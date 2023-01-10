@@ -1,6 +1,6 @@
 [![Checks](https://github.com/ExodusMovement/lerna-release-action/actions/workflows/release.yaml/badge.svg)](https://github.com/ExodusMovement/lerna-release-action/actions/workflows/checks.yaml)
 
-## @exodus/lerna-release-action
+## ExodusMovement/lerna-release-action
 
 ### Version workflow
 
@@ -30,7 +30,6 @@ jobs:
         name: Version
         with:
           github-token: ${{ secrets.GH_AUTOMATION_PAT }}
-
 ```
 
 ### Publish workflow
@@ -47,16 +46,16 @@ jobs:
   publish:
     runs-on: ubuntu-latest
   steps:
-  - uses: actions/checkout@v3
-    with:
-      ref: ${{ github.event.pull_request.head.sha }}
-  - uses: actions/setup-node@v3
-    with:
-      node-version-file: '.nvmrc'
-  - name: Install dependencies
-    run: yarn install
-  - name: Build
-    run: yarn build
-  - name: Publish
-    uses: ExodusMovement/lerna-release-action/publish@master
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+    - uses: actions/setup-node@v3
+      with:
+        node-version-file: '.nvmrc'
+    - name: Install dependencies
+      run: yarn install
+    - name: Build
+      run: yarn build
+    - name: Publish
+      uses: ExodusMovement/lerna-release-action/publish@master
 ```
