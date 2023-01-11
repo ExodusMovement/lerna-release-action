@@ -3,7 +3,7 @@ import { exec } from './process'
 import { Filesystem } from './types'
 
 const lockfileCommands = Object.entries({
-  'yarn.lock': 'yarn',
+  'yarn.lock': 'yarn --no-immutable',
   'package-lock.json': 'npm install',
 })
 

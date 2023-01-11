@@ -1,8 +1,8 @@
 import { Volume } from 'memfs/lib/volume'
-import { exec } from '../utils/process'
+import { exec } from './process'
 import { updateLockfile } from './package-manager'
 
-jest.mock('../utils/process', () => ({
+jest.mock('./process', () => ({
   __esModule: true,
   exec: jest.fn(),
 }))
@@ -39,7 +39,7 @@ describe('updateLockfile', () => {
 
     await updateLockfile({ filesystem: fs as never })
 
-    expect(exec).toHaveBeenCalledWith('yarn')
+    expect(exec).toHaveBeenCalledWith('yarn --no-immutable')
   })
 
   it('should do nothing if no lockfile', async () => {
