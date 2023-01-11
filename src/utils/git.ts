@@ -17,8 +17,14 @@ type CommitParams = {
   flags?: CommitFlags
 }
 export async function commit({ message, body, flags }: CommitParams): Promise<void> {
-  let command = `git commit ${stringifyFlags(flags)} -m "${message}"`
-  if (body) command += ` -m "${body}"`
+  let command = `git commit ${stringifyFlags(flags)}`
+  if (message) {
+    command += ` -m "${message}"`
+  }
+
+  if (body) {
+    command += ` -m "${body}"`
+  }
 
   await exec(command)
 }
