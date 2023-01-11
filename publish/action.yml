@@ -8,7 +8,7 @@ inputs:
 
 runs:
   using: 'node16'
-  main: '../dist/version/index.js'
+  main: '../dist/publish/index.js'
 author: 'ExodusMovement'
 branding:
   icon: 'upload-cloud'
