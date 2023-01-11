@@ -8,7 +8,11 @@ import { getPullRequestUrl, watchRun } from './utils/gh'
 import { exec } from '../../src/utils/process'
 import { program } from 'commander'
 import { ProgramOpts } from './utils/types'
-import { assertStrategy, strategyAsArgument } from '../../src/version/strategy'
+import {
+  assertStrategy,
+  strategyAsArgument,
+  validateAllowedStrategies,
+} from '../../src/version/strategy'
 
 program
   .name('lerna-release-action')
@@ -35,6 +39,8 @@ async function main() {
     console.log('No packages selected for release. Aborting')
     process.exit(-1)
   }
+
+  await validateAllowedStrategies({ packages, versionStrategy })
 
   const { stdout } = await exec(
     `echo n | lerna version ${strategyAsArgument(
