@@ -1,6 +1,5 @@
 import * as core from '@actions/core'
 import { GithubClient, Repo } from './types'
-import * as github from '@actions/github'
 
 type CreatePullRequestsParams = {
   client: GithubClient
