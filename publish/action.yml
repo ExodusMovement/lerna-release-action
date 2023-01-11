@@ -1,0 +1,15 @@
+name: 'Lerna release action: Publish'
+description: 'Action to publish yet unpublished packages'
+inputs:
+  github-token:
+    description: 'Token used to create a PR'
+    required: true
+
+
+runs:
+  using: 'node16'
+  main: '../dist/version/index.js'
+author: 'ExodusMovement'
+branding:
+  icon: 'plus-square'
+  color: 'blue'
