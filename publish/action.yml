@@ -11,5 +11,5 @@ runs:
   main: '../dist/version/index.js'
 author: 'ExodusMovement'
 branding:
-  icon: 'plus-square'
-  color: 'blue'
+  icon: 'upload-cloud'
+  color: 'purple'
