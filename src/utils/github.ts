@@ -1,0 +1,57 @@
+import * as core from '@actions/core'
+import { GithubClient, Repo } from './types'
+
+type CreatePullRequestsParams = {
+  client: GithubClient
+  repo: Repo
+  title: string
+  assignees?: string[]
+  base: string
+  head: string
+  body?: string
+  labels?: string[]
+}
+
+export async function createPullRequest({
+  client,
+  repo,
+  title,
+  base,
+  head,
+  body,
+  labels,
+  assignees,
+}: CreatePullRequestsParams) {
+  core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`)
+  const response = await client.rest.pulls.create({
+    ...repo,
+    title,
+    head,
+    base,
+    body,
+  })
+
+  const promises = []
+
+  if (labels) {
+    promises.push(
+      client.rest.issues.addLabels({
+        ...repo,
+        issue_number: response.data.number,
+        labels,
+      })
+    )
+  }
+
+  if (assignees) {
+    promises.push(
+      client.rest.issues.addAssignees({
+        ...repo,
+        issue_number: response.data.number,
+        assignees,
+      })
+    )
+  }
+
+  await Promise.all(promises)
+}

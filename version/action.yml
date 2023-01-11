@@ -1,0 +1,20 @@
+name: 'Lerna release action: Version'
+description: 'Action to version selected packages'
+inputs:
+  github-token:
+    description: 'Token used to create a PR'
+    required: true
+  packages:
+    description: 'Selected packages as comma separated string, e.g. modules/storage-spec,libraries/formatting'
+    required: true
+  version-extra-args:
+    description: 'Additional args appended to the lerna version call'
+
+
+runs:
+  using: 'node16'
+  main: 'dist/version/index.js'
+author: 'ExodusMovement'
+branding:
+  icon: 'plus-square'
+  color: 'blue'

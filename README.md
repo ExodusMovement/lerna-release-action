@@ -30,6 +30,8 @@ jobs:
         name: Version
         with:
           github-token: ${{ secrets.GH_AUTOMATION_PAT }}
+          packages: ${{ inputs.packages }}
+          version-extra-args: --force-publish
 ```
 
 ### Publish workflow
