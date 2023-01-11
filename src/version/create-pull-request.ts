@@ -1,6 +1,6 @@
-import { createPullRequest as createGithubPullRequest } from '../utils/github'
+import { createPullRequest as createGithubPullRequest, GithubClient } from '../utils/github'
 import { truncate } from '../utils/strings'
-import { GithubClient, Repo } from '../utils/types'
+import { Repo } from '../utils/types'
 import * as path from 'path'
 
 type Params = {

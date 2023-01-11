@@ -1,8 +1,5 @@
-import * as github from '@actions/github'
 import * as fs from 'fs'
 import { exec } from './process'
-
-export type GithubClient = ReturnType<typeof github.getOctokit>
 
 export type Repo = {
   owner: string
