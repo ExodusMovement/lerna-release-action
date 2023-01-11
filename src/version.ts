@@ -90,6 +90,5 @@ async function version() {
 }
 
 version().catch((error) => {
-  core.error(String(error))
   core.setFailed(String(error.message))
 })
