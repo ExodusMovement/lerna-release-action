@@ -36,8 +36,7 @@ async function main() {
   const packages = await getPackages(packagesCsv)
 
   if (packages.length === 0) {
-    console.log('No packages selected for release. Aborting')
-    process.exit(-1)
+    throw new Error('No packages selected for release. Aborting')
   }
 
   await validateAllowedStrategies({ packages, versionStrategy })
@@ -64,8 +63,7 @@ async function main() {
   }).catch(() => ({ confirm: false }))
 
   if (!confirm) {
-    console.log('Aborted')
-    process.exit(-1)
+    throw new Error('Aborted')
   }
 
   const selectedPackages = packages.sort(byBasenameAsc).join(',')
@@ -91,4 +89,7 @@ async function main() {
   }
 }
 
-main()
+main().catch((error: Error) => {
+  console.error(error.message)
+  process.exit(-1)
+})
