@@ -4,7 +4,7 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "lib": ["ES2021"],
-    "types": ["node", "jest"],
+    "types": ["node"],
     "strict": true,
     "noEmit": true,
     "downlevelIteration": true,
