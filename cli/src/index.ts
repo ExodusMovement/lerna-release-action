@@ -12,7 +12,7 @@ import { assertValidStrategy, strategyAsArgument } from '../../src/version/strat
 
 program
   .name('lerna-release-action')
-  .description(`CLI to supply inputs to lerna-release-action/version`)
+  .description('CLI to supply inputs to lerna-release-action/version')
   .enablePositionalOptions()
   .argument('[packages]')
   .option(
