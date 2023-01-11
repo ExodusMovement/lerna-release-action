@@ -9,6 +9,10 @@ export type Repo = {
   repo: string
 }
 
+export type Label = {
+  name: string
+}
+
 export type LernaConfig = {
   packages?: string[]
 }

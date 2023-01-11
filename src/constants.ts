@@ -3,3 +3,5 @@ export enum Input {
   Packages = 'packages',
   VersionExtraArgs = 'version-extra-args',
 }
+
+export const RELEASE_PR_LABEL = 'publish-on-merge'
