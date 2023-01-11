@@ -8,7 +8,7 @@ import { getPullRequestUrl, watchRun } from './utils/gh'
 import { exec } from '../../src/utils/process'
 import { program } from 'commander'
 import { ProgramOpts } from './utils/types'
-import { assertValidStrategy, strategyAsArgument } from '../../src/version/strategy'
+import { assertStrategy, strategyAsArgument } from '../../src/version/strategy'
 
 program
   .name('lerna-release-action')
@@ -25,7 +25,7 @@ async function main() {
   program.parse()
 
   const { versionStrategy } = program.opts<ProgramOpts>()
-  assertValidStrategy(versionStrategy)
+  assertStrategy(versionStrategy)
 
   const [packagesCsv] = program.args
 
