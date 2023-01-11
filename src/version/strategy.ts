@@ -14,3 +14,7 @@ export function assertValidStrategy(input: unknown): asserts input is VersionStr
     )
   }
 }
+
+export function strategyAsArgument(strategy: VersionStrategy): string {
+  return strategy === VersionStrategy.ConventionalCommits ? '--conventional-commits' : strategy
+}

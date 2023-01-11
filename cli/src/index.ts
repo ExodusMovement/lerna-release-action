@@ -6,9 +6,30 @@ import { prompt } from 'enquirer'
 import { byBasenameAsc } from './utils/sort'
 import { getPullRequestUrl, watchRun } from './utils/gh'
 import { exec } from '../../src/utils/process'
+import { program } from 'commander'
+import { ProgramOpts } from './utils/types'
+import { assertValidStrategy, strategyAsArgument } from '../../src/version/strategy'
+
+program
+  .name('lerna-release-action')
+  .description(`CLI to supply inputs to lerna-release-action/version`)
+  .enablePositionalOptions()
+  .argument('[packages]')
+  .option(
+    '-vs, --version-strategy <char>',
+    'Allows customizing the version strategy.',
+    'conventional-commits'
+  )
 
 async function main() {
-  const packages = await getPackages(process.argv[2])
+  program.parse()
+
+  const { versionStrategy } = program.opts<ProgramOpts>()
+  assertValidStrategy(versionStrategy)
+
+  const [packagesCsv] = program.args
+
+  const packages = await getPackages(packagesCsv)
 
   if (packages.length === 0) {
     console.log('No packages selected for release. Aborting')
@@ -16,7 +37,9 @@ async function main() {
   }
 
   const { stdout } = await exec(
-    'echo n | lerna version --conventional-commits --no-git-tag-version --force-publish'
+    `echo n | lerna version ${strategyAsArgument(
+      versionStrategy
+    )} --no-git-tag-version --force-publish`
   )
 
   const bumps = stdout
@@ -39,11 +62,11 @@ async function main() {
     process.exit(-1)
   }
 
-  const selectedModules = packages.sort(byBasenameAsc).join(',')
+  const selectedPackages = packages.sort(byBasenameAsc).join(',')
 
   try {
     const { stdout: runStdout, stderr } = await exec(
-      `gh workflow run version --field packages=${selectedModules}`
+      `gh workflow run version --field packages=${selectedPackages} --field version-strategy=${versionStrategy}`
     )
     if (stderr) {
       console.error(`${stderr}`)
