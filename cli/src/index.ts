@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import getPackages from './get-packages'
 import * as path from 'path'
 import { prompt } from 'enquirer'
