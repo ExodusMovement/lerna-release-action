@@ -9,6 +9,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@exodus/lerna-release-action-cli@workspace:."
   dependencies:
+    "@exodus/lerna-utils": ^1.2.0
     "@types/node": ^18.6.3
     commander: ^9.5.0
     enquirer: ^2.3.6
@@ -17,6 +18,13 @@ __metadata:
     lerna-release-action: lib/cli/src/index.js
   languageName: unknown
   linkType: soft
+
+"@exodus/lerna-utils@npm:^1.2.0":
+  version: 1.2.0
+  resolution: "@exodus/lerna-utils@npm:1.2.0"
+  checksum: ce3c90b2852f371fc25fc5d6f5a54a7f8b9c36cdec0ebb20fb38ff34005770af0c07839511381fd932d3c01bc019307d2a2613e46c1a2d8d75991ee1003a5dcf
+  languageName: node
+  linkType: hard
 
 "@types/node@npm:^18.6.3":
   version: 18.11.18
@@ -60,10 +68,10 @@ __metadata:
 
 "typescript@patch:typescript@^4.7.4#~builtin<compat/typescript>":
   version: 4.9.4
-  resolution: "typescript@patch:typescript@npm%3A4.9.4#~builtin<compat/typescript>::version=4.9.4&hash=a1c5e5"
+  resolution: "typescript@patch:typescript@npm%3A4.9.4#~builtin<compat/typescript>::version=4.9.4&hash=ad5954"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 37f6e2c3c5e2aa5934b85b0fddbf32eeac8b1bacf3a5b51d01946936d03f5377fe86255d4e5a4ae628fd0cd553386355ad362c57f13b4635064400f3e8e05b9d
+  checksum: 1caaea6cb7f813e64345190fddc4e6c924d0b698ab81189b503763c4a18f7f5501c69362979d36e19c042d89d936443e768a78b0675690b35eb663d19e0eae71
   languageName: node
   linkType: hard

@@ -1,15 +1,14 @@
 import normalizePackages from '../../src/version/normalize-packages'
-import { getPackagePathsByFolder, getPackageRoots } from '../../src/utils/package'
 import { prompt } from 'enquirer'
+import { getPackagePaths } from '@exodus/lerna-utils'
+
 const question = 'Which packages would you like to release?'
 export default async function getPackages(packagesCsv?: string) {
   if (packagesCsv) {
     return normalizePackages({ packagesCsv })
   }
 
-  const packageRoots = await getPackageRoots()
-  const packagesByFolder = await getPackagePathsByFolder({ packageRoots })
-  const packages = Object.values(packagesByFolder)
+  const packages = await getPackagePaths()
 
   const answer = await prompt<{ packages: string[] }>({
     name: 'packages',
