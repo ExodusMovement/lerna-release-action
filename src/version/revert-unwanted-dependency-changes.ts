@@ -1,9 +1,9 @@
 import * as path from 'path'
-import { getPackageNameByPath, getPackagePaths } from '../utils/package'
 import { Filesystem, PackageContentByPath, PackageJson } from '../utils/types'
 import { readJson } from '../utils/fs'
 import * as fs from 'fs'
 import * as core from '@actions/core'
+import { getPackageNameByPath, getPackagePaths } from '@exodus/lerna-utils'
 
 type Params = {
   packages: string[]
