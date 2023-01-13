@@ -46,7 +46,7 @@ async function version() {
   await versionPackages({ extraArgs: versionExtraArgs })
 
   const tags = await getTags(packages)
-  core.debug(`Tags created: ${tags}`)
+  core.debug(`Tags found: ${tags}`)
 
   const branch = `ci/release/${crypto.randomUUID()}`
   const sha = await getCommitSha()
