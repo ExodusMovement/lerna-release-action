@@ -1,4 +1,4 @@
-export function toSnakeCase(text: string): string {
+export function toKebabCase(text: string): string {
   return text.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase())
 }
 
