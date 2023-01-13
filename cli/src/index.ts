@@ -17,7 +17,6 @@ import {
 program
   .name('lerna-release-action')
   .description('CLI to supply inputs to lerna-release-action/version')
-  .enablePositionalOptions()
   .argument('[packages]')
   .option(
     '-vs, --version-strategy <char>',
