@@ -23,8 +23,8 @@
     "format": "prettier --write \"**/*.{json,md,yaml}\"",
     "format:check": "prettier --check \"**/*.{json,md,yaml}\"",
     "build": "yarn run build:version && yarn run build:publish",
-    "build:version": "ncc build src/version.ts --minify -o dist/version",
-    "build:publish": "ncc build src/publish.ts --minify -o dist/publish"
+    "build:version": "ncc build src/version.ts --source-map -o dist/version",
+    "build:publish": "ncc build src/publish.ts --source-map -o dist/publish"
   },
   "devDependencies": {
     "@exodus/eslint-config": "^3.0.0",
