@@ -13,6 +13,44 @@ type Params = {
 
 /**
  * Reverts changes to versions of workspaces dependencies that were not selected for versioning
+ *
+ * Explanation:
+ *
+ * Imagine a module A that has module B as dependency. If we select module A to be included but not module B,
+ * `lerna version` would create the diff below. Lerna bumps a version of a package, including the version of a
+ * dependency on that package in other workspace packages, whenever there are changes, and we happen to have
+ * `feat!: some massive feat including breaking changes` commit for B.:
+ *
+ * ```diff
+ * {
+ *   "name": "module-a",
+ * - "version": "1.0.0",
+ * + "version": "1.0.1"
+ *   "dependencies": {
+ * -    "module-b": "1.0.0"
+ * +    "module-b": "2.0.0"
+ *   }
+ * }
+ * ```
+ *
+ * We cannot simply reset the entire file because we need the bump for module-a's own version. As an easy workaround,
+ * we store the package.json contents prior to the lerna version step, resulting in the following contents for the key
+ * `modules/module-a` in our previousPackageContents object:
+ *
+ * ```js
+ * {
+ *   name: 'module-a',
+ *   version: '1.0.0',
+ *   dependencies: {
+ *     'module-b': '1.0.0'
+ *   }
+ * }
+ * ```
+ *
+ * For every package to be included in the release, we iterate through every package **not** to be included in the
+ * release, and if the not-to-be-included package is found in either `devDependencies` or `dependencies`, it's version
+ * is set back to it was prior to calling `lerna version`, aka what's in previousPackageContents
+ * under `<package-root>/<package-name>`
  */
 export default async function revertUnwantedDependencyChanges({
   packages: selected,
