@@ -8,7 +8,10 @@
     "strict": true,
     "noEmit": true,
     "downlevelIteration": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@exodus/lerna-utils": ["./node_modules/@exodus/lerna-utils"]
+    }
   },
   "include": ["src"],
   "exclude": ["node_modules"]
