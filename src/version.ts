@@ -14,7 +14,7 @@ import {
   resetLastCommit,
   switchToBranch,
 } from './utils/git'
-import backupPackages from './version/backup-packages'
+import readPackageJsons from './version/read-package-jsons'
 import getTags from './version/get-tags'
 import * as crypto from 'crypto'
 import revertUnwantedDependencyChanges from './version/revert-unwanted-dependency-changes'
@@ -39,8 +39,8 @@ async function version() {
     email: `${actor}@users.noreply.github.com`,
   })
 
-  core.info('Backing up packages')
-  await backupPackages()
+  core.info('Creating object of previous package.json contents')
+  const previousPackageContents = await readPackageJsons()
 
   core.info('Versioning packages')
   await versionPackages({ extraArgs: versionExtraArgs })
@@ -65,7 +65,7 @@ async function version() {
   await cleanup()
 
   core.info('Reverting changes to dependencies bumped but not included in release')
-  await revertUnwantedDependencyChanges({ packages })
+  await revertUnwantedDependencyChanges({ packages, previousPackageContents })
   await updateLockfile()
   await commit({ flags: { all: true, amend: true, noEdit: true } })
 

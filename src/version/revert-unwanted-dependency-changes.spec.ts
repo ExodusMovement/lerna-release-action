@@ -41,7 +41,7 @@ describe('revertUnwantedDependencyChanges', () => {
   }
 
   const previousPackageContents = {
-    batcave: JSON.stringify({
+    'packages/batcave': {
       name: '@exodus/batcave',
       dependencies: {
         '@exodus/batstorage': '1.0.1',
@@ -50,19 +50,19 @@ describe('revertUnwantedDependencyChanges', () => {
       devDependencies: {
         '@exodus/in-memory-bat-storage': '1.0.3',
       },
-    }),
-    baterang: JSON.stringify({
+    },
+    'packages/baterang': {
       name: '@exodus/baterang',
       dependencies: {
         '@exodus/batstorage': '1.0.1',
       },
-    }),
-    batstorage: JSON.stringify({
+    },
+    'packages/batstorage': {
       name: '@exodus/batstorage',
-    }),
-    'in-memory-bat-storage': JSON.stringify({
+    },
+    'packages/in-memory-bat-storage': {
       name: '@exodus/in-memory-bat-storage',
-    }),
+    },
   }
 
   beforeEach(() => {
@@ -72,17 +72,13 @@ describe('revertUnwantedDependencyChanges', () => {
       'packages/batstorage/package.json': packageContents.batstorage,
       'packages/baterang/package.json': packageContents.baterang,
       'packages/in-memory-bat-storage/package.json': packageContents['in-memory-bat-storage'],
-      'tmp/backup/packages/batcave.json': previousPackageContents.batcave,
-      'tmp/backup/packages/batstorage.json': previousPackageContents.batstorage,
-      'tmp/backup/packages/baterang.json': previousPackageContents.baterang,
-      'tmp/backup/packages/in-memory-bat-storage.json':
-        previousPackageContents['in-memory-bat-storage'],
     })
   })
 
   it('should revert version bumps of dependencies not selected for release', async () => {
     await revertUnwantedDependencyChanges({
       packages: ['packages/batcave', 'packages/baterang'],
+      previousPackageContents,
       filesystem: fs as never,
     })
 

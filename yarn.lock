@@ -695,6 +695,7 @@ __metadata:
     "@actions/core": ^1.10.0
     "@actions/github": ^5.1.1
     "@exodus/eslint-config": ^3.0.0
+    "@exodus/lerna-utils": ^1.2.0
     "@exodus/prettier": ^0.1.5
     "@octokit/plugin-rest-endpoint-methods": ^6.7.0
     "@types/jest": ^27.4.1
@@ -715,6 +716,13 @@ __metadata:
     typescript: ^4.7.4
   languageName: unknown
   linkType: soft
+
+"@exodus/lerna-utils@npm:^1.2.0":
+  version: 1.2.0
+  resolution: "@exodus/lerna-utils@npm:1.2.0"
+  checksum: ce3c90b2852f371fc25fc5d6f5a54a7f8b9c36cdec0ebb20fb38ff34005770af0c07839511381fd932d3c01bc019307d2a2613e46c1a2d8d75991ee1003a5dcf
+  languageName: node
+  linkType: hard
 
 "@exodus/prettier@npm:^0.1.5":
   version: 0.1.5

@@ -22,3 +22,7 @@ export type PackageJson = {
 export type Filesystem = typeof fs
 
 export type Exec = typeof exec
+
+export type PackageContentByPath = {
+  [path: string]: PackageJson
+}

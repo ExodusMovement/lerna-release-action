@@ -1,6 +1,6 @@
 import * as path from 'path'
 import { getPackageNameByPath, getPackagePaths } from '../utils/package'
-import { Filesystem, PackageJson } from '../utils/types'
+import { Filesystem, PackageContentByPath, PackageJson } from '../utils/types'
 import { readJson } from '../utils/fs'
 import * as fs from 'fs'
 import * as core from '@actions/core'
@@ -8,6 +8,7 @@ import * as core from '@actions/core'
 type Params = {
   packages: string[]
   filesystem?: Filesystem
+  previousPackageContents: PackageContentByPath
 }
 
 /**
@@ -15,6 +16,7 @@ type Params = {
  */
 export default async function revertUnwantedDependencyChanges({
   packages: selected,
+  previousPackageContents,
   filesystem = fs,
 }: Params) {
   const all = await getPackagePaths({ filesystem })
@@ -31,15 +33,7 @@ export default async function revertUnwantedDependencyChanges({
         async (pkgJson) => {
           /* eslint-disable @exodus/mutable/no-param-reassign-prop-only */
 
-          const before = await readJson<PackageJson>(
-            path.join(
-              'tmp',
-              'backup',
-              path.dirname(packageFolder),
-              `${path.basename(packageFolder)}.json`
-            ),
-            { filesystem }
-          )
+          const before = previousPackageContents[packageFolder]
 
           for (const name of unselectedPackageNames) {
             if (!name) continue
