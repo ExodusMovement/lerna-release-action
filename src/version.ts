@@ -55,7 +55,7 @@ async function version() {
   core.debug(`Switching to branch ${branch}`)
   await switchToBranch(branch)
 
-  core.info('Resetting last commit to stage only selected packages')
+  core.info('Resetting commit created by lerna to stage only selected packages')
   await resetLastCommit({ flags: { mixed: true } })
   await add(packages.join(' '))
   await commit({ message, body: tags.join('\n') })
