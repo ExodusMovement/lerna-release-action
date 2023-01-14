@@ -13017,6 +13017,9 @@ async function publish() {
     await (0, github_1.createTags)({ client, repo, tags, sha: pr?.base.sha ?? sha });
 }
 publish().catch((error) => {
+    if (error.stack) {
+        core.debug(error.stack);
+    }
     core.setFailed(String(error.message));
 });
 
