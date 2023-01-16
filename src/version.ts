@@ -1,6 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
-import { Input } from './constants'
+import { Input, RELEASE_PR_LABEL } from './constants'
 import normalizePackages from './version/normalize-packages'
 import {
   add,
@@ -79,7 +79,7 @@ async function version() {
     packages,
     tags,
     branch,
-    labels: ['publish-on-merge'],
+    labels: [RELEASE_PR_LABEL],
     assignees: [actor],
   })
 }

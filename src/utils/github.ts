@@ -55,3 +55,21 @@ export async function createPullRequest({
 
   await Promise.all(promises)
 }
+
+type CreateTagsParams = {
+  client: GithubClient
+  repo: Repo
+  sha: string
+  tags: string[]
+}
+export async function createTags({ client, repo, sha, tags }: CreateTagsParams) {
+  await Promise.all(
+    tags.map((tag) =>
+      client.rest.git.createRef({
+        ...repo,
+        ref: `refs/tags/${tag.replace(/\r/, '')}`,
+        sha,
+      })
+    )
+  )
+}
