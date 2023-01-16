@@ -8,7 +8,7 @@ inputs:
     description: 'Selected packages as comma separated string, e.g. modules/storage-spec,libraries/formatting'
     required: true
   version-strategy:
-    description: 'Versioning strategy, supports conventional-commits and static versioning through: patch, minor, major'
+    description: 'Versioning strategy, supports conventional-commits and static versioning through: patch, minor, major, premajor, preminor, prepatch, prerelease'
     default: 'conventional-commits'
   version-extra-args:
     description: 'Additional args appended to the lerna version call'

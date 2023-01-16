@@ -8,6 +8,10 @@ export enum VersionStrategy {
   Patch = 'patch',
   Minor = 'minor',
   Major = 'major',
+  Premajor = 'premajor',
+  Preminor = 'preminor',
+  Prepatch = 'prepatch',
+  Prerelease = 'prerelease',
 }
 
 export function assertStrategy(input: unknown): asserts input is VersionStrategy {

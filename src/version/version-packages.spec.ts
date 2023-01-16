@@ -14,15 +14,20 @@ describe('versionPackages', () => {
     )
   })
 
-  it.each([[VersionStrategy.Patch], [VersionStrategy.Minor], [VersionStrategy.Major]])(
-    'should derive %s version bumps',
-    async (versionStrategy) => {
-      await versionPackages({ versionStrategy })
-      expect(exec).toHaveBeenCalledWith(
-        `lerna version ${versionStrategy} --no-push --yes --no-private`
-      )
-    }
-  )
+  it.each([
+    [VersionStrategy.Patch],
+    [VersionStrategy.Minor],
+    [VersionStrategy.Major],
+    [VersionStrategy.Prerelease],
+    [VersionStrategy.Premajor],
+    [VersionStrategy.Preminor],
+    [VersionStrategy.Prepatch],
+  ])('should derive %s version bumps', async (versionStrategy) => {
+    await versionPackages({ versionStrategy })
+    expect(exec).toHaveBeenCalledWith(
+      `lerna version ${versionStrategy} --no-push --yes --no-private`
+    )
+  })
 
   it('should append extra args', async () => {
     await versionPackages({
