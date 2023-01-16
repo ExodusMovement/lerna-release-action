@@ -16,8 +16,10 @@
   "packageManager": "yarn@3.2.3",
   "scripts": {
     "test": "jest .",
-    "lint": "eslint .",
-    "lint:fix": "yarn lint --fix",
+    "lint": "yarn lint:actions && yarn lint:cli",
+    "lint:actions": "eslint src",
+    "lint:cli": "eslint cli -c cli/.eslintrc.js",
+    "lint:fix": "yarn lint:actions --fix && yarn lint:cli --fix",
     "format": "prettier --write \"**/*.{json,md,yaml}\"",
     "format:check": "prettier --check \"**/*.{json,md,yaml}\"",
     "build": "yarn run build:version && yarn run build:publish",

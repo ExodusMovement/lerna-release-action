@@ -1,5 +1,9 @@
 import * as core from '@actions/core'
-import { GithubClient, Repo } from './types'
+import * as github from '@actions/github'
+
+import { Repo } from './types'
+
+export type GithubClient = ReturnType<typeof github.getOctokit>
 
 type CreatePullRequestsParams = {
   client: GithubClient

@@ -1,0 +1,28 @@
+{
+  "name": "@exodus/lerna-release-action-cli",
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ExodusMovement/lerna-release-action.git"
+  },
+  "scripts": {
+    "build": "tsc --build tsconfig.build.json",
+    "watch": "tsc --watch -p tsconfig.build.json",
+    "prepublishOnly": "yarn build"
+  },
+  "dependencies": {
+    "enquirer": "^2.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^18.6.3",
+    "typescript": "^4.7.4"
+  },
+  "bin": {
+    "lerna-release-action": "lib/cli/src/index.js"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "packageManager": "yarn@3.2.3"
+}
