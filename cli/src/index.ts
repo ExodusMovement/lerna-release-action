@@ -69,7 +69,7 @@ async function main() {
 
   try {
     const { stdout: runStdout, stderr } = await exec(
-      `gh workflow run version --field packages=${selectedPackages} --field version-strategy=${versionStrategy}`
+      `gh workflow run version --field "packages=${selectedPackages}" --field "version-strategy=${versionStrategy}"`
     )
     if (stderr) {
       console.error(`${stderr}`)
