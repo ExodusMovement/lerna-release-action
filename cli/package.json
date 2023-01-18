@@ -11,6 +11,7 @@
     "prepublishOnly": "yarn build"
   },
   "dependencies": {
+    "commander": "^9.5.0",
     "enquirer": "^2.3.6"
   },
   "devDependencies": {

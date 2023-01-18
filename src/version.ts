@@ -21,13 +21,18 @@ import revertUnwantedDependencyChanges from './version/revert-unwanted-dependenc
 import versionPackages from './version/version-packages'
 import { updateLockfile } from './utils/package-manager'
 import createPullRequest from './version/create-pull-request'
+import { assertStrategy, validateAllowedStrategies } from './version/strategy'
 
 async function version() {
   const packagesCsv = core.getInput(Input.Packages, { required: true })
   const token = core.getInput(Input.GithubToken, { required: true })
   const versionExtraArgs = core.getInput(Input.VersionExtraArgs)
+  const versionStrategy = core.getInput(Input.VersionStrategy)
+
+  assertStrategy(versionStrategy)
 
   const packages = await normalizePackages({ packagesCsv })
+  await validateAllowedStrategies({ packages, versionStrategy })
 
   const client = github.getOctokit(token)
 
@@ -43,7 +48,7 @@ async function version() {
   const previousPackageContents = await readPackageJsons()
 
   core.info('Versioning packages')
-  await versionPackages({ extraArgs: versionExtraArgs })
+  await versionPackages({ extraArgs: versionExtraArgs, versionStrategy })
 
   const tags = await getTags(packages)
   core.debug(`Tags found: ${tags}`)
@@ -85,6 +90,5 @@ async function version() {
 }
 
 version().catch((error) => {
-  core.error(String(error))
   core.setFailed(String(error.message))
 })

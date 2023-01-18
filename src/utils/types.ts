@@ -1,5 +1,6 @@
 import * as fs from 'fs'
 import { exec } from './process'
+import { VersionStrategy } from '../version/strategy'
 
 export type Repo = {
   owner: string
@@ -18,6 +19,11 @@ export type PackageJson = {
   name: string
   dependencies?: Record<string, string | undefined>
   devDependencies?: Record<string, string | undefined>
+  release?: {
+    versionStrategy: {
+      [packageName: string]: VersionStrategy[]
+    }
+  }
 }
 
 export type Filesystem = typeof fs

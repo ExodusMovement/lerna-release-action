@@ -44,6 +44,5 @@ async function publish() {
 }
 
 publish().catch((error) => {
-  core.error(String(error))
   core.setFailed(String(error.message))
 })

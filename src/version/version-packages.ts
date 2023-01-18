@@ -1,12 +1,15 @@
 import { exec } from '../utils/process'
 import * as core from '@actions/core'
+import { strategyAsArgument, VersionStrategy } from './strategy'
 
 type Params = {
-  extraArgs: string
+  extraArgs?: string
+  versionStrategy: VersionStrategy
 }
-export default async function versionPackages({ extraArgs }: Params) {
-  const { stdout } = await exec(
-    `lerna version --conventional-commits --no-push --yes --no-private ${extraArgs}`
-  )
+export default async function versionPackages({ extraArgs, versionStrategy }: Params) {
+  let command = `lerna version ${strategyAsArgument(versionStrategy)} --no-push --yes --no-private`
+  if (extraArgs) command += ` ${extraArgs}`
+
+  const { stdout } = await exec(command)
   core.debug(stdout)
 }
