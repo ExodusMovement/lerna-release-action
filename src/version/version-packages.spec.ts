@@ -10,7 +10,7 @@ describe('versionPackages', () => {
   it('should derive bumps using conventional commits', async () => {
     await versionPackages({ versionStrategy: VersionStrategy.ConventionalCommits })
     expect(exec).toHaveBeenCalledWith(
-      'lerna version --conventional-commits --no-push --yes --no-private'
+      'lerna version --conventional-commits --no-push --yes --no-private --force-publish'
     )
   })
 
@@ -25,7 +25,7 @@ describe('versionPackages', () => {
   ])('should derive %s version bumps', async (versionStrategy) => {
     await versionPackages({ versionStrategy })
     expect(exec).toHaveBeenCalledWith(
-      `lerna version ${versionStrategy} --no-push --yes --no-private`
+      `lerna version ${versionStrategy} --no-push --yes --no-private --force-publish`
     )
   })
 
@@ -35,7 +35,7 @@ describe('versionPackages', () => {
       extraArgs: '--let-bruce-wayne-decide',
     })
     expect(exec).toHaveBeenCalledWith(
-      'lerna version --conventional-commits --no-push --yes --no-private --let-bruce-wayne-decide'
+      'lerna version --conventional-commits --no-push --yes --no-private --force-publish --let-bruce-wayne-decide'
     )
   })
 })

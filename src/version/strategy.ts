@@ -1,7 +1,7 @@
 import { Filesystem, PackageJson } from '../utils/types'
 import * as fs from 'fs'
-import { getPackageNameByPath } from '../utils/package'
 import { readJson } from '../utils/fs'
+import { getPackageNameByPath } from '@exodus/lerna-utils'
 
 export enum VersionStrategy {
   ConventionalCommits = 'conventional-commits',

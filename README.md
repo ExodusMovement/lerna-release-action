@@ -1,4 +1,4 @@
-[![Checks](https://github.com/ExodusMovement/lerna-release-action/actions/workflows/release.yaml/badge.svg)](https://github.com/ExodusMovement/lerna-release-action/actions/workflows/checks.yaml)
+[![Checks](https://github.com/ExodusMovement/lerna-release-action/actions/workflows/checks.yml/badge.svg)](https://github.com/ExodusMovement/lerna-release-action/actions/workflows/checks.yml)
 
 ## ExodusMovement/lerna-release-action
 
@@ -31,7 +31,6 @@ jobs:
         with:
           github-token: ${{ secrets.GH_AUTOMATION_PAT }}
           packages: ${{ inputs.packages }}
-          version-extra-args: --force-publish
 ```
 
 ### Publish workflow

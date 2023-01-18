@@ -42,6 +42,8 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version-file: '.nvmrc'
+      - name: Grant read access to private registry
+        run: yarn config set --home 'npmRegistries["//registry.npmjs.org/"].npmAuthToken' "${{ secrets.NPM_TOKEN }}"
       - name: Install dependencies
         working-directory: cli
         run: yarn install --immutable

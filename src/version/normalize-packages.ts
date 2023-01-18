@@ -1,4 +1,4 @@
-import { getPackagePathsByFolder, getPackageRoots } from '../utils/package'
+import { getPackagePathsByFolder } from '@exodus/lerna-utils'
 import * as fs from 'fs'
 import * as path from 'path'
 import { Filesystem } from '../utils/types'
@@ -9,8 +9,7 @@ type Params = {
 }
 
 export default async function normalizePackages({ packagesCsv, filesystem = fs }: Params) {
-  const packageRoots = await getPackageRoots({ filesystem })
-  const byFolder = await getPackagePathsByFolder({ packageRoots, filesystem })
+  const byFolder = await getPackagePathsByFolder({ filesystem })
 
   const normalized = []
   const invalid = []

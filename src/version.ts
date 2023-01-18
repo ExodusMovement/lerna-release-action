@@ -89,6 +89,9 @@ async function version() {
   })
 }
 
-version().catch((error) => {
+version().catch((error: Error) => {
+  if (error.stack) {
+    core.debug(error.stack)
+  }
   core.setFailed(String(error.message))
 })
