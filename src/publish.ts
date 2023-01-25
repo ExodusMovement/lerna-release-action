@@ -39,7 +39,7 @@ async function publish() {
 
   core.notice(`Published the following versions: ${tags.join(', ')}`)
 
-  core.info(`Adding tags tp commit ${sha}`)
+  core.info(`Adding tags to commit ${sha}`)
   await createTags({ client, repo, tags, sha: pr?.base.sha ?? sha })
 }
 
