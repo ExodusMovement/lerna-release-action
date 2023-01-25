@@ -12658,6 +12658,21 @@ exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
 /***/ }),
 
+/***/ 8873:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.unique = void 0;
+function unique(array) {
+    return array.filter((e, i) => array.indexOf(e) === i);
+}
+exports.unique = unique;
+
+
+/***/ }),
+
 /***/ 1225:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -12993,6 +13008,7 @@ const constants_1 = __nccwpck_require__(9042);
 const github = __nccwpck_require__(5438);
 const process_1 = __nccwpck_require__(9239);
 const github_1 = __nccwpck_require__(1225);
+const arrays_1 = __nccwpck_require__(8873);
 async function publish() {
     const token = core.getInput(constants_1.Input.GithubToken, { required: true });
     const client = github.getOctokit(token);
@@ -13012,9 +13028,10 @@ async function publish() {
         core.notice('No new packages versions found. Publish aborted.');
         return;
     }
-    core.notice(`Published the following versions: ${tags.join(', ')}`);
-    core.info(`Adding tags tp commit ${sha}`);
-    await (0, github_1.createTags)({ client, repo, tags, sha: pr?.base.sha ?? sha });
+    const deduped = (0, arrays_1.unique)(tags);
+    core.notice(`Published the following versions: ${deduped.join(', ')}`);
+    core.info(`Adding tags to commit ${sha}`);
+    await (0, github_1.createTags)({ client, repo, tags: deduped, sha: pr?.base.sha ?? sha });
 }
 publish().catch((error) => {
     if (error.stack) {
