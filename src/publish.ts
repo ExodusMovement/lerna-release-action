@@ -4,6 +4,7 @@ import * as github from '@actions/github'
 import { exec } from './utils/process'
 import { Label } from './utils/types'
 import { createTags } from './utils/github'
+import { unique } from './utils/arrays'
 
 async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
@@ -37,10 +38,11 @@ async function publish() {
     return
   }
 
-  core.notice(`Published the following versions: ${tags.join(', ')}`)
+  const deduped = unique(tags)
+  core.notice(`Published the following versions: ${deduped.join(', ')}`)
 
   core.info(`Adding tags to commit ${sha}`)
-  await createTags({ client, repo, tags, sha: pr?.base.sha ?? sha })
+  await createTags({ client, repo, tags: deduped, sha: pr?.base.sha ?? sha })
 }
 
 publish().catch((error: Error) => {
