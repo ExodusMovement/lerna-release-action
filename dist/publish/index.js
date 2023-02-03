@@ -13029,9 +13029,11 @@ async function publish() {
         return;
     }
     const deduped = (0, arrays_1.unique)(tags);
-    core.notice(`Published the following versions: ${deduped.join(', ')}`);
+    const publishedPackages = deduped.join(',');
+    core.notice(`Published the following versions: ${publishedPackages}`);
     core.info(`Adding tags to commit ${sha}`);
     await (0, github_1.createTags)({ client, repo, tags: deduped, sha: pr?.base.sha ?? sha });
+    core.setOutput('published-packages', publishedPackages);
 }
 publish().catch((error) => {
     if (error.stack) {

@@ -39,10 +39,12 @@ async function publish() {
   }
 
   const deduped = unique(tags)
-  core.notice(`Published the following versions: ${deduped.join(', ')}`)
+  const publishedPackages = deduped.join(',')
+  core.notice(`Published the following versions: ${publishedPackages}`)
 
   core.info(`Adding tags to commit ${sha}`)
   await createTags({ client, repo, tags: deduped, sha: pr?.base.sha ?? sha })
+  core.setOutput('published-packages', publishedPackages)
 }
 
 publish().catch((error: Error) => {

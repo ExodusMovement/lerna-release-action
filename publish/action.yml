@@ -4,7 +4,9 @@ inputs:
   github-token:
     description: 'Token used to create a PR'
     required: true
-
+outputs:
+  published-packages:
+    description: 'Comma-separated string of published packages and their versions, such as @exodus/referrals@5.0.0,@exodus/wallet@2.1.0'
 
 runs:
   using: 'node16'
