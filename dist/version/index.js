@@ -13294,7 +13294,7 @@ const process_1 = __nccwpck_require__(9239);
 const core = __nccwpck_require__(2186);
 const strategy_1 = __nccwpck_require__(4741);
 async function versionPackages({ extraArgs, versionStrategy }) {
-    let command = `lerna version ${(0, strategy_1.strategyAsArgument)(versionStrategy)} --no-push --yes --no-private --force-publish`;
+    let command = `npx lerna version ${(0, strategy_1.strategyAsArgument)(versionStrategy)} --no-push --yes --no-private --force-publish`;
     if (extraArgs)
         command += ` ${extraArgs}`;
     const { stdout } = await (0, process_1.exec)(command);
