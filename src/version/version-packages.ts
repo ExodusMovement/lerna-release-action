@@ -7,7 +7,7 @@ type Params = {
   versionStrategy: VersionStrategy
 }
 export default async function versionPackages({ extraArgs, versionStrategy }: Params) {
-  let command = `lerna version ${strategyAsArgument(
+  let command = `npx lerna version ${strategyAsArgument(
     versionStrategy
   )} --no-push --yes --no-private --force-publish`
   if (extraArgs) command += ` ${extraArgs}`
