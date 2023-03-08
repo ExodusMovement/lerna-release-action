@@ -15,6 +15,9 @@ const CHANGELOG_HEADER = [
   COMMIT_GUIDELINE,
 ].join(EOL)
 
+// dynamic imports such as await import() are bundled by vercel/ncc. We need to import at runtime
+const importDynamically = new Function('p', 'return import(p)') // eslint-disable-line no-new-func
+
 function makeBumpOnlyFilter(packageName: string) {
   return (newEntry: string): string => {
     if (!newEntry.split('\n').some((line) => line.startsWith('*'))) {
@@ -42,8 +45,8 @@ async function readExistingChangelog(packageDir: string): Promise<[string, strin
 }
 
 export default async function updateChangelog(packageDir: string) {
-  const config = await import('conventional-changelog-conventionalcommits')
-  const conventionalChangelogCore = await import('conventional-changelog-core')
+  const config = await importDynamically('conventional-changelog-conventionalcommits')
+  const conventionalChangelogCore = await importDynamically('conventional-changelog-core')
   const packageJson = await readJson<PackageJson>(packageDir, { filesystem: fs })
 
   if (!packageJson) {

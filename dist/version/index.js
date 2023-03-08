@@ -4771,6 +4771,135 @@ function checkEncoding(name) {
 
 /***/ }),
 
+/***/ 1585:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const {PassThrough: PassThroughStream} = __nccwpck_require__(2781);
+
+module.exports = options => {
+	options = {...options};
+
+	const {array} = options;
+	let {encoding} = options;
+	const isBuffer = encoding === 'buffer';
+	let objectMode = false;
+
+	if (array) {
+		objectMode = !(encoding || isBuffer);
+	} else {
+		encoding = encoding || 'utf8';
+	}
+
+	if (isBuffer) {
+		encoding = null;
+	}
+
+	const stream = new PassThroughStream({objectMode});
+
+	if (encoding) {
+		stream.setEncoding(encoding);
+	}
+
+	let length = 0;
+	const chunks = [];
+
+	stream.on('data', chunk => {
+		chunks.push(chunk);
+
+		if (objectMode) {
+			length = chunks.length;
+		} else {
+			length += chunk.length;
+		}
+	});
+
+	stream.getBufferedValue = () => {
+		if (array) {
+			return chunks;
+		}
+
+		return isBuffer ? Buffer.concat(chunks, length) : chunks.join('');
+	};
+
+	stream.getBufferedLength = () => length;
+
+	return stream;
+};
+
+
+/***/ }),
+
+/***/ 1766:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const {constants: BufferConstants} = __nccwpck_require__(4300);
+const stream = __nccwpck_require__(2781);
+const {promisify} = __nccwpck_require__(3837);
+const bufferStream = __nccwpck_require__(1585);
+
+const streamPipelinePromisified = promisify(stream.pipeline);
+
+class MaxBufferError extends Error {
+	constructor() {
+		super('maxBuffer exceeded');
+		this.name = 'MaxBufferError';
+	}
+}
+
+async function getStream(inputStream, options) {
+	if (!inputStream) {
+		throw new Error('Expected a stream');
+	}
+
+	options = {
+		maxBuffer: Infinity,
+		...options
+	};
+
+	const {maxBuffer} = options;
+	const stream = bufferStream(options);
+
+	await new Promise((resolve, reject) => {
+		const rejectPromise = error => {
+			// Don't retrieve an oversized buffer.
+			if (error && stream.getBufferedLength() <= BufferConstants.MAX_LENGTH) {
+				error.bufferedData = stream.getBufferedValue();
+			}
+
+			reject(error);
+		};
+
+		(async () => {
+			try {
+				await streamPipelinePromisified(inputStream, stream);
+				resolve();
+			} catch (error) {
+				rejectPromise(error);
+			}
+		})();
+
+		stream.on('data', () => {
+			if (stream.getBufferedLength() > maxBuffer) {
+				rejectPromise(new MaxBufferError());
+			}
+		});
+	});
+
+	return stream.getBufferedValue();
+}
+
+module.exports = getStream;
+module.exports.buffer = (stream, options) => getStream(stream, {...options, encoding: 'buffer'});
+module.exports.array = (stream, options) => getStream(stream, {...options, array: true});
+module.exports.MaxBufferError = MaxBufferError;
+
+
+/***/ }),
+
 /***/ 9695:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -13284,6 +13413,74 @@ exports.strategyAsArgument = strategyAsArgument;
 
 /***/ }),
 
+/***/ 8178:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const fs = __nccwpck_require__(7147);
+const getStream = __nccwpck_require__(1766);
+const path = __nccwpck_require__(1017);
+const fs_1 = __nccwpck_require__(1716);
+const EOL = '\n';
+const BLANK_LINE = EOL + EOL;
+const COMMIT_GUIDELINE = 'See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.';
+const CHANGELOG_HEADER = [
+    '# Change Log',
+    '',
+    'All notable changes to this project will be documented in this file.',
+    COMMIT_GUIDELINE,
+].join(EOL);
+// dynamic imports such as await import() are bundled by vercel/ncc. We need to import at runtime
+const importDynamically = new Function('p', 'return import(p)'); // eslint-disable-line no-new-func
+function makeBumpOnlyFilter(packageName) {
+    return (newEntry) => {
+        if (!newEntry.split('\n').some((line) => line.startsWith('*'))) {
+            const message = `**Note:** Version bump only for package ${packageName}`;
+            return [newEntry.trim(), message, BLANK_LINE].join(BLANK_LINE);
+        }
+        return newEntry;
+    };
+}
+async function readExistingChangelog(packageDir) {
+    const changelogPath = path.join(packageDir, 'CHANGELOG.md');
+    const buffer = await fs.promises.readFile(changelogPath).catch(() => '');
+    const contents = buffer.toString();
+    const headerIndex = contents.indexOf(COMMIT_GUIDELINE);
+    const contentsWithoutHeader = headerIndex === -1
+        ? contents
+        : contents.slice(headerIndex + COMMIT_GUIDELINE.length + BLANK_LINE.length);
+    return [changelogPath, contentsWithoutHeader];
+}
+async function updateChangelog(packageDir) {
+    const config = await importDynamically('conventional-changelog-conventionalcommits');
+    const conventionalChangelogCore = await importDynamically('conventional-changelog-core');
+    const packageJson = await (0, fs_1.readJson)(packageDir, { filesystem: fs });
+    if (!packageJson) {
+        throw new Error(`package.json does not exist in ${packageDir}`);
+    }
+    const options = {
+        pkg: { path: path.join(packageDir, 'package.json') },
+        config: config.conventionalChangelog,
+        lernaPackage: packageJson.name,
+    };
+    const gitRawCommitsOpts = Object.assign({}, options.config.gitRawCommitsOpts, {
+        path: packageDir,
+    });
+    const changelogStream = conventionalChangelogCore(options, {}, gitRawCommitsOpts);
+    const [newEntry, [changelogPath, changelogContents]] = await Promise.all([
+        getStream(changelogStream).then(makeBumpOnlyFilter(packageJson.name)),
+        readExistingChangelog(packageDir),
+    ]);
+    const content = [CHANGELOG_HEADER, newEntry, changelogContents].join(BLANK_LINE);
+    await fs.promises.writeFile(changelogPath, content.trim() + EOL);
+}
+exports["default"] = updateChangelog;
+
+
+/***/ }),
+
 /***/ 3380:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -13587,6 +13784,7 @@ const version_packages_1 = __nccwpck_require__(3380);
 const package_manager_1 = __nccwpck_require__(2435);
 const create_pull_request_1 = __nccwpck_require__(6672);
 const strategy_1 = __nccwpck_require__(4741);
+const update_changelog_1 = __nccwpck_require__(8178);
 async function version() {
     const packagesCsv = core.getInput(constants_1.Input.Packages, { required: true });
     const token = core.getInput(constants_1.Input.GithubToken, { required: true });
@@ -13597,6 +13795,11 @@ async function version() {
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
     const { actor, repo } = github.context;
+    if (versionStrategy !== strategy_1.VersionStrategy.ConventionalCommits) {
+        await Promise.all(packages.map((packageDir) => (0, update_changelog_1.default)(packageDir)));
+        await (0, git_1.add)(packages.join(' '));
+        await (0, git_1.commit)({ message: 'chore: update changelogs' });
+    }
     core.info(`Configure user ${actor}`);
     await (0, git_1.configureUser)({
         name: actor,
