@@ -21,7 +21,8 @@ import revertUnwantedDependencyChanges from './version/revert-unwanted-dependenc
 import versionPackages from './version/version-packages'
 import { updateLockfile } from './utils/package-manager'
 import createPullRequest from './version/create-pull-request'
-import { assertStrategy, validateAllowedStrategies } from './version/strategy'
+import { assertStrategy, validateAllowedStrategies, VersionStrategy } from './version/strategy'
+import updateChangelog from './version/update-changelog'
 
 async function version() {
   const packagesCsv = core.getInput(Input.Packages, { required: true })
@@ -37,6 +38,12 @@ async function version() {
   const client = github.getOctokit(token)
 
   const { actor, repo } = github.context
+
+  if (versionStrategy !== VersionStrategy.ConventionalCommits) {
+    await Promise.all(packages.map((packageDir) => updateChangelog(packageDir)))
+    await add(packages.join(' '))
+    await commit({ message: 'chore: update changelogs' })
+  }
 
   core.info(`Configure user ${actor}`)
   await configureUser({
