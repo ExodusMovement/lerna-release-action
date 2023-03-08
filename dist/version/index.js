@@ -13454,8 +13454,8 @@ async function readExistingChangelog(packageDir) {
     return [changelogPath, contentsWithoutHeader];
 }
 async function updateChangelog(packageDir) {
-    const config = await importDynamically('conventional-changelog-conventionalcommits');
-    const conventionalChangelogCore = await importDynamically('conventional-changelog-core');
+    const config = await importDynamically('node_modules/conventional-changelog-conventionalcommits');
+    const conventionalChangelogCore = await importDynamically('node_modules/conventional-changelog-core');
     const packageJson = await (0, fs_1.readJson)(packageDir, { filesystem: fs });
     if (!packageJson) {
         throw new Error(`package.json does not exist in ${packageDir}`);
@@ -13796,6 +13796,7 @@ async function version() {
     const client = github.getOctokit(token);
     const { actor, repo } = github.context;
     if (versionStrategy !== strategy_1.VersionStrategy.ConventionalCommits) {
+        core.info(`Static version strategy used. Trying to generate changelogs manually.`);
         await Promise.all(packages.map((packageDir) => (0, update_changelog_1.default)(packageDir)));
         await (0, git_1.add)(packages.join(' '));
         await (0, git_1.commit)({ message: 'chore: update changelogs' });

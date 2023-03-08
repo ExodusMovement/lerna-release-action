@@ -45,8 +45,12 @@ async function readExistingChangelog(packageDir: string): Promise<[string, strin
 }
 
 export default async function updateChangelog(packageDir: string) {
-  const config = await importDynamically('conventional-changelog-conventionalcommits')
-  const conventionalChangelogCore = await importDynamically('conventional-changelog-core')
+  const config = await importDynamically(
+    './node_modules/conventional-changelog-conventionalcommits'
+  )
+  const conventionalChangelogCore = await importDynamically(
+    './node_modules/conventional-changelog-core'
+  )
   const packageJson = await readJson<PackageJson>(packageDir, { filesystem: fs })
 
   if (!packageJson) {

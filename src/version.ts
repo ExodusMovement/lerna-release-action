@@ -40,6 +40,7 @@ async function version() {
   const { actor, repo } = github.context
 
   if (versionStrategy !== VersionStrategy.ConventionalCommits) {
+    core.info(`Static version strategy used. Trying to generate changelogs manually.`)
     await Promise.all(packages.map((packageDir) => updateChangelog(packageDir)))
     await add(packages.join(' '))
     await commit({ message: 'chore: update changelogs' })
