@@ -46,7 +46,7 @@ async function readExistingChangelog(packageDir: string): Promise<[string, strin
 }
 
 export default async function updateChangelog(packageDir: string) {
-  const workspace = process.env['GITHUB_WORKSPACE'] ?? ''
+  const workspace = process.env['GITHUB_WORKSPACE']! // eslint-disable-line @typescript-eslint/no-non-null-assertion
   const { default: createConfig } = await importDynamically(
     path.join(workspace, 'node_modules/conventional-changelog-conventionalcommits/index.js')
   )

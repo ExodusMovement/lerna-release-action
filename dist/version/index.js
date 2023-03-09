@@ -13455,7 +13455,7 @@ async function readExistingChangelog(packageDir) {
     return [changelogPath, contentsWithoutHeader];
 }
 async function updateChangelog(packageDir) {
-    const workspace = process.env['GITHUB_WORKSPACE'] ?? '';
+    const workspace = process.env['GITHUB_WORKSPACE']; // eslint-disable-line @typescript-eslint/no-non-null-assertion
     const { default: createConfig } = await importDynamically(path.join(workspace, 'node_modules/conventional-changelog-conventionalcommits/index.js'));
     const { default: conventionalChangelogCore } = await importDynamically(path.join(workspace, 'node_modules/conventional-changelog-core/index.js'));
     const config = await createConfig();
