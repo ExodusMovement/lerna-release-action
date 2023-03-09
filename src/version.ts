@@ -21,7 +21,8 @@ import revertUnwantedDependencyChanges from './version/revert-unwanted-dependenc
 import versionPackages from './version/version-packages'
 import { updateLockfile } from './utils/package-manager'
 import createPullRequest from './version/create-pull-request'
-import { assertStrategy, validateAllowedStrategies } from './version/strategy'
+import { assertStrategy, validateAllowedStrategies, VersionStrategy } from './version/strategy'
+import updateChangelog from './version/update-changelog'
 
 async function version() {
   const packagesCsv = core.getInput(Input.Packages, { required: true })
@@ -68,6 +69,13 @@ async function version() {
   core.info('Deleting previous tags and cleaning up working directory')
   await deleteTags(tags)
   await cleanup()
+
+  if (versionStrategy !== VersionStrategy.ConventionalCommits) {
+    core.info(`Static version strategy used. Trying to generate changelogs manually.`)
+    await Promise.all(packages.map((packageDir) => updateChangelog(packageDir)))
+    await add(packages.join(' '))
+    await commit({ message: 'chore: update changelogs' })
+  }
 
   core.info('Reverting changes to dependencies bumped but not included in release')
   await revertUnwantedDependencyChanges({ packages, previousPackageContents })
