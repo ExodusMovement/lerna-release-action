@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as getStream from 'get-stream'
 import * as path from 'path'
-import * as github from '@actions/github'
+import * as core from '@actions/core'
 import { readJson } from '../utils/fs'
 import { PackageJson } from '../utils/types'
 
@@ -47,12 +47,15 @@ async function readExistingChangelog(packageDir: string): Promise<[string, strin
 
 export default async function updateChangelog(packageDir: string) {
   const workspace = process.env['GITHUB_WORKSPACE'] ?? ''
-  const config = await importDynamically(
+  const createConfig = await importDynamically(
     path.join(workspace, 'node_modules/conventional-changelog-conventionalcommits/index.js')
   )
   const conventionalChangelogCore = await importDynamically(
     path.join(workspace, 'node_modules/conventional-changelog-core/index.js')
   )
+  const config = await createConfig()
+  core.debug(JSON.stringify(config))
+
   const packageJson = await readJson<PackageJson>(path.join(packageDir, 'package.json'), {
     filesystem: fs,
   })

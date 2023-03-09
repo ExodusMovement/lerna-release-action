@@ -13422,6 +13422,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const fs = __nccwpck_require__(7147);
 const getStream = __nccwpck_require__(1766);
 const path = __nccwpck_require__(1017);
+const core = __nccwpck_require__(2186);
 const fs_1 = __nccwpck_require__(1716);
 const EOL = '\n';
 const BLANK_LINE = EOL + EOL;
@@ -13455,8 +13456,10 @@ async function readExistingChangelog(packageDir) {
 }
 async function updateChangelog(packageDir) {
     const workspace = process.env['GITHUB_WORKSPACE'] ?? '';
-    const config = await importDynamically(path.join(workspace, 'node_modules/conventional-changelog-conventionalcommits/index.js'));
+    const createConfig = await importDynamically(path.join(workspace, 'node_modules/conventional-changelog-conventionalcommits/index.js'));
     const conventionalChangelogCore = await importDynamically(path.join(workspace, 'node_modules/conventional-changelog-core/index.js'));
+    const config = await createConfig();
+    core.debug(JSON.stringify(config));
     const packageJson = await (0, fs_1.readJson)(path.join(packageDir, 'package.json'), {
         filesystem: fs,
     });
