@@ -53,6 +53,7 @@ export default async function updateChangelog(packageDir: string) {
   const conventionalChangelogCore = await importDynamically(
     path.join(workspace, 'node_modules/conventional-changelog-core/index.js')
   )
+  core.debug(JSON.stringify(createConfig))
   const config = await createConfig()
   core.debug(JSON.stringify(config))
 
