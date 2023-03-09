@@ -13454,8 +13454,9 @@ async function readExistingChangelog(packageDir) {
     return [changelogPath, contentsWithoutHeader];
 }
 async function updateChangelog(packageDir) {
-    const config = await importDynamically('./node_modules/conventional-changelog-conventionalcommits');
-    const conventionalChangelogCore = await importDynamically('./node_modules/conventional-changelog-core');
+    const workspace = process.env['GITHUB_WORKSPACE'] ?? '';
+    const config = await importDynamically(path.join(workspace, 'node_modules/conventional-changelog-conventionalcommits/index.js'));
+    const conventionalChangelogCore = await importDynamically(path.join(workspace, 'node_modules/conventional-changelog-core/index.js'));
     const packageJson = await (0, fs_1.readJson)(packageDir, { filesystem: fs });
     if (!packageJson) {
         throw new Error(`package.json does not exist in ${packageDir}`);
