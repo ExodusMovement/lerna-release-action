@@ -4,6 +4,8 @@ import * as path from 'path'
 import * as core from '@actions/core'
 import { readJson } from '../utils/fs'
 import { PackageJson } from '../utils/types'
+import createConfig from 'conventional-changelog-conventionalcommits'
+import conventionalChangelogCore from 'conventional-changelog-core'
 
 const EOL = '\n'
 const BLANK_LINE = EOL + EOL
@@ -15,9 +17,6 @@ const CHANGELOG_HEADER = [
   'All notable changes to this project will be documented in this file.',
   COMMIT_GUIDELINE,
 ].join(EOL)
-
-// dynamic imports such as await import() are bundled by vercel/ncc. We need to import at runtime
-const importDynamically = new Function('p', 'return import(p)') // eslint-disable-line no-new-func
 
 function makeBumpOnlyFilter(packageName: string) {
   return (newEntry: string): string => {
@@ -46,14 +45,6 @@ async function readExistingChangelog(packageDir: string): Promise<[string, strin
 }
 
 export default async function updateChangelog(packageDir: string) {
-  const workspace = process.env['GITHUB_WORKSPACE']! // eslint-disable-line @typescript-eslint/no-non-null-assertion
-  const { default: createConfig } = await importDynamically(
-    path.join(workspace, 'node_modules/conventional-changelog-conventionalcommits/index.js')
-  )
-  const { default: conventionalChangelogCore } = await importDynamically(
-    path.join(workspace, 'node_modules/conventional-changelog-core/index.js')
-  )
-
   const config = await createConfig()
   core.debug(JSON.stringify(config))
 
