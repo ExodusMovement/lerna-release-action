@@ -4,8 +4,8 @@ import * as path from 'path'
 import * as core from '@actions/core'
 import { readJson } from '../utils/fs'
 import { PackageJson } from '../utils/types'
-import createConfig from 'conventional-changelog-conventionalcommits'
-import conventionalChangelogCore from 'conventional-changelog-core'
+import * as createConfig from 'conventional-changelog-conventionalcommits'
+import * as conventionalChangelogCore from 'conventional-changelog-core'
 
 const EOL = '\n'
 const BLANK_LINE = EOL + EOL

@@ -64101,8 +64101,8 @@ const getStream = __nccwpck_require__(1766);
 const path = __nccwpck_require__(1017);
 const core = __nccwpck_require__(2186);
 const fs_1 = __nccwpck_require__(1716);
-const conventional_changelog_conventionalcommits_1 = __nccwpck_require__(8761);
-const conventional_changelog_core_1 = __nccwpck_require__(3064);
+const createConfig = __nccwpck_require__(8761);
+const conventionalChangelogCore = __nccwpck_require__(3064);
 const EOL = '\n';
 const BLANK_LINE = EOL + EOL;
 const COMMIT_GUIDELINE = 'See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.';
@@ -64132,7 +64132,7 @@ async function readExistingChangelog(packageDir) {
     return [changelogPath, contentsWithoutHeader];
 }
 async function updateChangelog(packageDir) {
-    const config = await (0, conventional_changelog_conventionalcommits_1.default)();
+    const config = await createConfig();
     core.debug(JSON.stringify(config));
     const packageJson = await (0, fs_1.readJson)(path.join(packageDir, 'package.json'), {
         filesystem: fs,
@@ -64148,7 +64148,7 @@ async function updateChangelog(packageDir) {
     const gitRawCommitsOpts = Object.assign({}, options.config.gitRawCommitsOpts, {
         path: packageDir,
     });
-    const changelogStream = (0, conventional_changelog_core_1.default)(options, {}, gitRawCommitsOpts);
+    const changelogStream = conventionalChangelogCore(options, {}, gitRawCommitsOpts);
     const [newEntry, [changelogPath, changelogContents]] = await Promise.all([
         getStream(changelogStream).then(makeBumpOnlyFilter(packageJson.name)),
         readExistingChangelog(packageDir),
