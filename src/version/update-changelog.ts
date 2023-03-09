@@ -47,13 +47,13 @@ async function readExistingChangelog(packageDir: string): Promise<[string, strin
 
 export default async function updateChangelog(packageDir: string) {
   const workspace = process.env['GITHUB_WORKSPACE'] ?? ''
-  const createConfig = await importDynamically(
+  const { default: createConfig } = await importDynamically(
     path.join(workspace, 'node_modules/conventional-changelog-conventionalcommits/index.js')
   )
-  const conventionalChangelogCore = await importDynamically(
+  const { default: conventionalChangelogCore } = await importDynamically(
     path.join(workspace, 'node_modules/conventional-changelog-core/index.js')
   )
-  core.debug(JSON.stringify(createConfig))
+
   const config = await createConfig()
   core.debug(JSON.stringify(config))
 
