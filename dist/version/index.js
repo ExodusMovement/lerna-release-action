@@ -13801,17 +13801,17 @@ async function version() {
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
     const { actor, repo } = github.context;
+    core.info(`Configure user ${actor}`);
+    await (0, git_1.configureUser)({
+        name: actor,
+        email: `${actor}@users.noreply.github.com`,
+    });
     if (versionStrategy !== strategy_1.VersionStrategy.ConventionalCommits) {
         core.info(`Static version strategy used. Trying to generate changelogs manually.`);
         await Promise.all(packages.map((packageDir) => (0, update_changelog_1.default)(packageDir)));
         await (0, git_1.add)(packages.join(' '));
         await (0, git_1.commit)({ message: 'chore: update changelogs' });
     }
-    core.info(`Configure user ${actor}`);
-    await (0, git_1.configureUser)({
-        name: actor,
-        email: `${actor}@users.noreply.github.com`,
-    });
     core.info('Creating object of previous package.json contents');
     const previousPackageContents = await (0, read_package_jsons_1.default)();
     core.info('Versioning packages');

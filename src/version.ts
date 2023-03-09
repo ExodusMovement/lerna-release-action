@@ -39,18 +39,18 @@ async function version() {
 
   const { actor, repo } = github.context
 
+  core.info(`Configure user ${actor}`)
+  await configureUser({
+    name: actor,
+    email: `${actor}@users.noreply.github.com`,
+  })
+
   if (versionStrategy !== VersionStrategy.ConventionalCommits) {
     core.info(`Static version strategy used. Trying to generate changelogs manually.`)
     await Promise.all(packages.map((packageDir) => updateChangelog(packageDir)))
     await add(packages.join(' '))
     await commit({ message: 'chore: update changelogs' })
   }
-
-  core.info(`Configure user ${actor}`)
-  await configureUser({
-    name: actor,
-    email: `${actor}@users.noreply.github.com`,
-  })
 
   core.info('Creating object of previous package.json contents')
   const previousPackageContents = await readPackageJsons()
