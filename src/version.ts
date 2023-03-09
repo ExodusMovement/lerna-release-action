@@ -45,13 +45,6 @@ async function version() {
     email: `${actor}@users.noreply.github.com`,
   })
 
-  if (versionStrategy !== VersionStrategy.ConventionalCommits) {
-    core.info(`Static version strategy used. Trying to generate changelogs manually.`)
-    await Promise.all(packages.map((packageDir) => updateChangelog(packageDir)))
-    await add(packages.join(' '))
-    await commit({ message: 'chore: update changelogs' })
-  }
-
   core.info('Creating object of previous package.json contents')
   const previousPackageContents = await readPackageJsons()
 
@@ -76,6 +69,13 @@ async function version() {
   core.info('Deleting previous tags and cleaning up working directory')
   await deleteTags(tags)
   await cleanup()
+
+  if (versionStrategy !== VersionStrategy.ConventionalCommits) {
+    core.info(`Static version strategy used. Trying to generate changelogs manually.`)
+    await Promise.all(packages.map((packageDir) => updateChangelog(packageDir)))
+    await add(packages.join(' '))
+    await commit({ message: 'chore: update changelogs' })
+  }
 
   core.info('Reverting changes to dependencies bumped but not included in release')
   await revertUnwantedDependencyChanges({ packages, previousPackageContents })

@@ -13806,12 +13806,6 @@ async function version() {
         name: actor,
         email: `${actor}@users.noreply.github.com`,
     });
-    if (versionStrategy !== strategy_1.VersionStrategy.ConventionalCommits) {
-        core.info(`Static version strategy used. Trying to generate changelogs manually.`);
-        await Promise.all(packages.map((packageDir) => (0, update_changelog_1.default)(packageDir)));
-        await (0, git_1.add)(packages.join(' '));
-        await (0, git_1.commit)({ message: 'chore: update changelogs' });
-    }
     core.info('Creating object of previous package.json contents');
     const previousPackageContents = await (0, read_package_jsons_1.default)();
     core.info('Versioning packages');
@@ -13830,6 +13824,12 @@ async function version() {
     core.info('Deleting previous tags and cleaning up working directory');
     await (0, git_1.deleteTags)(tags);
     await (0, git_1.cleanup)();
+    if (versionStrategy !== strategy_1.VersionStrategy.ConventionalCommits) {
+        core.info(`Static version strategy used. Trying to generate changelogs manually.`);
+        await Promise.all(packages.map((packageDir) => (0, update_changelog_1.default)(packageDir)));
+        await (0, git_1.add)(packages.join(' '));
+        await (0, git_1.commit)({ message: 'chore: update changelogs' });
+    }
     core.info('Reverting changes to dependencies bumped but not included in release');
     await (0, revert_unwanted_dependency_changes_1.default)({ packages, previousPackageContents });
     await (0, package_manager_1.updateLockfile)();
