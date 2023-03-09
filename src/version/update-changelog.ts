@@ -53,7 +53,9 @@ export default async function updateChangelog(packageDir: string) {
   const conventionalChangelogCore = await importDynamically(
     path.join(workspace, 'node_modules/conventional-changelog-core/index.js')
   )
-  const packageJson = await readJson<PackageJson>(packageDir, { filesystem: fs })
+  const packageJson = await readJson<PackageJson>(path.join(packageDir, 'package.json'), {
+    filesystem: fs,
+  })
 
   if (!packageJson) {
     throw new Error(`package.json does not exist in ${packageDir}`)
