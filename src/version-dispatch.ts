@@ -42,6 +42,7 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
     ...repo,
     workflow_id: workflowId,
     inputs: {
+      assignee: pr.user.login,
       'version-strategy': VersionStrategy.ConventionalCommits,
       packages: affected.join(','),
     },

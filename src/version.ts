@@ -38,11 +38,12 @@ async function version() {
   const client = github.getOctokit(token)
 
   const { actor, repo } = github.context
+  const assignee = core.getInput(Input.Assignee) || actor
 
-  core.info(`Configure user ${actor}`)
+  core.info(`Configure user ${assignee}`)
   await configureUser({
-    name: actor,
-    email: `${actor}@users.noreply.github.com`,
+    name: assignee,
+    email: `${assignee}@users.noreply.github.com`,
   })
 
   core.info('Creating object of previous package.json contents')
@@ -93,7 +94,7 @@ async function version() {
     tags,
     branch,
     labels: [RELEASE_PR_LABEL],
-    assignees: [actor],
+    assignees: [assignee],
   })
 }
 

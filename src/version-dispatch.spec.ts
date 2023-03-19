@@ -70,6 +70,9 @@ describe('versionDispatch', () => {
       pull_request: {
         number: 123,
         merged: true,
+        user: {
+          login: 'brucewayne',
+        },
         labels: [{ name: 'blockchain-metadata' }, { name: 'atoms' }, { name: 'refactor' }],
       },
     }
@@ -81,6 +84,7 @@ describe('versionDispatch', () => {
       ref,
       workflow_id: workflowId,
       inputs: {
+        assignee: 'brucewayne',
         'version-strategy': 'conventional-commits',
         packages: 'libraries/atoms,modules/blockchain-metadata',
       },

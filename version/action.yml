@@ -12,6 +12,8 @@ inputs:
     default: 'conventional-commits'
   version-extra-args:
     description: 'Additional args appended to the lerna version call'
+  assignee:
+    description: 'User to assign the workflow to. Defaults to github.context.actor'
 
 
 runs:
