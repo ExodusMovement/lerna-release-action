@@ -12,7 +12,7 @@ inputs:
     default: 'version'
 runs:
   using: 'node16'
-  main: '../../dist/version-dispatch/index.js'
+  main: '../dist/version-dispatch/index.js'
 author: 'ExodusMovement'
 branding:
   icon: 'plus-square'
