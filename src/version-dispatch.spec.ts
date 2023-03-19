@@ -114,4 +114,17 @@ describe('versionDispatch', () => {
     await versionDispatch({ filesystem: fs as never })
     expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
   })
+
+  it('should abort if none of the lerna managed packages were affected', async () => {
+    github.context.payload = {
+      pull_request: {
+        number: 123,
+        merged: true,
+        labels: [{ name: 'ci' }, { name: 'docs' }],
+      },
+    }
+
+    await versionDispatch({ filesystem: fs as never })
+    expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+  })
 })

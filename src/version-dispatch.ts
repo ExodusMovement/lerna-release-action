@@ -22,12 +22,12 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
   } = github.context
 
   if (!pr) {
-    core.warning('Action triggered by non-PR related event. Aborting')
+    core.warning('Action triggered by non-PR related event.')
     return
   }
 
   if (!pr.merged) {
-    core.notice('PR was closed without merging. Aborting')
+    core.notice('PR was closed without merging.')
     return
   }
 
@@ -36,6 +36,11 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
   const affected = packagePaths.filter((it) =>
     pr.labels.some((label: { name: string }) => label.name === path.basename(it))
   )
+
+  if (affected.length === 0) {
+    core.notice('No packages were affected.')
+    return
+  }
 
   await client.rest.actions.createWorkflowDispatch({
     ref,
