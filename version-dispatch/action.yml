@@ -9,7 +9,7 @@ inputs:
     default: 'master'
   version-workflow-id:
     description: 'ID of the version workflow'
-    default: 'version'
+    default: 'version.yml'
 runs:
   using: 'node16'
   main: '../dist/version-dispatch/index.js'
