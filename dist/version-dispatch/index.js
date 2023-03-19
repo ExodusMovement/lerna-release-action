@@ -13126,16 +13126,20 @@ async function versionDispatch({ filesystem = fs } = {}) {
     const ref = core.getInput(constants_1.Input.Ref);
     const { repo, payload: { pull_request: pr }, } = github.context;
     if (!pr) {
-        core.warning('Action triggered by non-PR related event. Aborting');
+        core.warning('Action triggered by non-PR related event.');
         return;
     }
     if (!pr.merged) {
-        core.notice('PR was closed without merging. Aborting');
+        core.notice('PR was closed without merging.');
         return;
     }
     const client = github.getOctokit(token);
     const packagePaths = await (0, lerna_utils_1.getPackagePaths)({ filesystem });
     const affected = packagePaths.filter((it) => pr.labels.some((label) => label.name === path.basename(it)));
+    if (affected.length === 0) {
+        core.notice('No packages were affected.');
+        return;
+    }
     await client.rest.actions.createWorkflowDispatch({
         ref,
         ...repo,
