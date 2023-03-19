@@ -1053,6 +1053,7 @@ class Context {
 exports.Context = Context;
 //# sourceMappingURL=context.js.map
 
+
 /***/ }),
 
 /***/ 5438:
@@ -63585,6 +63586,8 @@ var Input;
     Input["Packages"] = "packages";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
+    Input["VersionWorkflowId"] = "version-workflow-id";
+    Input["Ref"] = "ref";
 })(Input = exports.Input || (exports.Input = {}));
 exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
