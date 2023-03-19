@@ -3,6 +3,22 @@ import { versionDispatch } from './version-dispatch'
 import { GithubClient } from './utils/github'
 import { Volume } from 'memfs/lib/volume'
 
+jest.mock('@actions/core', () => ({
+  getInput: (name: string) => {
+    const inputs: Record<string, unknown> = {
+      ref: 'main',
+      'version-workflow-id': 'a tiny little workflow',
+      'github-token': 'abc',
+    }
+    return inputs[name]
+  },
+  debug: jest.fn(),
+  warning: jest.fn(),
+  error: jest.fn(),
+  notice: jest.fn(),
+  setFailed: jest.fn(),
+}))
+
 describe('versionDispatch', () => {
   type CreateWorkflowDispatch = GithubClient['rest']['actions']['createWorkflowDispatch']
 
@@ -47,10 +63,6 @@ describe('versionDispatch', () => {
         name: '@exodus/blockchain-metadata',
       }),
     })
-
-    process.env['INPUT_GITHUB-TOKEN'] = 'the token'
-    process.env['INPUT_REF'] = ref
-    process.env['INPUT_VERSION-WORKFLOW-ID'] = workflowId
   })
 
   it('should invoke version workflow with packages affected by PR', async () => {
