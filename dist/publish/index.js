@@ -12648,10 +12648,13 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.RELEASE_PR_LABEL = exports.Input = void 0;
 var Input;
 (function (Input) {
+    Input["Assignee"] = "assignee";
     Input["GithubToken"] = "github-token";
     Input["Packages"] = "packages";
+    Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
+    Input["VersionWorkflowId"] = "version-workflow-id";
 })(Input = exports.Input || (exports.Input = {}));
 exports.RELEASE_PR_LABEL = 'publish-on-merge';
 

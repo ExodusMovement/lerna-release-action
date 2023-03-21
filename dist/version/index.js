@@ -63581,10 +63581,13 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.RELEASE_PR_LABEL = exports.Input = void 0;
 var Input;
 (function (Input) {
+    Input["Assignee"] = "assignee";
     Input["GithubToken"] = "github-token";
     Input["Packages"] = "packages";
+    Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
+    Input["VersionWorkflowId"] = "version-workflow-id";
 })(Input = exports.Input || (exports.Input = {}));
 exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
@@ -64615,10 +64618,11 @@ async function version() {
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
     const { actor, repo } = github.context;
-    core.info(`Configure user ${actor}`);
+    const assignee = core.getInput(constants_1.Input.Assignee) || actor;
+    core.info(`Configure user ${assignee}`);
     await (0, git_1.configureUser)({
-        name: actor,
-        email: `${actor}@users.noreply.github.com`,
+        name: assignee,
+        email: `${assignee}@users.noreply.github.com`,
     });
     core.info('Creating object of previous package.json contents');
     const previousPackageContents = await (0, read_package_jsons_1.default)();
@@ -64658,7 +64662,7 @@ async function version() {
         tags,
         branch,
         labels: [constants_1.RELEASE_PR_LABEL],
-        assignees: [actor],
+        assignees: [assignee],
     });
 }
 version().catch((error) => {

@@ -12,6 +12,8 @@ inputs:
     default: 'conventional-commits'
   version-extra-args:
     description: 'Additional args appended to the lerna version call'
+  assignee:
+    description: 'User to assign the workflow to. When triggered through workflow_dispatch, this will default to the user who invoked the workflow.'
 
 
 runs:

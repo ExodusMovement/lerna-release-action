@@ -1,0 +1,19 @@
+name: 'Lerna release action: Version Dispatch'
+description: 'Action to trigger the versioning process post-merge'
+inputs:
+  github-token:
+    description: 'Token used to create a PR'
+    required: true
+  ref:
+    description: 'Ref to checkout'
+    default: 'master'
+  version-workflow-id:
+    description: 'ID of the version workflow'
+    default: 'version.yml'
+runs:
+  using: 'node16'
+  main: '../dist/version-dispatch/index.js'
+author: 'ExodusMovement'
+branding:
+  icon: 'plus-square'
+  color: 'blue'
