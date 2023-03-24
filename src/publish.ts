@@ -27,7 +27,7 @@ async function publish() {
   }
 
   core.info('Publishing yet unpublished packages')
-  const { stdout } = await exec('npx lerna publish from-package --yes')
+  const { stdout } = await exec('npx lerna publish from-package --yes --no-private')
   core.debug(stdout)
 
   core.info('Identifying published packages')

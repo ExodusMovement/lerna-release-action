@@ -13023,7 +13023,7 @@ async function publish() {
         return;
     }
     core.info('Publishing yet unpublished packages');
-    const { stdout } = await (0, process_1.exec)('npx lerna publish from-package --yes');
+    const { stdout } = await (0, process_1.exec)('npx lerna publish from-package --yes --no-private');
     core.debug(stdout);
     core.info('Identifying published packages');
     const tags = stdout.match(/@exodus\/\S+@\d+\.\d+.\d+/g);
