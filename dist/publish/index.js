@@ -12667,11 +12667,18 @@ exports.RELEASE_PR_LABEL = 'publish-on-merge';
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.unique = void 0;
+exports.joinNatural = exports.unique = void 0;
 function unique(array) {
     return array.filter((e, i) => array.indexOf(e) === i);
 }
 exports.unique = unique;
+function joinNatural(elements) {
+    if (elements.length === 1)
+        return elements[0]; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    const [last] = elements.slice(-1);
+    return elements.slice(0, -1).join(', ') + `, and ${last}`;
+}
+exports.joinNatural = joinNatural;
 
 
 /***/ }),

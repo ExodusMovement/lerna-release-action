@@ -12788,6 +12788,28 @@ exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
 /***/ }),
 
+/***/ 8873:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.joinNatural = exports.unique = void 0;
+function unique(array) {
+    return array.filter((e, i) => array.indexOf(e) === i);
+}
+exports.unique = unique;
+function joinNatural(elements) {
+    if (elements.length === 1)
+        return elements[0]; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    const [last] = elements.slice(-1);
+    return elements.slice(0, -1).join(', ') + `, and ${last}`;
+}
+exports.joinNatural = joinNatural;
+
+
+/***/ }),
+
 /***/ 1716:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -13120,6 +13142,7 @@ const fs = __nccwpck_require__(7147);
 const lerna_utils_1 = __nccwpck_require__(4801);
 const path = __nccwpck_require__(1017);
 const strategy_1 = __nccwpck_require__(4741);
+const arrays_1 = __nccwpck_require__(8873);
 async function versionDispatch({ filesystem = fs } = {}) {
     const token = core.getInput(constants_1.Input.GithubToken, { required: true });
     const workflowId = core.getInput(constants_1.Input.VersionWorkflowId);
@@ -13149,6 +13172,11 @@ async function versionDispatch({ filesystem = fs } = {}) {
             'version-strategy': strategy_1.VersionStrategy.ConventionalCommits,
             packages: affected.join(','),
         },
+    });
+    await client.rest.issues.createComment({
+        ...repo,
+        body: `@${pr.user.login} Fear not, for I have begun versioning the packages ${(0, arrays_1.joinNatural)(affected.map((packagePath) => path.basename(packagePath)))} for you. Once finished, you shall be assigned to the release PR. If releasing wasn't your plan, just close the PR.`,
+        issue_number: 123,
     });
 }
 exports.versionDispatch = versionDispatch;
