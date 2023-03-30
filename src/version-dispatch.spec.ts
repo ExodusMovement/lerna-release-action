@@ -131,6 +131,7 @@ describe('versionDispatch', () => {
 
     await versionDispatch({ filesystem: fs as never })
     expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+    expect(client.rest.issues.createComment).not.toHaveBeenCalled()
   })
 
   it('should abort if PR was not merged', async () => {
@@ -144,6 +145,7 @@ describe('versionDispatch', () => {
 
     await versionDispatch({ filesystem: fs as never })
     expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+    expect(client.rest.issues.createComment).not.toHaveBeenCalled()
   })
 
   it('should abort if none of the lerna managed packages were affected', async () => {
@@ -157,5 +159,6 @@ describe('versionDispatch', () => {
 
     await versionDispatch({ filesystem: fs as never })
     expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+    expect(client.rest.issues.createComment).not.toHaveBeenCalled()
   })
 })
