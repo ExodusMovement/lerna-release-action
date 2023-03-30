@@ -21,6 +21,7 @@ jest.mock('@actions/core', () => ({
 
 describe('versionDispatch', () => {
   type CreateWorkflowDispatch = GithubClient['rest']['actions']['createWorkflowDispatch']
+  type CreateComment = GithubClient['rest']['issues']['createComment']
 
   const repo = {
     owner: 'WayneFoundation',
@@ -46,6 +47,9 @@ describe('versionDispatch', () => {
   beforeEach(() => {
     client = {
       rest: {
+        issues: {
+          createComment: jest.fn() as unknown as CreateComment,
+        },
         actions: {
           createWorkflowDispatch: jest.fn() as unknown as CreateWorkflowDispatch,
         },
@@ -59,6 +63,7 @@ describe('versionDispatch', () => {
     fs = Volume.fromJSON({
       'lerna.json': lernaConfig,
       'libraries/atoms/package.json': JSON.stringify({ name: '@exodus/atoms' }),
+      'libraries/wallet/package.json': JSON.stringify({ name: '@exodus/wallet' }),
       'modules/blockchain-metadata/package.json': JSON.stringify({
         name: '@exodus/blockchain-metadata',
       }),
@@ -88,6 +93,32 @@ describe('versionDispatch', () => {
         'version-strategy': 'conventional-commits',
         packages: 'libraries/atoms,modules/blockchain-metadata',
       },
+    })
+  })
+
+  it('should comment on PR to let user know that versioning was started on their behalf', async () => {
+    github.context.payload = {
+      pull_request: {
+        number: 123,
+        merged: true,
+        user: {
+          login: 'brucewayne',
+        },
+        labels: [
+          { name: 'blockchain-metadata' },
+          { name: 'atoms' },
+          { name: 'wallet' },
+          { name: 'refactor' },
+        ],
+      },
+    }
+
+    await versionDispatch({ filesystem: fs as never })
+
+    expect(client.rest.issues.createComment).toHaveBeenCalledWith({
+      ...repo,
+      body: "@brucewayne Fear not, for I have begun versioning the packages atoms, wallet, and blockchain-metadata for you. Once finished, you shall be assigned to the release PR. If releasing wasn't your plan, just close the PR.",
+      issue_number: 123,
     })
   })
 
