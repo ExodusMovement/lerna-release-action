@@ -59,7 +59,7 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
     body: `@${pr.user.login} Fear not, for I have begun versioning the packages ${joinNatural(
       affected.map((packagePath) => path.basename(packagePath))
     )} for you. Once finished, you shall be assigned to the release PR. If releasing wasn't your plan, just close the PR.`,
-    issue_number: 123,
+    issue_number: pr.number,
   })
 }
 
