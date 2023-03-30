@@ -7,6 +7,7 @@ import { getPackagePaths } from '@exodus/lerna-utils'
 import * as path from 'path'
 import { VersionStrategy } from './version/strategy'
 import { joinNatural } from './utils/arrays'
+import { pluralize } from './utils/strings'
 
 type Params = {
   filesystem?: Filesystem
@@ -56,7 +57,10 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
 
   await client.rest.issues.createComment({
     ...repo,
-    body: `@${pr.user.login} Fear not, for I have begun versioning the packages ${joinNatural(
+    body: `@${pr.user.login} Fear not, for I have begun versioning the ${pluralize(
+      'package',
+      affected.length
+    )} ${joinNatural(
       affected.map((packagePath) => path.basename(packagePath))
     )} for you. Once finished, you shall be assigned to the release PR. If releasing wasn't your plan, just close the PR.`,
     issue_number: pr.number,
