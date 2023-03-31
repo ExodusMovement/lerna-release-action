@@ -63814,7 +63814,7 @@ exports.exec = util.promisify(node_child_process_1.exec);
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.truncate = exports.toKebabCase = void 0;
+exports.pluralize = exports.truncate = exports.toKebabCase = void 0;
 function toKebabCase(text) {
     return text.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
 }
@@ -63838,6 +63838,12 @@ function truncate(text, maxLen) {
     return `${text.slice(0, splitAt)}${ellipsis}`;
 }
 exports.truncate = truncate;
+function pluralize(word, count) {
+    if (count === 1)
+        return word;
+    return `${word}s`;
+}
+exports.pluralize = pluralize;
 
 
 /***/ }),
