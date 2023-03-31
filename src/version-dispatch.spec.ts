@@ -117,7 +117,7 @@ describe('versionDispatch', () => {
 
     expect(client.rest.issues.createComment).toHaveBeenCalledWith({
       ...repo,
-      body: "@brucewayne Fear not, for I have begun versioning the packages atoms, wallet, and blockchain-metadata for you. Once finished, you shall be assigned to the release PR. If releasing wasn't your plan, just close the PR.",
+      body: "@brucewayne fear not, for I have begun versioning the packages atoms, wallet, and blockchain-metadata for you. Once finished, you shall be assigned to the release PR. If releasing wasn't your plan, just close the PR.",
       issue_number: 123,
     })
   })

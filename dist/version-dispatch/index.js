@@ -13216,7 +13216,7 @@ async function versionDispatch({ filesystem = fs } = {}) {
     });
     await client.rest.issues.createComment({
         ...repo,
-        body: `@${pr.user.login} Fear not, for I have begun versioning the ${(0, strings_1.pluralize)('package', affected.length)} ${(0, arrays_1.joinNatural)(affected.map((packagePath) => path.basename(packagePath)))} for you. Once finished, you shall be assigned to the release PR. If releasing wasn't your plan, just close the PR.`,
+        body: `@${pr.user.login} fear not, for I have begun versioning the ${(0, strings_1.pluralize)('package', affected.length)} ${(0, arrays_1.joinNatural)(affected.map((packagePath) => path.basename(packagePath)))} for you. Once finished, you shall be assigned to the release PR. If releasing wasn't your plan, just close the PR.`,
         issue_number: pr.number,
     });
 }

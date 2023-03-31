@@ -57,7 +57,7 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
 
   await client.rest.issues.createComment({
     ...repo,
-    body: `@${pr.user.login} Fear not, for I have begun versioning the ${pluralize(
+    body: `@${pr.user.login} fear not, for I have begun versioning the ${pluralize(
       'package',
       affected.length
     )} ${joinNatural(
