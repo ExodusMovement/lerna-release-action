@@ -9,7 +9,7 @@ type Params = {
 export default async function versionPackages({ extraArgs, versionStrategy }: Params) {
   let command = `npx lerna version ${strategyAsArgument(
     versionStrategy
-  )} --no-push --yes --no-private --force-publish`
+  )} --no-push --force-git-tag --yes --no-private --force-publish`
   if (extraArgs) command += ` ${extraArgs}`
 
   const { stdout } = await exec(command)
