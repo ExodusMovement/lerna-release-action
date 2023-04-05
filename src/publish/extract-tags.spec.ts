@@ -1,5 +1,5 @@
 import { extractTags } from './extract-tags'
-import { PUBLISH_OUTPUT } from './fixture'
+import { PUBLISH_OUTPUT } from '../__fixtures__/publish'
 
 describe('extractTags', () => {
   it('should extractTags from lerna publish output', () => {
