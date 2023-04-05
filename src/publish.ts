@@ -5,6 +5,7 @@ import { exec } from './utils/process'
 import { Label } from './utils/types'
 import { createTags } from './utils/github'
 import { unique } from './utils/arrays'
+import { extractTags } from './publish/extract-tags'
 
 async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
@@ -31,19 +32,18 @@ async function publish() {
   core.debug(stdout)
 
   core.info('Identifying published packages')
-  const tags = stdout.match(/@exodus\/\S+@\d+\.\d+.\d+/g)
+  const tags = extractTags(stdout)
 
   if (!tags) {
     core.notice('No new packages versions found. Publish aborted.')
     return
   }
 
-  const deduped = unique(tags)
-  const publishedPackages = deduped.join(',')
+  const publishedPackages = tags.join(',')
   core.notice(`Published the following versions: ${publishedPackages}`)
 
   core.info(`Adding tags to commit ${sha}`)
-  await createTags({ client, repo, tags: deduped, sha: pr?.base.sha ?? sha })
+  await createTags({ client, repo, tags, sha: pr?.base.sha ?? sha })
   core.setOutput('published-packages', publishedPackages)
 }
 
