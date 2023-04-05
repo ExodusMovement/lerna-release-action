@@ -12661,6 +12661,26 @@ exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
 /***/ }),
 
+/***/ 4672:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.extractTags = void 0;
+const arrays_1 = __nccwpck_require__(8873);
+function extractTags(publishStdout) {
+    const matches = publishStdout.match(/@exodus\/\S+@\d+\.\d+.\d+(-\w+\.\d+)?/g);
+    if (!matches) {
+        return;
+    }
+    return (0, arrays_1.unique)(matches);
+}
+exports.extractTags = extractTags;
+
+
+/***/ }),
+
 /***/ 8873:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -13018,7 +13038,7 @@ const constants_1 = __nccwpck_require__(9042);
 const github = __nccwpck_require__(5438);
 const process_1 = __nccwpck_require__(9239);
 const github_1 = __nccwpck_require__(1225);
-const arrays_1 = __nccwpck_require__(8873);
+const extract_tags_1 = __nccwpck_require__(4672);
 async function publish() {
     const token = core.getInput(constants_1.Input.GithubToken, { required: true });
     const client = github.getOctokit(token);
@@ -13033,16 +13053,15 @@ async function publish() {
     const { stdout } = await (0, process_1.exec)('npx lerna publish from-package --yes --no-private');
     core.debug(stdout);
     core.info('Identifying published packages');
-    const tags = stdout.match(/@exodus\/\S+@\d+\.\d+.\d+/g);
+    const tags = (0, extract_tags_1.extractTags)(stdout);
     if (!tags) {
         core.notice('No new packages versions found. Publish aborted.');
         return;
     }
-    const deduped = (0, arrays_1.unique)(tags);
-    const publishedPackages = deduped.join(',');
+    const publishedPackages = tags.join(',');
     core.notice(`Published the following versions: ${publishedPackages}`);
     core.info(`Adding tags to commit ${sha}`);
-    await (0, github_1.createTags)({ client, repo, tags: deduped, sha: pr?.base.sha ?? sha });
+    await (0, github_1.createTags)({ client, repo, tags, sha: pr?.base.sha ?? sha });
     core.setOutput('published-packages', publishedPackages);
 }
 publish().catch((error) => {
