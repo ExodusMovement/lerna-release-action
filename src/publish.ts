@@ -4,7 +4,6 @@ import * as github from '@actions/github'
 import { exec } from './utils/process'
 import { Label } from './utils/types'
 import { createTags } from './utils/github'
-import { unique } from './utils/arrays'
 import { extractTags } from './publish/extract-tags'
 
 async function publish() {
