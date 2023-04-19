@@ -7,6 +7,9 @@ inputs:
   ref:
     description: 'Ref to checkout'
     default: 'master'
+  exclude-commit-types:
+    description: 'Specify any commit types that should not trigger versioning'
+    default: 'docs,chore'
   version-workflow-id:
     description: 'ID of the version workflow'
     default: 'version.yml'

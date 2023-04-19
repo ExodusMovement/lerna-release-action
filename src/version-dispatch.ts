@@ -8,6 +8,7 @@ import * as path from 'path'
 import { VersionStrategy } from './version/strategy'
 import { joinNatural } from './utils/arrays'
 import { pluralize } from './utils/strings'
+import { parseMessage } from './utils/conventional-commits'
 
 type Params = {
   filesystem?: Filesystem
@@ -17,6 +18,7 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
   const token = core.getInput(Input.GithubToken, { required: true })
   const workflowId = core.getInput(Input.VersionWorkflowId)
   const ref = core.getInput(Input.Ref)
+  const excludedCommitTypes = new Set(core.getInput(Input.ExcludeCommitTypes).split(','))
 
   const {
     repo,
@@ -30,6 +32,12 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
 
   if (!pr.merged) {
     core.notice('PR was closed without merging.')
+    return
+  }
+
+  const { type: commitType } = parseMessage(pr.title)
+  if (excludedCommitTypes.has(commitType)) {
+    core.notice(`Skipped for excluded commit type "${commitType}"`)
     return
   }
 

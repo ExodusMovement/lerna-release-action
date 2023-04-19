@@ -9,6 +9,7 @@ jest.mock('@actions/core', () => ({
       ref: 'main',
       'version-workflow-id': 'a tiny little workflow',
       'github-token': 'abc',
+      'exclude-commit-types': 'docs,chore',
     }
     return inputs[name]
   },
@@ -73,6 +74,7 @@ describe('versionDispatch', () => {
   it('should invoke version workflow with packages affected by PR', async () => {
     github.context.payload = {
       pull_request: {
+        title: 'feat: added a lot of new features',
         number: 123,
         merged: true,
         user: {
@@ -99,6 +101,7 @@ describe('versionDispatch', () => {
   it('should comment on PR to let user know that versioning was started on their behalf', async () => {
     github.context.payload = {
       pull_request: {
+        title: 'feat: added a lot of new features',
         number: 123,
         merged: true,
         user: {
@@ -124,12 +127,16 @@ describe('versionDispatch', () => {
 
   describe('abort conditions', () => {
     const defaults = {
+      title: 'feat: added a lot of new features',
       number: 123,
       merged: true,
       labels: [{ name: 'blockchain-metadata' }, { name: 'atoms' }, { name: 'refactor' }],
+      user: {
+        login: 'brucewayne',
+      },
     }
 
-    it.each([
+    it.each<[string, any]>([
       [
         'for non-PR event',
         {
@@ -156,6 +163,44 @@ describe('versionDispatch', () => {
           },
         },
       ],
+      ...['docs', 'chore'].flatMap<[string, any]>((type) => [
+        [
+          `if PR has type '${type}'`,
+          {
+            pull_request: {
+              ...defaults,
+              title: `${type}: some commit of type ${type}`,
+            },
+          },
+        ],
+        [
+          `if PR has type '${type}' with scope`,
+          {
+            pull_request: {
+              ...defaults,
+              title: `${type}(arkham-asylum): some craziness of type ${type}`,
+            },
+          },
+        ],
+        [
+          `if PR has type '${type}' with breaking modifier`,
+          {
+            pull_request: {
+              ...defaults,
+              title: `${type}!: some breaking commit`,
+            },
+          },
+        ],
+        [
+          `if PR has type '${type}' with scope and breaking modifier`,
+          {
+            pull_request: {
+              ...defaults,
+              title: `${type}(arkham-asylum)!: some breaking craziness of type ${type}`,
+            },
+          },
+        ],
+      ]),
     ])('should abort %s', async (_, payload) => {
       github.context.payload = payload
 
