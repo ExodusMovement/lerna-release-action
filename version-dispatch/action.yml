@@ -10,6 +10,9 @@ inputs:
   exclude-commit-types:
     description: 'Specify any commit types that should not trigger versioning'
     default: 'docs,chore'
+  exclude-labels:
+    description: 'Specify any labels that should not trigger versioning'
+    default: 'skip-release'
   version-workflow-id:
     description: 'ID of the version workflow'
     default: 'version.yml'

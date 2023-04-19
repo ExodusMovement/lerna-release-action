@@ -10,6 +10,7 @@ jest.mock('@actions/core', () => ({
       'version-workflow-id': 'a tiny little workflow',
       'github-token': 'abc',
       'exclude-commit-types': 'docs,chore',
+      'exclude-labels': 'publish-on-merge,skip-release',
     }
     return inputs[name]
   },
@@ -201,6 +202,24 @@ describe('versionDispatch', () => {
           },
         ],
       ]),
+      [
+        'if PR has label skip-release',
+        {
+          pull_request: {
+            ...defaults,
+            labels: [...defaults.labels, { name: 'skip-release' }],
+          },
+        },
+      ],
+      [
+        'if PR has label publish-on-merge',
+        {
+          pull_request: {
+            ...defaults,
+            labels: [...defaults.labels, { name: 'publish-on-merge' }],
+          },
+        },
+      ],
     ])('should abort %s', async (_, payload) => {
       github.context.payload = payload
 
