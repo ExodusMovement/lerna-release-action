@@ -12772,7 +12772,7 @@ function wrappy (fn, cb) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RELEASE_PR_LABEL = exports.Input = void 0;
+exports.RELEASE_PR_LABEL = exports.VersionDispatchInput = exports.Input = void 0;
 var Input;
 (function (Input) {
     Input["Assignee"] = "assignee";
@@ -12781,8 +12781,15 @@ var Input;
     Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
-    Input["VersionWorkflowId"] = "version-workflow-id";
 })(Input = exports.Input || (exports.Input = {}));
+var VersionDispatchInput;
+(function (VersionDispatchInput) {
+    VersionDispatchInput["GithubToken"] = "github-token";
+    VersionDispatchInput["Ref"] = "ref";
+    VersionDispatchInput["VersionWorkflowId"] = "version-workflow-id";
+    VersionDispatchInput["ExcludeCommitTypes"] = "exclude-commit-types";
+    VersionDispatchInput["ExcludeLabels"] = "exclude-labels";
+})(VersionDispatchInput = exports.VersionDispatchInput || (exports.VersionDispatchInput = {}));
 exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
 
@@ -12806,6 +12813,25 @@ function joinNatural(array) {
     return array.slice(0, -1).join(', ') + `, and ${last}`;
 }
 exports.joinNatural = joinNatural;
+
+
+/***/ }),
+
+/***/ 9879:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseMessage = void 0;
+function parseMessage(message) {
+    const type = message.match(/^([^!(:])+/)?.[0];
+    if (!type) {
+        throw new Error(`Failed to parse message as conventional commit: ${message}`);
+    }
+    return { type };
+}
+exports.parseMessage = parseMessage;
 
 
 /***/ }),
@@ -13184,10 +13210,13 @@ const path = __nccwpck_require__(1017);
 const strategy_1 = __nccwpck_require__(4741);
 const arrays_1 = __nccwpck_require__(8873);
 const strings_1 = __nccwpck_require__(8927);
+const conventional_commits_1 = __nccwpck_require__(9879);
 async function versionDispatch({ filesystem = fs } = {}) {
-    const token = core.getInput(constants_1.Input.GithubToken, { required: true });
-    const workflowId = core.getInput(constants_1.Input.VersionWorkflowId);
-    const ref = core.getInput(constants_1.Input.Ref);
+    const token = core.getInput(constants_1.VersionDispatchInput.GithubToken, { required: true });
+    const workflowId = core.getInput(constants_1.VersionDispatchInput.VersionWorkflowId);
+    const ref = core.getInput(constants_1.VersionDispatchInput.Ref);
+    const excludedCommitTypes = new Set(core.getInput(constants_1.VersionDispatchInput.ExcludeCommitTypes).split(','));
+    const excludedLabels = new Set(core.getInput(constants_1.VersionDispatchInput.ExcludeLabels).split(','));
     const { repo, payload: { pull_request: pr }, } = github.context;
     if (!pr) {
         core.warning('Action triggered by non-PR related event.');
@@ -13195,6 +13224,16 @@ async function versionDispatch({ filesystem = fs } = {}) {
     }
     if (!pr.merged) {
         core.notice('PR was closed without merging.');
+        return;
+    }
+    const { type: commitType } = (0, conventional_commits_1.parseMessage)(pr.title);
+    if (excludedCommitTypes.has(commitType)) {
+        core.notice(`Skipped for excluded commit type "${commitType}"`);
+        return;
+    }
+    const excludedLabel = pr.labels.find((label) => excludedLabels.has(label.name));
+    if (excludedLabel) {
+        core.notice(`Skipped for excluded label "${excludedLabel}"`);
         return;
     }
     const client = github.getOctokit(token);

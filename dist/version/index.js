@@ -63578,7 +63578,7 @@ try {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RELEASE_PR_LABEL = exports.Input = void 0;
+exports.RELEASE_PR_LABEL = exports.VersionDispatchInput = exports.Input = void 0;
 var Input;
 (function (Input) {
     Input["Assignee"] = "assignee";
@@ -63587,8 +63587,15 @@ var Input;
     Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
-    Input["VersionWorkflowId"] = "version-workflow-id";
 })(Input = exports.Input || (exports.Input = {}));
+var VersionDispatchInput;
+(function (VersionDispatchInput) {
+    VersionDispatchInput["GithubToken"] = "github-token";
+    VersionDispatchInput["Ref"] = "ref";
+    VersionDispatchInput["VersionWorkflowId"] = "version-workflow-id";
+    VersionDispatchInput["ExcludeCommitTypes"] = "exclude-commit-types";
+    VersionDispatchInput["ExcludeLabels"] = "exclude-labels";
+})(VersionDispatchInput = exports.VersionDispatchInput || (exports.VersionDispatchInput = {}));
 exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
 

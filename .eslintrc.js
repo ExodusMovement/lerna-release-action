@@ -48,5 +48,11 @@ module.exports = {
       },
       parser: '@typescript-eslint/parser',
     },
+    {
+      files: ['*.{spec,test}.{ts,tsx}'],
+      rules: {
+        '@typescript-eslint/no-explicit-any': 'off',
+      },
+    },
   ],
 }

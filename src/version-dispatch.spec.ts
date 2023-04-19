@@ -9,6 +9,8 @@ jest.mock('@actions/core', () => ({
       ref: 'main',
       'version-workflow-id': 'a tiny little workflow',
       'github-token': 'abc',
+      'exclude-commit-types': 'docs,chore',
+      'exclude-labels': 'publish-on-merge,skip-release',
     }
     return inputs[name]
   },
@@ -73,6 +75,7 @@ describe('versionDispatch', () => {
   it('should invoke version workflow with packages affected by PR', async () => {
     github.context.payload = {
       pull_request: {
+        title: 'feat: added a lot of new features',
         number: 123,
         merged: true,
         user: {
@@ -99,6 +102,7 @@ describe('versionDispatch', () => {
   it('should comment on PR to let user know that versioning was started on their behalf', async () => {
     github.context.payload = {
       pull_request: {
+        title: 'feat: added a lot of new features',
         number: 123,
         merged: true,
         user: {
@@ -122,43 +126,106 @@ describe('versionDispatch', () => {
     })
   })
 
-  it('should abort for non-PR event', async () => {
-    github.context.payload = {
-      comment: {
-        id: 1,
+  describe('abort conditions', () => {
+    const defaults = {
+      title: 'feat: added a lot of new features',
+      number: 123,
+      merged: true,
+      labels: [{ name: 'blockchain-metadata' }, { name: 'atoms' }, { name: 'refactor' }],
+      user: {
+        login: 'brucewayne',
       },
     }
 
-    await versionDispatch({ filesystem: fs as never })
-    expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
-    expect(client.rest.issues.createComment).not.toHaveBeenCalled()
-  })
+    it.each<[string, any]>([
+      [
+        'for non-PR event',
+        {
+          comment: {
+            id: 1,
+          },
+        },
+      ],
+      [
+        'if PR was not merged',
+        {
+          pull_request: {
+            ...defaults,
+            merged: false,
+          },
+        },
+      ],
+      [
+        'if none of the lerna managed packages were affected',
+        {
+          pull_request: {
+            ...defaults,
+            labels: [{ name: 'ci' }, { name: 'docs' }],
+          },
+        },
+      ],
+      ...['docs', 'chore'].flatMap<[string, any]>((type) => [
+        [
+          `if PR has type '${type}'`,
+          {
+            pull_request: {
+              ...defaults,
+              title: `${type}: some commit of type ${type}`,
+            },
+          },
+        ],
+        [
+          `if PR has type '${type}' with scope`,
+          {
+            pull_request: {
+              ...defaults,
+              title: `${type}(arkham-asylum): some craziness of type ${type}`,
+            },
+          },
+        ],
+        [
+          `if PR has type '${type}' with breaking modifier`,
+          {
+            pull_request: {
+              ...defaults,
+              title: `${type}!: some breaking commit`,
+            },
+          },
+        ],
+        [
+          `if PR has type '${type}' with scope and breaking modifier`,
+          {
+            pull_request: {
+              ...defaults,
+              title: `${type}(arkham-asylum)!: some breaking craziness of type ${type}`,
+            },
+          },
+        ],
+      ]),
+      [
+        'if PR has label skip-release',
+        {
+          pull_request: {
+            ...defaults,
+            labels: [...defaults.labels, { name: 'skip-release' }],
+          },
+        },
+      ],
+      [
+        'if PR has label publish-on-merge',
+        {
+          pull_request: {
+            ...defaults,
+            labels: [...defaults.labels, { name: 'publish-on-merge' }],
+          },
+        },
+      ],
+    ])('should abort %s', async (_, payload) => {
+      github.context.payload = payload
 
-  it('should abort if PR was not merged', async () => {
-    github.context.payload = {
-      pull_request: {
-        number: 123,
-        merged: false,
-        labels: [{ name: 'blockchain-metadata' }, { name: 'atoms' }, { name: 'refactor' }],
-      },
-    }
-
-    await versionDispatch({ filesystem: fs as never })
-    expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
-    expect(client.rest.issues.createComment).not.toHaveBeenCalled()
-  })
-
-  it('should abort if none of the lerna managed packages were affected', async () => {
-    github.context.payload = {
-      pull_request: {
-        number: 123,
-        merged: true,
-        labels: [{ name: 'ci' }, { name: 'docs' }],
-      },
-    }
-
-    await versionDispatch({ filesystem: fs as never })
-    expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
-    expect(client.rest.issues.createComment).not.toHaveBeenCalled()
+      await versionDispatch({ filesystem: fs as never })
+      expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+      expect(client.rest.issues.createComment).not.toHaveBeenCalled()
+    })
   })
 })

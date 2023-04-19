@@ -5,7 +5,14 @@ export enum Input {
   Ref = 'ref',
   VersionExtraArgs = 'version-extra-args',
   VersionStrategy = 'version-strategy',
+}
+
+export enum VersionDispatchInput {
+  GithubToken = 'github-token',
+  Ref = 'ref',
   VersionWorkflowId = 'version-workflow-id',
+  ExcludeCommitTypes = 'exclude-commit-types',
+  ExcludeLabels = 'exclude-labels',
 }
 
 export const RELEASE_PR_LABEL = 'publish-on-merge'
