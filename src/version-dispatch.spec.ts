@@ -122,43 +122,46 @@ describe('versionDispatch', () => {
     })
   })
 
-  it('should abort for non-PR event', async () => {
-    github.context.payload = {
-      comment: {
-        id: 1,
-      },
+  describe('abort conditions', () => {
+    const defaults = {
+      number: 123,
+      merged: true,
+      labels: [{ name: 'blockchain-metadata' }, { name: 'atoms' }, { name: 'refactor' }],
     }
 
-    await versionDispatch({ filesystem: fs as never })
-    expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
-    expect(client.rest.issues.createComment).not.toHaveBeenCalled()
-  })
+    it.each([
+      [
+        'for non-PR event',
+        {
+          comment: {
+            id: 1,
+          },
+        },
+      ],
+      [
+        'if PR was not merged',
+        {
+          pull_request: {
+            ...defaults,
+            merged: false,
+          },
+        },
+      ],
+      [
+        'if none of the lerna managed packages were affected',
+        {
+          pull_request: {
+            ...defaults,
+            labels: [{ name: 'ci' }, { name: 'docs' }],
+          },
+        },
+      ],
+    ])('should abort %s', async (_, payload) => {
+      github.context.payload = payload
 
-  it('should abort if PR was not merged', async () => {
-    github.context.payload = {
-      pull_request: {
-        number: 123,
-        merged: false,
-        labels: [{ name: 'blockchain-metadata' }, { name: 'atoms' }, { name: 'refactor' }],
-      },
-    }
-
-    await versionDispatch({ filesystem: fs as never })
-    expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
-    expect(client.rest.issues.createComment).not.toHaveBeenCalled()
-  })
-
-  it('should abort if none of the lerna managed packages were affected', async () => {
-    github.context.payload = {
-      pull_request: {
-        number: 123,
-        merged: true,
-        labels: [{ name: 'ci' }, { name: 'docs' }],
-      },
-    }
-
-    await versionDispatch({ filesystem: fs as never })
-    expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
-    expect(client.rest.issues.createComment).not.toHaveBeenCalled()
+      await versionDispatch({ filesystem: fs as never })
+      expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+      expect(client.rest.issues.createComment).not.toHaveBeenCalled()
+    })
   })
 })
