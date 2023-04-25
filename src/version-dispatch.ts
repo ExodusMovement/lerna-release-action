@@ -6,8 +6,6 @@ import * as fs from 'fs'
 import { getPackagePaths } from '@exodus/lerna-utils'
 import * as path from 'path'
 import { VersionStrategy } from './version/strategy'
-import { joinNatural } from './utils/arrays'
-import { pluralize } from './utils/strings'
 import { parseMessage } from './utils/conventional-commits'
 
 type Params = {
