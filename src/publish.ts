@@ -16,7 +16,7 @@ async function publish() {
     payload: { pull_request: pr },
   } = github.context
 
-  const sha = pr?.base.sha ?? github.context.sha
+  const sha = pr?.merge_commit_sha ?? github.context.sha
 
   const isReleasePr = pr?.merged && pr.labels.some(({ name }: Label) => name === RELEASE_PR_LABEL)
   if (!(eventName === 'workflow_dispatch' || isReleasePr)) {
@@ -42,7 +42,7 @@ async function publish() {
   core.notice(`Published the following versions: ${publishedPackages}`)
 
   core.info(`Adding tags to commit ${sha}`)
-  await createTags({ client, repo, tags, sha: pr?.base.sha ?? sha })
+  await createTags({ client, repo, tags, sha })
   core.setOutput('published-packages', publishedPackages)
 }
 
