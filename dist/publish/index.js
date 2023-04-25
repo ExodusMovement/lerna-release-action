@@ -13050,7 +13050,7 @@ async function publish() {
     const token = core.getInput(constants_1.Input.GithubToken, { required: true });
     const client = github.getOctokit(token);
     const { repo, eventName, payload: { pull_request: pr }, } = github.context;
-    const sha = pr?.base.sha ?? github.context.sha;
+    const sha = pr?.merge_commit_sha ?? github.context.sha;
     const isReleasePr = pr?.merged && pr.labels.some(({ name }) => name === constants_1.RELEASE_PR_LABEL);
     if (!(eventName === 'workflow_dispatch' || isReleasePr)) {
         core.info('Skipped action as it was neither triggered through workflow_dispatch or merging of a release PR');
@@ -13068,7 +13068,7 @@ async function publish() {
     const publishedPackages = tags.join(',');
     core.notice(`Published the following versions: ${publishedPackages}`);
     core.info(`Adding tags to commit ${sha}`);
-    await (0, github_1.createTags)({ client, repo, tags, sha: pr?.base.sha ?? sha });
+    await (0, github_1.createTags)({ client, repo, tags, sha });
     core.setOutput('published-packages', publishedPackages);
 }
 publish().catch((error) => {
