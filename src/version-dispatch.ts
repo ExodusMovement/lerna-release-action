@@ -69,17 +69,6 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
       packages: affected.join(','),
     },
   })
-
-  await client.rest.issues.createComment({
-    ...repo,
-    body: `@${pr.user.login} fear not, for I have begun versioning the ${pluralize(
-      'package',
-      affected.length
-    )} ${joinNatural(
-      affected.map((packagePath) => path.basename(packagePath))
-    )} for you. Once finished, you shall be assigned to the release PR. If releasing wasn't your plan, just close the PR.`,
-    issue_number: pr.number,
-  })
 }
 
 versionDispatch().catch((error: Error) => {
