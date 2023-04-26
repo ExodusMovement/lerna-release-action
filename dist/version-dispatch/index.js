@@ -12795,28 +12795,6 @@ exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
 /***/ }),
 
-/***/ 8873:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.joinNatural = exports.unique = void 0;
-function unique(array) {
-    return array.filter((e, i) => array.indexOf(e) === i);
-}
-exports.unique = unique;
-function joinNatural(array) {
-    if (array.length === 1)
-        return array[0]; // eslint-disable-line @typescript-eslint/no-non-null-assertion
-    const [last] = array.slice(-1);
-    return array.slice(0, -1).join(', ') + `, and ${last}`;
-}
-exports.joinNatural = joinNatural;
-
-
-/***/ }),
-
 /***/ 9879:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -12854,46 +12832,6 @@ async function readJson(path, { filesystem }) {
     return JSON.parse(buffer.toString());
 }
 exports.readJson = readJson;
-
-
-/***/ }),
-
-/***/ 8927:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.pluralize = exports.truncate = exports.toKebabCase = void 0;
-function toKebabCase(text) {
-    return text.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
-}
-exports.toKebabCase = toKebabCase;
-const ellipsis = '...';
-function truncate(text, maxLen) {
-    if (text.length < maxLen) {
-        return text;
-    }
-    const { indexes } = text.split(/[\s,.:]/).reduce(({ indexes, cursor }, word) => {
-        const index = text.indexOf(word, cursor);
-        indexes.push([index, word]);
-        return { indexes, cursor: index + word.length };
-    }, { indexes: [], cursor: 0 });
-    const lastValidIndex = indexes.findIndex(([index, word]) => index + word.length + ellipsis.length >= maxLen) - 1;
-    if (lastValidIndex === -1) {
-        return ellipsis.slice(0, maxLen);
-    }
-    const [index, word] = indexes[lastValidIndex]; // eslint-disable-line @typescript-eslint/no-non-null-assertion
-    const splitAt = index + word.length;
-    return `${text.slice(0, splitAt)}${ellipsis}`;
-}
-exports.truncate = truncate;
-function pluralize(word, count) {
-    if (count === 1)
-        return word;
-    return `${word}s`;
-}
-exports.pluralize = pluralize;
 
 
 /***/ }),
@@ -13208,8 +13146,6 @@ const fs = __nccwpck_require__(7147);
 const lerna_utils_1 = __nccwpck_require__(4801);
 const path = __nccwpck_require__(1017);
 const strategy_1 = __nccwpck_require__(4741);
-const arrays_1 = __nccwpck_require__(8873);
-const strings_1 = __nccwpck_require__(8927);
 const conventional_commits_1 = __nccwpck_require__(9879);
 async function versionDispatch({ filesystem = fs } = {}) {
     const token = core.getInput(constants_1.VersionDispatchInput.GithubToken, { required: true });
@@ -13252,11 +13188,6 @@ async function versionDispatch({ filesystem = fs } = {}) {
             'version-strategy': strategy_1.VersionStrategy.ConventionalCommits,
             packages: affected.join(','),
         },
-    });
-    await client.rest.issues.createComment({
-        ...repo,
-        body: `@${pr.user.login} fear not, for I have begun versioning the ${(0, strings_1.pluralize)('package', affected.length)} ${(0, arrays_1.joinNatural)(affected.map((packagePath) => path.basename(packagePath)))} for you. Once finished, you shall be assigned to the release PR. If releasing wasn't your plan, just close the PR.`,
-        issue_number: pr.number,
     });
 }
 exports.versionDispatch = versionDispatch;
