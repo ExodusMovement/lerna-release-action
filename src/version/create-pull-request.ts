@@ -29,7 +29,7 @@ export default async function createPullRequest({
     client,
     base: 'master',
     head: branch,
-    title: truncate(`chore: release ${packageNames}`, 80),
+    title: truncate(`chore: release ${tags}`, 80),
     body: `## Release \n${packageList}\n## Tags\nThe following tags will be created automatically on merge:\n ${tags.join(
       '\n'
     )}`,
