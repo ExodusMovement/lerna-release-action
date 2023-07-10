@@ -33,6 +33,20 @@ jobs:
           packages: ${{ inputs.packages }}
 ```
 
+#### Enabling auto-merge
+
+The Version action can enable auto-merge on the created pull request. This is possible when the repository allows auto-merge, squash merging is enabled and has branch protection rules set up.
+
+To use it, set the `auto-merge` input of the action to `true`.
+
+```yaml
+- uses: ExodusMovement/lerna-release-action/version@master
+  name: Version
+  with:
+    # other inputs here
+    auto-merge: true
+```
+
 ### Publish workflow
 
 ```yaml
