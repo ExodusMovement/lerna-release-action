@@ -63587,6 +63587,7 @@ var Input;
     Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
+    Input["AutoMerge"] = "auto-merge";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
@@ -63882,7 +63883,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const github_1 = __nccwpck_require__(1225);
 const strings_1 = __nccwpck_require__(8927);
 const path = __nccwpck_require__(1017);
-async function createPullRequest({ client, tags, repo, branch, packages, labels, assignees, }) {
+async function createPullRequest({ client, tags, repo, branch, packages, labels, assignees, autoMerge, }) {
     const packageNames = packages.map((it) => path.basename(it));
     const packageList = packageNames.map((it) => `- ${it}`).join('\n');
     return (0, github_1.createPullRequest)({
@@ -63894,6 +63895,7 @@ async function createPullRequest({ client, tags, repo, branch, packages, labels,
         body: `## Release \n${packageList}\n## Tags\nThe following tags will be created automatically on merge:\n ${tags.join('\n')}`,
         labels,
         assignees,
+        autoMerge,
     });
 }
 exports["default"] = createPullRequest;
@@ -64644,6 +64646,7 @@ async function version() {
     const token = core.getInput(constants_1.Input.GithubToken, { required: true });
     const versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs);
     const versionStrategy = core.getInput(constants_1.Input.VersionStrategy);
+    const autoMerge = core.getInput(constants_1.Input.AutoMerge) === 'true';
     (0, strategy_1.assertStrategy)(versionStrategy);
     const packages = await (0, normalize_packages_1.default)({ packagesCsv });
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
@@ -64694,6 +64697,7 @@ async function version() {
         branch,
         labels: [constants_1.RELEASE_PR_LABEL],
         assignees: [assignee],
+        autoMerge,
     });
 }
 version().catch((error) => {
