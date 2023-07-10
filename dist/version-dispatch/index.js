@@ -12781,6 +12781,7 @@ var Input;
     Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
+    Input["AutoMerge"] = "auto-merge";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {

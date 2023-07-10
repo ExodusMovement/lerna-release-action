@@ -5,6 +5,16 @@ import { Repo } from './types'
 
 export type GithubClient = ReturnType<typeof github.getOctokit>
 
+type EnablePullRequestAutoMergeResponse = {
+  enablePullRequestAutoMerge: {
+    pullRequest: {
+      autoMergeRequest: {
+        enabledAt: Date
+      }
+    }
+  }
+}
+
 type CreatePullRequestsParams = {
   client: GithubClient
   repo: Repo
@@ -14,6 +24,7 @@ type CreatePullRequestsParams = {
   head: string
   body?: string
   labels?: string[]
+  autoMerge?: boolean
 }
 
 export async function createPullRequest({
@@ -25,6 +36,7 @@ export async function createPullRequest({
   body,
   labels,
   assignees,
+  autoMerge,
 }: CreatePullRequestsParams) {
   core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`)
   const response = await client.rest.pulls.create({
@@ -54,6 +66,31 @@ export async function createPullRequest({
         issue_number: response.data.number,
         assignees,
       })
+    )
+  }
+
+  if (autoMerge) {
+    const autoMergePromise = client.graphql<EnablePullRequestAutoMergeResponse>(
+      `mutation enableAutoMerge($pullRequestId: ID!) {
+        enablePullRequestAutoMerge(input: {
+          pullRequestId: $pullRequestId,
+          mergeMethod: SQUASH,
+        }) {
+          pullRequest {
+            autoMergeRequest {
+              enabledAt
+            }
+          }
+        }
+      }`,
+      {
+        pullRequestId: response.data.node_id,
+      }
+    )
+
+    promises.push(autoMergePromise)
+    autoMergePromise.then(({ enablePullRequestAutoMerge: { pullRequest } }) =>
+      core.debug(`Auto-merge enabled at ${pullRequest.autoMergeRequest.enabledAt}`)
     )
   }
 

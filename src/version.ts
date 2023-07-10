@@ -29,6 +29,7 @@ async function version() {
   const token = core.getInput(Input.GithubToken, { required: true })
   const versionExtraArgs = core.getInput(Input.VersionExtraArgs)
   const versionStrategy = core.getInput(Input.VersionStrategy)
+  const autoMerge = core.getInput(Input.AutoMerge) === 'true'
 
   assertStrategy(versionStrategy)
 
@@ -95,6 +96,7 @@ async function version() {
     branch,
     labels: [RELEASE_PR_LABEL],
     assignees: [assignee],
+    autoMerge,
   })
 }
 
