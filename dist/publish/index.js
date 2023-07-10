@@ -12718,7 +12718,7 @@ exports.joinNatural = joinNatural;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
-async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, }) {
+async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
     const response = await client.rest.pulls.create({
         ...repo,
@@ -12741,6 +12741,24 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
             issue_number: response.data.number,
             assignees,
         }));
+    }
+    if (autoMerge) {
+        const autoMergePromise = client.graphql(`mutation enableAutoMerge($pullRequestId: ID!) {
+        enablePullRequestAutoMerge(input: {
+          pullRequestId: $pullRequestId,
+          mergeMethod: SQUASH,
+        }) {
+          pullRequest {
+            autoMergeRequest {
+              enabledAt
+            }
+          }
+        }
+      }`, {
+            pullRequestId: response.data.node_id,
+        });
+        promises.push(autoMergePromise);
+        autoMergePromise.then(({ enablePullRequestAutoMerge: { pullRequest } }) => core.debug(`Auto-merge enabled at ${pullRequest.autoMergeRequest.enabledAt}`));
     }
     await Promise.all(promises);
 }
