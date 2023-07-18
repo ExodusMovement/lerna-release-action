@@ -65,6 +65,11 @@ export async function createPullRequest({
         ...repo,
         issue_number: response.data.number,
         assignees,
+      }),
+      client.rest.pulls.requestReviewers({
+        ...repo,
+        pull_number: response.data.number,
+        reviewers: assignees,
       })
     )
   }
