@@ -35,7 +35,7 @@ describe('versionDispatch', () => {
   const ref = 'main'
 
   const lernaConfig = JSON.stringify({
-    packages: ['libraries/*', 'modules/*'],
+    packages: ['libraries/*', 'modules/{blockchain-metadata,balances}'],
   })
 
   let client: GithubClient
@@ -70,6 +70,9 @@ describe('versionDispatch', () => {
       'modules/blockchain-metadata/package.json': JSON.stringify({
         name: '@exodus/blockchain-metadata',
       }),
+      'modules/balances/package.json': JSON.stringify({
+        name: '@exodus/balances',
+      }),
     })
   })
 
@@ -82,7 +85,12 @@ describe('versionDispatch', () => {
         user: {
           login: 'brucewayne',
         },
-        labels: [{ name: 'blockchain-metadata' }, { name: 'atoms' }, { name: 'refactor' }],
+        labels: [
+          { name: 'blockchain-metadata' },
+          { name: 'balances' },
+          { name: 'atoms' },
+          { name: 'refactor' },
+        ],
       },
     }
 
@@ -95,7 +103,7 @@ describe('versionDispatch', () => {
       inputs: {
         assignee: 'brucewayne',
         'version-strategy': 'conventional-commits',
-        packages: 'libraries/atoms,modules/blockchain-metadata',
+        packages: 'libraries/atoms,modules/blockchain-metadata,modules/balances',
       },
     })
   })
@@ -111,6 +119,7 @@ describe('versionDispatch', () => {
         },
         labels: [
           { name: 'blockchain-metadata' },
+          { name: 'balances' },
           { name: 'atoms' },
           { name: 'wallet' },
           { name: 'refactor' },

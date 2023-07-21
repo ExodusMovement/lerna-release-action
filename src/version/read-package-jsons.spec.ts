@@ -43,7 +43,7 @@ describe('readPackageJsons', () => {
   })
 
   it('should backup package.json from packages specified in lerna.json', async () => {
-    setup(['modules/*', 'libraries/*'])
+    setup(['modules/{storage-mobile,config}', 'libraries/*'])
 
     const packages = await readPackageJsons({ filesystem: fs as never })
 

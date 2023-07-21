@@ -18,9 +18,20 @@ describe('normalizePackages', () => {
     theUltimatePackage: JSON.stringify({
       name: '@exodus/the-ultimate-package',
     }),
+    bruce: JSON.stringify({
+      name: '@exodus/bruce',
+    }),
+    batman: JSON.stringify({
+      name: '@exodus/batman',
+    }),
   }
   const lernaConfig = JSON.stringify({
-    packages: ['libraries/*', 'modules/*', 'deeply/nested/package/root/*'],
+    packages: [
+      'libraries/*',
+      'modules/*',
+      'deeply/nested/package/root/*',
+      'groups/wayne/{bruce,batman}',
+    ],
     version: 'independent',
     npmClient: 'yarn',
     useWorkspaces: true,
@@ -35,6 +46,8 @@ describe('normalizePackages', () => {
         packageContents.theUltimatePackage,
       'modules/config/package.json': packageContents.config,
       'libraries/formatting/package.json': packageContents.formatting,
+      'groups/wayne/bruce/package.json': packageContents.bruce,
+      'groups/wayne/batman/package.json': packageContents.batman,
     })
   })
 
@@ -84,6 +97,22 @@ describe('normalizePackages', () => {
       filesystem: fs as never,
     })
     expect(result).toEqual(['deeply/nested/package/root/the-ultimate-package'])
+  })
+
+  it('should normalize grouped package name', async () => {
+    const result = await normalizePackages({
+      packagesCsv: '@exodus/bruce, @exodus/batman',
+      filesystem: fs as never,
+    })
+    expect(result).toEqual(['groups/wayne/bruce', 'groups/wayne/batman'])
+  })
+
+  it('should normalize grouped short name', async () => {
+    const result = await normalizePackages({
+      packagesCsv: 'bruce, batman',
+      filesystem: fs as never,
+    })
+    expect(result).toEqual(['groups/wayne/bruce', 'groups/wayne/batman'])
   })
 
   it('should throw for non existing short names', async () => {
