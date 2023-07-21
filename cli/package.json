@@ -11,7 +11,7 @@
     "prepublishOnly": "yarn build"
   },
   "dependencies": {
-    "@exodus/lerna-utils": "^1.4.1",
+    "@exodus/lerna-utils": "^1.4.2",
     "commander": "^9.5.0",
     "enquirer": "^2.3.6"
   },
