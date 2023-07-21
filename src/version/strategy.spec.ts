@@ -1,6 +1,7 @@
 import { Volume } from 'memfs/lib/volume'
 import { PackageJson } from '../utils/types'
 import { validateAllowedStrategies, VersionStrategy } from './strategy'
+import { createFsFromJSON } from '../utils/testing'
 
 describe('validateAllowedStrategies', () => {
   let fs: Volume
@@ -11,7 +12,7 @@ describe('validateAllowedStrategies', () => {
       ...(versionStrategy && { release: { versionStrategy } }),
     } as PackageJson)
 
-    fs = Volume.fromJSON({
+    fs = createFsFromJSON({
       'package.json': packageJson,
       'packages/assets/package.json': JSON.stringify({ name: '@exodus/assets' }),
     })

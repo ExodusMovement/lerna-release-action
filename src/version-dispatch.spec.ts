@@ -2,6 +2,7 @@ import * as github from '@actions/github'
 import { versionDispatch } from './version-dispatch'
 import { GithubClient } from './utils/github'
 import { Volume } from 'memfs/lib/volume'
+import { createFsFromJSON } from './utils/testing'
 
 jest.mock('@actions/core', () => ({
   getInput: (name: string) => {
@@ -62,7 +63,7 @@ describe('versionDispatch', () => {
       value: repo,
     })
 
-    fs = Volume.fromJSON({
+    fs = createFsFromJSON({
       'lerna.json': lernaConfig,
       'libraries/atoms/package.json': JSON.stringify({ name: '@exodus/atoms' }),
       'libraries/wallet/package.json': JSON.stringify({ name: '@exodus/wallet' }),

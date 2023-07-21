@@ -2,6 +2,7 @@ import { Volume } from 'memfs/lib/volume'
 import revertUnwantedDependencyChanges from './revert-unwanted-dependency-changes'
 import { readJson } from '../utils/fs'
 import { PackageJson } from '../utils/types'
+import { createFsFromJSON } from '../utils/testing'
 
 describe('revertUnwantedDependencyChanges', () => {
   let fs: Volume
@@ -66,7 +67,7 @@ describe('revertUnwantedDependencyChanges', () => {
   }
 
   beforeEach(() => {
-    fs = Volume.fromJSON({
+    fs = createFsFromJSON({
       'lerna.json': lernaConfig(['packages/*']),
       'packages/batcave/package.json': packageContents.batcave,
       'packages/batstorage/package.json': packageContents.batstorage,

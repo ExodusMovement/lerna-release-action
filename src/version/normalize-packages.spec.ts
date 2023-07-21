@@ -1,5 +1,6 @@
 import { Volume } from 'memfs/lib/volume'
 import normalizePackages from './normalize-packages'
+import { createFsFromJSON } from '../utils/testing'
 
 describe('normalizePackages', () => {
   let fs: Volume
@@ -27,7 +28,7 @@ describe('normalizePackages', () => {
   })
 
   beforeEach(() => {
-    fs = Volume.fromJSON({
+    fs = createFsFromJSON({
       'lerna.json': lernaConfig,
       'modules/storage-mobile/package.json': packageContents.storageMobile,
       'deeply/nested/package/root/the-ultimate-package/package.json':

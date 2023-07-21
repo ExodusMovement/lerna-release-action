@@ -1,6 +1,7 @@
 import { Volume } from 'memfs/lib/volume'
 import { exec } from './process'
 import { updateLockfile } from './package-manager'
+import { createFsFromJSON } from './testing'
 
 jest.mock('./process', () => ({
   __esModule: true,
@@ -21,7 +22,7 @@ describe('updateLockfile', () => {
       }
     })
 
-    fs = Volume.fromJSON({
+    fs = createFsFromJSON({
       [packageManager ? filenames[packageManager] : 'some-other-file.json']: 'some content',
     })
   }
