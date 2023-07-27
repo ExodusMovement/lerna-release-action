@@ -1,5 +1,6 @@
 import { Volume } from 'memfs/lib/volume'
 import readPackageJsons from './read-package-jsons'
+import { createFsFromJSON } from '../utils/testing'
 
 describe('readPackageJsons', () => {
   let fs: Volume
@@ -26,7 +27,7 @@ describe('readPackageJsons', () => {
   }
 
   function setup(packages: string[]) {
-    fs = Volume.fromJSON({
+    fs = createFsFromJSON({
       'lerna.json': lernaConfig(packages),
       'modules/storage-mobile/package.json': JSON.stringify(packageContents.storageMobile),
       'modules/config/package.json': JSON.stringify(packageContents.config),
@@ -42,7 +43,7 @@ describe('readPackageJsons', () => {
   })
 
   it('should backup package.json from packages specified in lerna.json', async () => {
-    setup(['modules/*', 'libraries/*'])
+    setup(['modules/{storage-mobile,config}', 'libraries/*'])
 
     const packages = await readPackageJsons({ filesystem: fs as never })
 

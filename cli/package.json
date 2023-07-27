@@ -1,6 +1,6 @@
 {
   "name": "@exodus/lerna-release-action-cli",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/ExodusMovement/lerna-release-action.git"
@@ -11,7 +11,7 @@
     "prepublishOnly": "yarn build"
   },
   "dependencies": {
-    "@exodus/lerna-utils": "^1.2.0",
+    "@exodus/lerna-utils": "^1.4.2",
     "commander": "^9.5.0",
     "enquirer": "^2.3.6"
   },

@@ -2,6 +2,7 @@ import * as github from '@actions/github'
 import { versionDispatch } from './version-dispatch'
 import { GithubClient } from './utils/github'
 import { Volume } from 'memfs/lib/volume'
+import { createFsFromJSON } from './utils/testing'
 
 jest.mock('@actions/core', () => ({
   getInput: (name: string) => {
@@ -34,7 +35,7 @@ describe('versionDispatch', () => {
   const ref = 'main'
 
   const lernaConfig = JSON.stringify({
-    packages: ['libraries/*', 'modules/*'],
+    packages: ['libraries/*', 'modules/{blockchain-metadata,balances}'],
   })
 
   let client: GithubClient
@@ -62,12 +63,15 @@ describe('versionDispatch', () => {
       value: repo,
     })
 
-    fs = Volume.fromJSON({
+    fs = createFsFromJSON({
       'lerna.json': lernaConfig,
       'libraries/atoms/package.json': JSON.stringify({ name: '@exodus/atoms' }),
       'libraries/wallet/package.json': JSON.stringify({ name: '@exodus/wallet' }),
       'modules/blockchain-metadata/package.json': JSON.stringify({
         name: '@exodus/blockchain-metadata',
+      }),
+      'modules/balances/package.json': JSON.stringify({
+        name: '@exodus/balances',
       }),
     })
   })
@@ -81,7 +85,12 @@ describe('versionDispatch', () => {
         user: {
           login: 'brucewayne',
         },
-        labels: [{ name: 'blockchain-metadata' }, { name: 'atoms' }, { name: 'refactor' }],
+        labels: [
+          { name: 'blockchain-metadata' },
+          { name: 'balances' },
+          { name: 'atoms' },
+          { name: 'refactor' },
+        ],
       },
     }
 
@@ -94,7 +103,7 @@ describe('versionDispatch', () => {
       inputs: {
         assignee: 'brucewayne',
         'version-strategy': 'conventional-commits',
-        packages: 'libraries/atoms,modules/blockchain-metadata',
+        packages: 'libraries/atoms,modules/blockchain-metadata,modules/balances',
       },
     })
   })
@@ -110,6 +119,7 @@ describe('versionDispatch', () => {
         },
         labels: [
           { name: 'blockchain-metadata' },
+          { name: 'balances' },
           { name: 'atoms' },
           { name: 'wallet' },
           { name: 'refactor' },
