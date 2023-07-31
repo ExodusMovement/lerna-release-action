@@ -14,6 +14,7 @@ export async function getPullRequestUrl() {
 }
 
 export function getToken() {
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const hosts = fs.readFileSync(path.join(process.env.HOME!, '.config/gh/hosts.yml'), {
     encoding: 'utf8',
   })
