@@ -81,7 +81,7 @@ __metadata:
     typescript: ^4.7.4
     yaml: ^2.3.1
   bin:
-    lerna-release-action: lib/cli/src/index.js
+    lerna-release-action: lib/index.js
   languageName: unknown
   linkType: soft
 
