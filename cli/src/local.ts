@@ -13,6 +13,7 @@ export async function version({ packagesCsv, versionStrategy }: VersionParams) {
 
   const { owner, name } = getRepo()
   setGithubContext({ owner, repo: name })
+
   const pullRequest = await versionGithub({
     token: getToken(),
     versionStrategy,
