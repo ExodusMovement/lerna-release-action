@@ -1,7 +1,12 @@
 import { execSync } from 'child_process'
 import logger from './logger'
 
-export const ensureCleanCWD = () => {
+export const pullTags = () => {
+  logger.info('Pulling latest tags')
+  execSync('git pull --tags')
+}
+
+export const assertCleanCWD = () => {
   const stdout = execSync('git status --short', { encoding: 'utf8' })
   const changes = stdout.trim()
 
@@ -16,9 +21,6 @@ export const ensureCleanCWD = () => {
   } catch {
     throw new Error('Branch has to be up-to-date with master')
   }
-
-  logger.info('Pulling latest tags')
-  execSync('git pull --tags')
 }
 
 export const getUsername = () => {

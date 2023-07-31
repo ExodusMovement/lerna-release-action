@@ -1,4 +1,4 @@
-import { ensureCleanCWD, getUsername } from './utils/git'
+import { assertCleanCWD, getUsername, pullTags } from './utils/git'
 import { getRepo, getToken, setGithubContext } from './utils/gh'
 import versionGithub from './action/version'
 import logger from './utils/logger'
@@ -9,7 +9,8 @@ type VersionParams = {
 }
 
 export async function version({ packagesCsv, versionStrategy }: VersionParams) {
-  ensureCleanCWD()
+  assertCleanCWD()
+  pullTags()
 
   const { owner, name } = getRepo()
   setGithubContext({ owner, repo: name })

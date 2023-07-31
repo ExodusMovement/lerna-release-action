@@ -1,4 +1,4 @@
-import {backoff, exec, sleep} from './process'
+import { backoff, exec, sleep } from './process'
 import { exec as execCb, execSync } from 'child_process'
 import * as fs from 'fs'
 import * as yaml from 'yaml'
