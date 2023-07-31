@@ -1,6 +1,6 @@
 import { ensureCleanCWD, getUsername } from './utils/git'
 import { getRepo, getToken, setGithubContext } from './utils/gh'
-import versionGithub from '../../src/version'
+import versionGithub from './action/version'
 import logger from './utils/logger'
 
 type VersionParams = {

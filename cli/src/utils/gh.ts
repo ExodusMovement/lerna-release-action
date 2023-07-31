@@ -1,6 +1,5 @@
-import { backoff, sleep } from './process'
+import {backoff, exec, sleep} from './process'
 import { exec as execCb, execSync } from 'child_process'
-import { exec } from '../../../src/utils/process'
 import * as fs from 'fs'
 import * as yaml from 'yaml'
 import * as path from 'path'

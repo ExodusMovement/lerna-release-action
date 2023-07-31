@@ -1,4 +1,4 @@
-import normalizePackages from '../../src/version/normalize-packages'
+import normalizePackages from './action/version/normalize-packages'
 import { prompt } from 'enquirer'
 import { getPackagePaths } from '@exodus/lerna-utils'
 

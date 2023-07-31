@@ -5,14 +5,14 @@ import * as path from 'path'
 import { prompt } from 'enquirer'
 import { byBasenameAsc } from './utils/sort'
 import { getPullRequestUrl, watchRun } from './utils/gh'
-import { exec } from '../../src/utils/process'
+import { exec } from './utils/process'
 import { program } from 'commander'
 import { ProgramOpts } from './utils/types'
 import {
   assertStrategy,
   strategyAsArgument,
   validateAllowedStrategies,
-} from '../../src/version/strategy'
+} from './action/version/strategy'
 import { version } from './local'
 import logger from './utils/logger'
 
