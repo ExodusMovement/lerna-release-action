@@ -24,22 +24,23 @@ import createPullRequest from './version/create-pull-request'
 import { assertStrategy, validateAllowedStrategies, VersionStrategy } from './version/strategy'
 import updateChangelog from './version/update-changelog'
 
-async function version() {
-  const packagesCsv = core.getInput(Input.Packages, { required: true })
-  const token = core.getInput(Input.GithubToken, { required: true })
-  const versionExtraArgs = core.getInput(Input.VersionExtraArgs)
-  const versionStrategy = core.getInput(Input.VersionStrategy)
-  const autoMerge = core.getInput(Input.AutoMerge) === 'true'
-
+export default async function version({
+  packagesCsv = core.getInput(Input.Packages, { required: true }),
+  token = core.getInput(Input.GithubToken, { required: true }),
+  versionExtraArgs = core.getInput(Input.VersionExtraArgs),
+  versionStrategy = core.getInput(Input.VersionStrategy),
+  autoMerge = core.getInput(Input.AutoMerge) === 'true',
+  assignee = core.getInput(Input.Assignee),
+} = {}) {
   assertStrategy(versionStrategy)
+
+  const { actor, repo } = github.context
+  assignee = assignee || actor
 
   const packages = await normalizePackages({ packagesCsv })
   await validateAllowedStrategies({ packages, versionStrategy })
 
   const client = github.getOctokit(token)
-
-  const { actor, repo } = github.context
-  const assignee = core.getInput(Input.Assignee) || actor
 
   core.info(`Configure user ${assignee}`)
   await configureUser({
@@ -100,9 +101,11 @@ async function version() {
   })
 }
 
-version().catch((error: Error) => {
-  if (error.stack) {
-    core.debug(error.stack)
-  }
-  core.setFailed(String(error.message))
-})
+if (require.main === module) {
+  version().catch((error: Error) => {
+    if (error.stack) {
+      core.debug(error.stack)
+    }
+    core.setFailed(String(error.message))
+  })
+}

@@ -13,6 +13,8 @@ import {
   strategyAsArgument,
   validateAllowedStrategies,
 } from '../../src/version/strategy'
+import { version } from './local'
+import logger from './utils/logger'
 
 program
   .name('lerna-release-action')
@@ -23,14 +25,17 @@ program
     'Allows customizing the version strategy.',
     'conventional-commits'
   )
+  .option('-l, --local', 'Allows running the version workflow locally in case GH has issues')
 
 async function main() {
   program.parse()
 
-  const { versionStrategy } = program.opts<ProgramOpts>()
+  const { versionStrategy, local } = program.opts<ProgramOpts>()
   assertStrategy(versionStrategy)
 
   const [packagesCsv] = program.args
+
+  if (local) return version({ packagesCsv, versionStrategy })
 
   const packages = await getPackages(packagesCsv)
 
@@ -72,23 +77,23 @@ async function main() {
       `gh workflow run version --field "packages=${selectedPackages}" --field "version-strategy=${versionStrategy}"`
     )
     if (stderr) {
-      console.error(`${stderr}`)
+      logger.error(`${stderr}`)
     }
 
-    console.log(runStdout)
+    logger.info(runStdout)
 
     await watchRun()
 
     const url = await getPullRequestUrl()
     if (url) {
-      console.log(`Successfully created PR. You can view it here: ${url}`)
+      logger.info(`Successfully created PR. You can view it here: ${url}`)
     }
   } catch (e) {
-    console.error(`Unexpected error occurred: ${e}`)
+    logger.error(`Unexpected error occurred: ${e}`)
   }
 }
 
 main().catch((error: Error) => {
-  console.error(error.message)
+  logger.error(error.message)
   process.exit(-1)
 })
