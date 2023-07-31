@@ -1,6 +1,6 @@
 import { assertCleanCWD, getUsername, pullTags } from './utils/git'
 import { getRepo, getToken, setGithubContext } from './utils/gh'
-import versionGithub from './action/version'
+import versionAction from './action/version'
 import logger from './utils/logger'
 
 type VersionParams = {
@@ -15,7 +15,7 @@ export async function version({ packagesCsv, versionStrategy }: VersionParams) {
   const { owner, name } = getRepo()
   setGithubContext({ owner, repo: name })
 
-  const pullRequest = await versionGithub({
+  const pullRequest = await versionAction({
     token: getToken(),
     versionStrategy,
     packagesCsv,
