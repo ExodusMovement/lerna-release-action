@@ -6,6 +6,7 @@ export enum Input {
   VersionExtraArgs = 'version-extra-args',
   VersionStrategy = 'version-strategy',
   AutoMerge = 'auto-merge',
+  RequestReviewers = 'request-reviewers',
 }
 
 export enum VersionDispatchInput {

@@ -2,6 +2,13 @@ import { execSync } from 'child_process'
 import logger from './logger'
 
 export const ensureCleanCWD = () => {
+  const stdout = execSync('git status --short', { encoding: 'utf8' })
+  const changes = stdout.trim()
+
+  if (changes) {
+    throw new Error('Current working directory contains uncommitted changes')
+  }
+
   logger.info('Fetching remote changes')
   execSync('git fetch', { stdio: 'inherit' })
   try {
@@ -12,13 +19,6 @@ export const ensureCleanCWD = () => {
 
   logger.info('Pulling latest tags')
   execSync('git pull --tags')
-
-  const stdout = execSync('git status --short', { encoding: 'utf8' })
-  const changes = stdout.trim()
-
-  if (changes) {
-    throw new Error('Current working directory contains uncommitted changes')
-  }
 }
 
 export const getUsername = () => {

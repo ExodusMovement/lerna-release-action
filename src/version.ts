@@ -30,6 +30,7 @@ export default async function version({
   versionExtraArgs = core.getInput(Input.VersionExtraArgs),
   versionStrategy = core.getInput(Input.VersionStrategy),
   autoMerge = core.getInput(Input.AutoMerge) === 'true',
+  requestReviewers = core.getInput(Input.RequestReviewers) === 'true',
   assignee = core.getInput(Input.Assignee),
 } = {}) {
   assertStrategy(versionStrategy)
@@ -89,7 +90,7 @@ export default async function version({
   await pushHeadToOrigin()
 
   core.info('Creating PR')
-  await createPullRequest({
+  return createPullRequest({
     client,
     repo,
     packages,
@@ -98,6 +99,7 @@ export default async function version({
     labels: [RELEASE_PR_LABEL],
     assignees: [assignee],
     autoMerge,
+    requestReviewers,
   })
 }
 
