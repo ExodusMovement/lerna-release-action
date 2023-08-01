@@ -1,5 +1,5 @@
 export type ProgramOpts = {
   versionStrategy: string
-  githubToken: string
+  githubToken?: string
   local: boolean
 }

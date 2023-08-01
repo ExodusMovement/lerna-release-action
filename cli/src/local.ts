@@ -19,7 +19,7 @@ export async function version({ packagesCsv, versionStrategy }: VersionParams) {
   setGithubContext({ owner, repo: name })
 
   const { githubToken } = program.opts<ProgramOpts>()
-  const token = getToken() ?? githubToken
+  const token = githubToken ?? getToken()
 
   assert(
     token,
