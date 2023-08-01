@@ -26,6 +26,10 @@ program
     'conventional-commits'
   )
   .option('-l, --local', 'Allows running the version workflow locally in case GH has issues')
+  .option(
+    '--github-token',
+    'Required for local versioning when token is not stored in ~/.config/gh/hosts.yml'
+  )
 
 async function main() {
   program.parse()
