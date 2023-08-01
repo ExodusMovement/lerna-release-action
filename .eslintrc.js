@@ -49,9 +49,10 @@ module.exports = {
       parser: '@typescript-eslint/parser',
     },
     {
-      files: ['*.{spec,test}.{ts,tsx}'],
+      files: ['*.{spec,test}.{ts,tsx}', '**/utils/testing.ts'],
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',
+        'import/no-extraneous-dependencies': 'off',
       },
     },
   ],

@@ -25,6 +25,7 @@ type CreatePullRequestsParams = {
   body?: string
   labels?: string[]
   autoMerge?: boolean
+  reviewers?: string[]
 }
 
 export async function createPullRequest({
@@ -37,6 +38,7 @@ export async function createPullRequest({
   labels,
   assignees,
   autoMerge,
+  reviewers,
 }: CreatePullRequestsParams) {
   core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`)
   const response = await client.rest.pulls.create({
@@ -65,7 +67,12 @@ export async function createPullRequest({
         ...repo,
         issue_number: response.data.number,
         assignees,
-      }),
+      })
+    )
+  }
+
+  if (reviewers) {
+    promises.push(
       client.rest.pulls.requestReviewers({
         ...repo,
         pull_number: response.data.number,
@@ -100,6 +107,7 @@ export async function createPullRequest({
   }
 
   await Promise.all(promises)
+  return response.data
 }
 
 type CreateTagsParams = {

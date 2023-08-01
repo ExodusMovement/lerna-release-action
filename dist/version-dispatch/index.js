@@ -13103,6 +13103,7 @@ var Input;
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
     Input["AutoMerge"] = "auto-merge";
+    Input["RequestReviewers"] = "request-reviewers";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {

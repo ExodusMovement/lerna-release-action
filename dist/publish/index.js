@@ -12655,6 +12655,7 @@ var Input;
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
     Input["AutoMerge"] = "auto-merge";
+    Input["RequestReviewers"] = "request-reviewers";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
@@ -12719,7 +12720,7 @@ exports.joinNatural = joinNatural;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
-async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, }) {
+async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
     const response = await client.rest.pulls.create({
         ...repo,
@@ -12741,7 +12742,10 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
             ...repo,
             issue_number: response.data.number,
             assignees,
-        }), client.rest.pulls.requestReviewers({
+        }));
+    }
+    if (reviewers) {
+        promises.push(client.rest.pulls.requestReviewers({
             ...repo,
             pull_number: response.data.number,
             reviewers: assignees,
@@ -12766,6 +12770,7 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
         autoMergePromise.then(({ enablePullRequestAutoMerge: { pullRequest } }) => core.debug(`Auto-merge enabled at ${pullRequest.autoMergeRequest.enabledAt}`));
     }
     await Promise.all(promises);
+    return response.data;
 }
 exports.createPullRequest = createPullRequest;
 async function createTags({ client, repo, sha, tags }) {

@@ -12,6 +12,7 @@ type Params = {
   labels?: string[]
   assignees?: string[]
   autoMerge?: boolean
+  requestReviewers?: boolean
 }
 
 export default async function createPullRequest({
@@ -23,6 +24,7 @@ export default async function createPullRequest({
   labels,
   assignees,
   autoMerge,
+  requestReviewers,
 }: Params) {
   const packageNames = packages.map((it) => path.basename(it))
   const packageList = packageNames.map((it) => `- ${it}`).join('\n')
@@ -39,5 +41,6 @@ export default async function createPullRequest({
     labels,
     assignees,
     autoMerge,
+    reviewers: requestReviewers ? assignees : undefined,
   })
 }

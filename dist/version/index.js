@@ -63909,6 +63909,7 @@ var Input;
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
     Input["AutoMerge"] = "auto-merge";
+    Input["RequestReviewers"] = "request-reviewers";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
@@ -64037,7 +64038,7 @@ exports.configureUser = configureUser;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
-async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, }) {
+async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
     const response = await client.rest.pulls.create({
         ...repo,
@@ -64059,7 +64060,10 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
             ...repo,
             issue_number: response.data.number,
             assignees,
-        }), client.rest.pulls.requestReviewers({
+        }));
+    }
+    if (reviewers) {
+        promises.push(client.rest.pulls.requestReviewers({
             ...repo,
             pull_number: response.data.number,
             reviewers: assignees,
@@ -64084,6 +64088,7 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
         autoMergePromise.then(({ enablePullRequestAutoMerge: { pullRequest } }) => core.debug(`Auto-merge enabled at ${pullRequest.autoMergeRequest.enabledAt}`));
     }
     await Promise.all(promises);
+    return response.data;
 }
 exports.createPullRequest = createPullRequest;
 async function createTags({ client, repo, sha, tags }) {
@@ -64208,7 +64213,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const github_1 = __nccwpck_require__(1225);
 const strings_1 = __nccwpck_require__(8927);
 const path = __nccwpck_require__(1017);
-async function createPullRequest({ client, tags, repo, branch, packages, labels, assignees, autoMerge, }) {
+async function createPullRequest({ client, tags, repo, branch, packages, labels, assignees, autoMerge, requestReviewers, }) {
     const packageNames = packages.map((it) => path.basename(it));
     const packageList = packageNames.map((it) => `- ${it}`).join('\n');
     return (0, github_1.createPullRequest)({
@@ -64221,6 +64226,7 @@ async function createPullRequest({ client, tags, repo, branch, packages, labels,
         labels,
         assignees,
         autoMerge,
+        reviewers: requestReviewers ? assignees : undefined,
     });
 }
 exports["default"] = createPullRequest;
@@ -73720,18 +73726,13 @@ const package_manager_1 = __nccwpck_require__(2435);
 const create_pull_request_1 = __nccwpck_require__(6672);
 const strategy_1 = __nccwpck_require__(4741);
 const update_changelog_1 = __nccwpck_require__(8178);
-async function version() {
-    const packagesCsv = core.getInput(constants_1.Input.Packages, { required: true });
-    const token = core.getInput(constants_1.Input.GithubToken, { required: true });
-    const versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs);
-    const versionStrategy = core.getInput(constants_1.Input.VersionStrategy);
-    const autoMerge = core.getInput(constants_1.Input.AutoMerge) === 'true';
+async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getInput(constants_1.Input.AutoMerge) === 'true', requestReviewers = core.getInput(constants_1.Input.RequestReviewers) === 'true', assignee = core.getInput(constants_1.Input.Assignee), } = {}) {
     (0, strategy_1.assertStrategy)(versionStrategy);
+    const { actor, repo } = github.context;
+    assignee = assignee || actor;
     const packages = await (0, normalize_packages_1.default)({ packagesCsv });
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
-    const { actor, repo } = github.context;
-    const assignee = core.getInput(constants_1.Input.Assignee) || actor;
     core.info(`Configure user ${assignee}`);
     await (0, git_1.configureUser)({
         name: assignee,
@@ -73768,7 +73769,7 @@ async function version() {
     core.info(`Pushing changes to ${branch}`);
     await (0, git_1.pushHeadToOrigin)();
     core.info('Creating PR');
-    await (0, create_pull_request_1.default)({
+    return (0, create_pull_request_1.default)({
         client,
         repo,
         packages,
@@ -73777,14 +73778,18 @@ async function version() {
         labels: [constants_1.RELEASE_PR_LABEL],
         assignees: [assignee],
         autoMerge,
+        requestReviewers,
     });
 }
-version().catch((error) => {
-    if (error.stack) {
-        core.debug(error.stack);
-    }
-    core.setFailed(String(error.message));
-});
+exports["default"] = version;
+if (require.main === require.cache[eval('__filename')]) {
+    version().catch((error) => {
+        if (error.stack) {
+            core.debug(error.stack);
+        }
+        core.setFailed(String(error.message));
+    });
+}
 
 })();
 

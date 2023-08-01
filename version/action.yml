@@ -17,6 +17,9 @@ inputs:
   auto-merge:
     description: 'Enables auto-merging on the created pull request when set to `true`. Defaults to `false`.'
     default: false
+  request-reviewers:
+    description: 'Request PR assignees as reviewers'
+    default: true
 
 runs:
   using: 'node16'
