@@ -21,13 +21,13 @@ program
   .description('CLI to supply inputs to lerna-release-action/version')
   .argument('[packages]')
   .option(
-    '-vs, --version-strategy <char>',
+    '-vs, --version-strategy <strategy>',
     'Allows customizing the version strategy.',
     'conventional-commits'
   )
   .option('-l, --local', 'Allows running the version workflow locally in case GH has issues')
   .option(
-    '--github-token',
+    '--github-token <token>',
     'Required for local versioning when token is not stored in ~/.config/gh/hosts.yml'
   )
 
