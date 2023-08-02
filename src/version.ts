@@ -109,6 +109,8 @@ export default async function version({
   } catch (e) {
     core.warning(`Failed to close previous PRs: ${unwrapErrorMessage(e, 'for unknown reasons')}`)
   }
+
+  return pullRequest
 }
 
 if (require.main === module) {

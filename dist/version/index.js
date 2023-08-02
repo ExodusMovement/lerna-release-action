@@ -73885,6 +73885,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     catch (e) {
         core.warning(`Failed to close previous PRs: ${(0, errors_1.unwrapErrorMessage)(e, 'for unknown reasons')}`);
     }
+    return pullRequest;
 }
 exports["default"] = version;
 if (require.main === require.cache[eval('__filename')]) {
