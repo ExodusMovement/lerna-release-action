@@ -12810,6 +12810,7 @@ async function closePullRequest({ client, number, repo }) {
     await client.rest.pulls.update({
         ...repo,
         pull_number: number,
+        state: 'closed',
     });
 }
 exports.closePullRequest = closePullRequest;
