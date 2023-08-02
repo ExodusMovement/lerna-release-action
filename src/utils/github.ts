@@ -129,12 +129,6 @@ export async function createTags({ client, repo, sha, tags }: CreateTagsParams) 
   )
 }
 
-type GetPullRequestForLabelsParams = {
-  labels: string[]
-  client: GithubClient
-  repo: Repo
-}
-
 type GetPullRequestsForLabelsResponse = {
   search: {
     edges: { node: { number: number; title: string } }[]
@@ -160,13 +154,21 @@ query searchPullRequests($search: String!) {
   }
 }`
 
+type GetPullRequestForLabelsParams = {
+  labels: string[]
+  client: GithubClient
+  repo: Repo
+  state?: 'open' | 'closed'
+}
+
 export async function getPullRequestsForLabels({
   client,
   labels,
   repo,
+  state = 'open',
 }: GetPullRequestForLabelsParams) {
   const labelQuery = labels.map((label) => `label:${label}`).join(' ')
-  const search = `repo:${repo.owner}/${repo.repo} is:pr state:open ${labelQuery}`
+  const search = `repo:${repo.owner}/${repo.repo} is:pr state:${state} ${labelQuery}`
   const response = await client.graphql<GetPullRequestsForLabelsResponse>(
     SEARCH_PULL_REQUESTS_QUERY,
     { search }

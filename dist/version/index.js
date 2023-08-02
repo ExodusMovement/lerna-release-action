@@ -64134,9 +64134,9 @@ query searchPullRequests($search: String!) {
     }
   }
 }`;
-async function getPullRequestsForLabels({ client, labels, repo, }) {
+async function getPullRequestsForLabels({ client, labels, repo, state = 'open', }) {
     const labelQuery = labels.map((label) => `label:${label}`).join(' ');
-    const search = `repo:${repo.owner}/${repo.repo} is:pr state:open ${labelQuery}`;
+    const search = `repo:${repo.owner}/${repo.repo} is:pr state:${state} ${labelQuery}`;
     const response = await client.graphql(SEARCH_PULL_REQUESTS_QUERY, { search });
     return response.search.edges.map((edge) => edge.node);
 }
