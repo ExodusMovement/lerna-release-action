@@ -64282,13 +64282,14 @@ const core = __nccwpck_require__(2186);
 async function closePreviousPrs({ client, repo, pullRequest, packages }) {
     const labels = [constants_1.RELEASE_PR_LABEL, ...packages.map((it) => path.basename(it))];
     const previousPrs = await (0, github_1.getPullRequestsForLabels)({ client, repo, labels });
-    if (previousPrs.length === 0) {
+    const filtered = previousPrs.filter((pr) => pr.number !== pullRequest.number);
+    if (filtered.length === 0) {
         core.info('Found no previous PRs releasing the same packages.');
         return;
     }
-    core.info(`Found ${previousPrs.length} previous PRs releasing the same packages. Closing`);
+    core.info(`Found ${filtered.length} previous PRs releasing the same packages. Closing`);
     const comment = `Closing in favor of ${pullRequest.html_url}`;
-    const promises = previousPrs.flatMap((pr) => [
+    const promises = filtered.flatMap((pr) => [
         (0, github_1.closePullRequest)({ client, repo, number: pr.number }),
         (0, github_1.commentOnIssue)({ client, number: pr.number, repo, body: comment }),
     ]);

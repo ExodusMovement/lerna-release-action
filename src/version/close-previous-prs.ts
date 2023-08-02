@@ -19,19 +19,19 @@ type Params = {
 
 export default async function closePreviousPrs({ client, repo, pullRequest, packages }: Params) {
   const labels = [RELEASE_PR_LABEL, ...packages.map((it) => path.basename(it))]
-
   const previousPrs = await getPullRequestsForLabels({ client, repo, labels })
+  const filtered = previousPrs.filter((pr) => pr.number !== pullRequest.number)
 
-  if (previousPrs.length === 0) {
+  if (filtered.length === 0) {
     core.info('Found no previous PRs releasing the same packages.')
     return
   }
 
-  core.info(`Found ${previousPrs.length} previous PRs releasing the same packages. Closing`)
+  core.info(`Found ${filtered.length} previous PRs releasing the same packages. Closing`)
 
   const comment = `Closing in favor of ${pullRequest.html_url}`
 
-  const promises = previousPrs.flatMap((pr) => [
+  const promises = filtered.flatMap((pr) => [
     closePullRequest({ client, repo, number: pr.number }),
     commentOnIssue({ client, number: pr.number, repo, body: comment }),
   ])
