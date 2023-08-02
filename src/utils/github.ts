@@ -116,6 +116,7 @@ type CreateTagsParams = {
   sha: string
   tags: string[]
 }
+
 export async function createTags({ client, repo, sha, tags }: CreateTagsParams) {
   await Promise.all(
     tags.map((tag) =>
@@ -126,4 +127,78 @@ export async function createTags({ client, repo, sha, tags }: CreateTagsParams) 
       })
     )
   )
+}
+
+type GetPullRequestForLabelsParams = {
+  labels: string[]
+  client: GithubClient
+  repo: Repo
+}
+
+type GetPullRequestsForLabelsResponse = {
+  search: {
+    edges: { node: { number: number; title: string } }[]
+  }
+}
+
+const SEARCH_PULL_REQUESTS_QUERY = `
+query searchPullRequests($search: String!) {
+  search(
+    query: $search
+    type: ISSUE
+    first: 100
+  ) {
+    edges {
+      node {
+        ... on PullRequest {
+          number
+          title
+          url
+        }
+      }
+    }
+  }
+}`
+
+export async function getPullRequestsForLabels({
+  client,
+  labels,
+  repo,
+}: GetPullRequestForLabelsParams) {
+  const labelQuery = labels.map((label) => `label:${label}`).join(' ')
+  const search = `repo:${repo.owner}/${repo.repo} is:pr state:open ${labelQuery}`
+  const response = await client.graphql<GetPullRequestsForLabelsResponse>(
+    SEARCH_PULL_REQUESTS_QUERY,
+    { search }
+  )
+
+  return response.search.edges.map((edge) => edge.node)
+}
+
+type ClosePullRequestParams = {
+  client: GithubClient
+  number: number
+  repo: Repo
+}
+
+export async function closePullRequest({ client, number, repo }: ClosePullRequestParams) {
+  await client.rest.pulls.update({
+    ...repo,
+    pull_number: number,
+  })
+}
+
+type CommentOnIssueParams = {
+  client: GithubClient
+  number: number
+  repo: Repo
+  body: string
+}
+
+export async function commentOnIssue({ client, number, repo, body }: CommentOnIssueParams) {
+  await client.rest.issues.createComment({
+    ...repo,
+    issue_number: number,
+    body,
+  })
 }
