@@ -63924,6 +63924,23 @@ exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
 /***/ }),
 
+/***/ 2579:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.unwrapErrorMessage = void 0;
+const unwrapErrorMessage = (error, defaultMessage) => {
+    if (error instanceof Error)
+        return error.message;
+    return defaultMessage;
+};
+exports.unwrapErrorMessage = unwrapErrorMessage;
+
+
+/***/ }),
+
 /***/ 1716:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -64036,7 +64053,7 @@ exports.configureUser = configureUser;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.createTags = exports.createPullRequest = void 0;
+exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
@@ -64099,6 +64116,46 @@ async function createTags({ client, repo, sha, tags }) {
     })));
 }
 exports.createTags = createTags;
+const SEARCH_PULL_REQUESTS_QUERY = `
+query searchPullRequests($search: String!) {
+  search(
+    query: $search
+    type: ISSUE
+    first: 100
+  ) {
+    edges {
+      node {
+        ... on PullRequest {
+          number
+          title
+          url
+        }
+      }
+    }
+  }
+}`;
+async function getPullRequestsForLabels({ client, labels, repo, }) {
+    const labelQuery = labels.map((label) => `label:${label}`).join(' ');
+    const search = `repo:${repo.owner}/${repo.repo} is:pr state:open ${labelQuery}`;
+    const response = await client.graphql(SEARCH_PULL_REQUESTS_QUERY, { search });
+    return response.search.edges.map((edge) => edge.node);
+}
+exports.getPullRequestsForLabels = getPullRequestsForLabels;
+async function closePullRequest({ client, number, repo }) {
+    await client.rest.pulls.update({
+        ...repo,
+        pull_number: number,
+    });
+}
+exports.closePullRequest = closePullRequest;
+async function commentOnIssue({ client, number, repo, body }) {
+    await client.rest.issues.createComment({
+        ...repo,
+        issue_number: number,
+        body,
+    });
+}
+exports.commentOnIssue = commentOnIssue;
 
 
 /***/ }),
@@ -64204,6 +64261,36 @@ exports.pluralize = pluralize;
 
 /***/ }),
 
+/***/ 4171:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const github_1 = __nccwpck_require__(1225);
+const constants_1 = __nccwpck_require__(9042);
+const path = __nccwpck_require__(1017);
+const core = __nccwpck_require__(2186);
+async function closePreviousPrs({ client, repo, pullRequest, packages }) {
+    const labels = [constants_1.RELEASE_PR_LABEL, ...packages.map((it) => path.basename(it))];
+    const previousPrs = await (0, github_1.getPullRequestsForLabels)({ client, repo, labels });
+    if (previousPrs.length === 0) {
+        core.info('Found no previous PRs releasing the same packages.');
+        return;
+    }
+    core.info(`Found ${previousPrs.length} previous PRs releasing the same packages. Closing`);
+    const comment = `Closing in favor of ${pullRequest.html_url}`;
+    const promises = previousPrs.flatMap((pr) => [
+        (0, github_1.closePullRequest)({ client, repo, number: pr.number }),
+        (0, github_1.commentOnIssue)({ client, number: pr.number, repo, body: comment }),
+    ]);
+    await Promise.all(promises);
+}
+exports["default"] = closePreviousPrs;
+
+
+/***/ }),
+
 /***/ 6672:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -64216,6 +64303,7 @@ const path = __nccwpck_require__(1017);
 async function createPullRequest({ client, tags, repo, branch, packages, labels, assignees, autoMerge, requestReviewers, }) {
     const packageNames = packages.map((it) => path.basename(it));
     const packageList = packageNames.map((it) => `- ${it}`).join('\n');
+    labels = [...packageNames, ...(labels ?? [])];
     return (0, github_1.createPullRequest)({
         repo,
         client,
@@ -73726,6 +73814,8 @@ const package_manager_1 = __nccwpck_require__(2435);
 const create_pull_request_1 = __nccwpck_require__(6672);
 const strategy_1 = __nccwpck_require__(4741);
 const update_changelog_1 = __nccwpck_require__(8178);
+const close_previous_prs_1 = __nccwpck_require__(4171);
+const errors_1 = __nccwpck_require__(2579);
 async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getInput(constants_1.Input.AutoMerge) === 'true', requestReviewers = core.getInput(constants_1.Input.RequestReviewers) === 'true', assignee = core.getInput(constants_1.Input.Assignee), } = {}) {
     (0, strategy_1.assertStrategy)(versionStrategy);
     const { actor, repo } = github.context;
@@ -73769,7 +73859,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     core.info(`Pushing changes to ${branch}`);
     await (0, git_1.pushHeadToOrigin)();
     core.info('Creating PR');
-    return (0, create_pull_request_1.default)({
+    const pullRequest = await (0, create_pull_request_1.default)({
         client,
         repo,
         packages,
@@ -73780,6 +73870,12 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
         autoMerge,
         requestReviewers,
     });
+    try {
+        await (0, close_previous_prs_1.default)({ client, repo, pullRequest, packages });
+    }
+    catch (e) {
+        core.warning(`Failed to close previous PRs: ${(0, errors_1.unwrapErrorMessage)(e, 'for unknown reasons')}`);
+    }
 }
 exports["default"] = version;
 if (require.main === require.cache[eval('__filename')]) {
