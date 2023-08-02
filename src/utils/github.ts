@@ -131,7 +131,7 @@ export async function createTags({ client, repo, sha, tags }: CreateTagsParams) 
 
 type GetPullRequestsForLabelsResponse = {
   search: {
-    edges: { node: { number: number; title: string } }[]
+    edges: { node: { number: number; title: string; labels: { nodes: { name: string }[] } } }[]
   }
 }
 
@@ -148,6 +148,11 @@ query searchPullRequests($search: String!) {
           number
           title
           url
+          labels(first: 100) {
+            nodes {
+              name
+            }
+          }
         }
       }
     }
@@ -174,7 +179,9 @@ export async function getPullRequestsForLabels({
     { search }
   )
 
-  return response.search.edges.map((edge) => edge.node)
+  return response.search.edges
+    .map((edge) => edge.node)
+    .filter((pr) => pr.labels.nodes.every((label) => labels.includes(label.name)))
 }
 
 type ClosePullRequestParams = {
