@@ -12718,7 +12718,7 @@ exports.joinNatural = joinNatural;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.createTags = exports.createPullRequest = void 0;
+exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
@@ -12781,6 +12781,54 @@ async function createTags({ client, repo, sha, tags }) {
     })));
 }
 exports.createTags = createTags;
+const SEARCH_PULL_REQUESTS_QUERY = `
+query searchPullRequests($search: String!) {
+  search(
+    query: $search
+    type: ISSUE
+    first: 100
+  ) {
+    edges {
+      node {
+        ... on PullRequest {
+          number
+          title
+          url
+          labels(first: 100) {
+            nodes {
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+async function getPullRequestsForLabels({ client, labels, repo, state = 'open', }) {
+    const labelQuery = labels.map((label) => `label:${label}`).join(' ');
+    const search = `repo:${repo.owner}/${repo.repo} is:pr state:${state} ${labelQuery}`;
+    const response = await client.graphql(SEARCH_PULL_REQUESTS_QUERY, { search });
+    return response.search.edges
+        .map((edge) => edge.node)
+        .filter((pr) => pr.labels.nodes.every((label) => labels.includes(label.name)));
+}
+exports.getPullRequestsForLabels = getPullRequestsForLabels;
+async function closePullRequest({ client, number, repo }) {
+    await client.rest.pulls.update({
+        ...repo,
+        pull_number: number,
+        state: 'closed',
+    });
+}
+exports.closePullRequest = closePullRequest;
+async function commentOnIssue({ client, number, repo, body }) {
+    await client.rest.issues.createComment({
+        ...repo,
+        issue_number: number,
+        body,
+    });
+}
+exports.commentOnIssue = commentOnIssue;
 
 
 /***/ }),

@@ -12,6 +12,8 @@ const clean = (message: string) => message.replace('::debug::', '')
 process.stdout.write = (buffer) => {
   const message = buffer.toString().trim()
 
+  if (!message) return true
+
   if (isDebug(message)) {
     logger.debug(clean(message))
     return true

@@ -29,6 +29,8 @@ export default async function createPullRequest({
   const packageNames = packages.map((it) => path.basename(it))
   const packageList = packageNames.map((it) => `- ${it}`).join('\n')
 
+  labels = [...packageNames, ...(labels ?? [])]
+
   return createGithubPullRequest({
     repo,
     client,

@@ -23,6 +23,8 @@ import { updateLockfile } from './utils/package-manager'
 import createPullRequest from './version/create-pull-request'
 import { assertStrategy, validateAllowedStrategies, VersionStrategy } from './version/strategy'
 import updateChangelog from './version/update-changelog'
+import closePreviousPrs from './version/close-previous-prs'
+import { unwrapErrorMessage } from './utils/errors'
 
 export default async function version({
   packagesCsv = core.getInput(Input.Packages, { required: true }),
@@ -90,7 +92,7 @@ export default async function version({
   await pushHeadToOrigin()
 
   core.info('Creating PR')
-  return createPullRequest({
+  const pullRequest = await createPullRequest({
     client,
     repo,
     packages,
@@ -101,6 +103,14 @@ export default async function version({
     autoMerge,
     requestReviewers,
   })
+
+  try {
+    await closePreviousPrs({ client, repo, pullRequest, packages })
+  } catch (e) {
+    core.warning(`Failed to close previous PRs: ${unwrapErrorMessage(e, 'for unknown reasons')}`)
+  }
+
+  return pullRequest
 }
 
 if (require.main === module) {
