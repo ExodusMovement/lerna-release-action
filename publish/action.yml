@@ -9,7 +9,7 @@ outputs:
     description: 'Comma-separated string of published packages and their versions, such as @exodus/referrals@5.0.0,@exodus/wallet@2.1.0'
 
 runs:
-  using: 'node16'
+  using: 'node20'
   main: '../dist/publish/index.js'
 author: 'ExodusMovement'
 branding:
