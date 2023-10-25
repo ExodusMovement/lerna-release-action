@@ -17,7 +17,7 @@ inputs:
     description: 'ID of the version workflow'
     default: 'version.yml'
 runs:
-  using: 'node16'
+  using: 'node20'
   main: '../dist/version-dispatch/index.js'
 author: 'ExodusMovement'
 branding:
