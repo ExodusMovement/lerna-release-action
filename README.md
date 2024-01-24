@@ -32,7 +32,7 @@ jobs:
       - uses: ExodusMovement/lerna-release-action/version@master
         name: Version
         with:
-          github-token: ${{ secrets.GH_AUTOMATION_PAT }} # should be a PAT so that checks run on the release PR
+          github-token: ${{ secrets.GH_AUTOMATION_PAT }} # should not be the default GITHUB_TOKEN, otherwise subsequent automation will not run (such as checks on the release PR)
           packages: ${{ inputs.packages }}
 ```
 
