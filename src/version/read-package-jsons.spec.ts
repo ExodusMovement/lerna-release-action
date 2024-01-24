@@ -5,15 +5,6 @@ import { createFsFromJSON } from '../utils/testing'
 describe('readPackageJsons', () => {
   let fs: Volume
 
-  const lernaConfig = (packages: string[]) =>
-    JSON.stringify({
-      packages: packages,
-      version: 'independent',
-      npmClient: 'yarn',
-      useWorkspaces: true,
-      useNx: true,
-    })
-
   const packageContents = {
     storageMobile: {
       name: '@exodus/storage-mobile',
@@ -54,3 +45,12 @@ describe('readPackageJsons', () => {
     })
   })
 })
+
+const lernaConfig = (packages: string[]) =>
+  JSON.stringify({
+    packages,
+    version: 'independent',
+    npmClient: 'yarn',
+    useWorkspaces: true,
+    useNx: true,
+  })

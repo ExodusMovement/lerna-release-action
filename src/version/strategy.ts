@@ -1,4 +1,4 @@
-import { Filesystem, PackageJson } from '../utils/types'
+import type { Filesystem, PackageJson } from '../utils/types'
 import * as fs from 'fs'
 import { readJson } from '../utils/fs'
 import { getPackageNameByPath } from '@exodus/lerna-utils'

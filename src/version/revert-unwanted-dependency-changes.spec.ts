@@ -9,7 +9,7 @@ describe('revertUnwantedDependencyChanges', () => {
 
   const lernaConfig = (packages: string[]) =>
     JSON.stringify({
-      packages: packages,
+      packages,
       version: 'independent',
       npmClient: 'yarn',
       useWorkspaces: true,

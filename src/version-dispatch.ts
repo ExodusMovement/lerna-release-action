@@ -73,5 +73,6 @@ versionDispatch().catch((error: Error) => {
   if (error.stack) {
     core.debug(error.stack)
   }
+
   core.setFailed(String(error.message))
 })
