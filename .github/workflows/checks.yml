@@ -6,6 +6,8 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+permissions: {}
+
 jobs:
   main:
     runs-on: ubuntu-latest
