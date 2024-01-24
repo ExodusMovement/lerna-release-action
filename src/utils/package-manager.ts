@@ -1,6 +1,6 @@
 import * as fs from 'fs'
 import { Filesystem } from './types'
-import { spawnSync } from 'child_process'
+import { spawnSync } from './process'
 
 const lockfileCommands = {
   'yarn.lock': { command: 'yarn', args: ['--no-immutable'] },

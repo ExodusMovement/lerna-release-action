@@ -4,7 +4,7 @@ import * as github from '@actions/github'
 import { Label } from './utils/types'
 import { createTags } from './utils/github'
 import { extractTags } from './publish/extract-tags'
-import { spawnSync } from 'child_process'
+import { spawnSync } from './utils/process'
 
 async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
@@ -27,11 +27,7 @@ async function publish() {
   }
 
   core.info('Publishing yet unpublished packages')
-  const { stdout } = spawnSync(
-    'npx',
-    ['lerna', 'publish', 'from-package', '--yes', '--no-private'],
-    { encoding: 'utf8' }
-  )
+  const stdout = spawnSync('npx', ['lerna', 'publish', 'from-package', '--yes', '--no-private'])
   core.debug(stdout)
 
   core.info('Identifying published packages')

@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process'
+import { spawnSync } from './process'
 import { flagsAsArguments } from './objects'
 
 export function add(pathSpec: string) {
@@ -39,7 +39,7 @@ export function switchToBranch(branch: string) {
 }
 
 export async function getBranch(): Promise<string> {
-  const { stdout } = spawnSync('git', ['branch', '--show-current'], { encoding: 'utf8' })
+  const stdout = spawnSync('git', ['branch', '--show-current'])
   return stdout.toString().replaceAll('\n', '').trim()
 }
 
@@ -51,7 +51,7 @@ export async function getRef(): Promise<string> {
 }
 
 export function getTags(commit: string): string[] {
-  const { stdout: tags } = spawnSync('git', ['tag', '--contains', commit], { encoding: 'utf8' })
+  const tags = spawnSync('git', ['tag', '--contains', commit])
   return tags.trim().split('\n')
 }
 
@@ -60,12 +60,12 @@ export function deleteTags(tags: string[]) {
 }
 
 export function getCommitSha(): string {
-  const { stdout } = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' })
+  const stdout = spawnSync('git', ['rev-parse', 'HEAD'])
   return stdout.toString().replaceAll('\n', '').trim()
 }
 
 export function getCommitMessage(commit: string): string {
-  const { stdout } = spawnSync('git', ['show', '-s', '--format=%s', commit], { encoding: 'utf8' })
+  const stdout = spawnSync('git', ['show', '-s', '--format=%s', commit])
   return stdout.trim()
 }
 

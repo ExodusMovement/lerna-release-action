@@ -12,9 +12,9 @@ describe('getTags', () => {
 
     when(spawnSync)
       .calledWith('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' })
-      .mockReturnValue({ stdout: commit, stderr: '' } as never)
+      .mockReturnValue({ stdout: commit, stderr: '', status: 0 } as never)
       .calledWith('git', ['tag', '--contains', commit], { encoding: 'utf8' })
-      .mockReturnValue({ stdout: tags.join('\n'), stderr: '' } as never)
+      .mockReturnValue({ stdout: tags.join('\n'), stderr: '', status: 0 } as never)
   }
 
   it('should only return tags from selected packages', () => {

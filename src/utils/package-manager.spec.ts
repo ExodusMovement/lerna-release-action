@@ -9,16 +9,15 @@ jest.mock('child_process', () => ({
 
 describe('updateLockfile', () => {
   let fs: Volume
-
-  function setup(packageManager?: 'npm' | 'yarn', commandExists = true) {
+  function setup(packageManager?: 'npm' | 'yarn') {
     const filenames = {
       npm: 'package-lock.json',
       yarn: 'yarn.lock',
     }
 
-    ;(spawnSync as jest.Mock).mockImplementation((command) => {
-      if (!commandExists && command === `command -v ${packageManager}`) {
-        throw new Error('some non-zero exit code from os')
+    ;(spawnSync as jest.Mock).mockImplementation(() => {
+      return {
+        status: 0,
       }
     })
 
@@ -32,7 +31,7 @@ describe('updateLockfile', () => {
 
     updateLockfile({ filesystem: fs as never })
 
-    expect(spawnSync).toHaveBeenCalledWith('npm', ['install'])
+    expect(spawnSync).toHaveBeenCalledWith('npm', ['install'], expect.anything())
   })
 
   it('should call yarn if yarn.lock present', () => {
@@ -40,7 +39,7 @@ describe('updateLockfile', () => {
 
     updateLockfile({ filesystem: fs as never })
 
-    expect(spawnSync).toHaveBeenCalledWith('yarn', ['--no-immutable'])
+    expect(spawnSync).toHaveBeenCalledWith('yarn', ['--no-immutable'], expect.anything())
   })
 
   it('should do nothing if no lockfile', () => {

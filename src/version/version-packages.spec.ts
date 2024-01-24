@@ -3,12 +3,12 @@ import { VersionStrategy } from './strategy'
 import { spawnSync } from 'child_process'
 
 jest.mock('child_process', () => ({
-  spawnSync: jest.fn(() => ({ stdout: '' })),
+  spawnSync: jest.fn(() => ({ stdout: '', status: 0 })),
 }))
 
 describe('versionPackages', () => {
   it('should derive bumps using conventional commits', async () => {
-    await versionPackages({ versionStrategy: VersionStrategy.ConventionalCommits })
+    versionPackages({ versionStrategy: VersionStrategy.ConventionalCommits })
     expect(spawnSync).toHaveBeenCalledWith(
       'npx',
       [
