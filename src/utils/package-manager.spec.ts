@@ -1,11 +1,10 @@
 import { Volume } from 'memfs/lib/volume'
-import { exec } from './process'
 import { updateLockfile } from './package-manager'
 import { createFsFromJSON } from './testing'
+import { spawnSync } from 'child_process'
 
-jest.mock('./process', () => ({
-  __esModule: true,
-  exec: jest.fn(),
+jest.mock('child_process', () => ({
+  spawnSync: jest.fn(),
 }))
 
 describe('updateLockfile', () => {
@@ -17,7 +16,7 @@ describe('updateLockfile', () => {
       yarn: 'yarn.lock',
     }
 
-    ;(exec as jest.Mock).mockImplementation(async (command) => {
+    ;(spawnSync as jest.Mock).mockImplementation((command) => {
       if (!commandExists && command === `command -v ${packageManager}`) {
         throw new Error('some non-zero exit code from os')
       }
@@ -28,27 +27,27 @@ describe('updateLockfile', () => {
     })
   }
 
-  it('should call npm install if package-lock.json present', async () => {
+  it('should call npm install if package-lock.json present', () => {
     setup('npm')
 
-    await updateLockfile({ filesystem: fs as never })
+    updateLockfile({ filesystem: fs as never })
 
-    expect(exec).toHaveBeenCalledWith('npm install')
+    expect(spawnSync).toHaveBeenCalledWith('npm', ['install'])
   })
 
-  it('should call yarn if yarn.lock present', async () => {
+  it('should call yarn if yarn.lock present', () => {
     setup('yarn')
 
-    await updateLockfile({ filesystem: fs as never })
+    updateLockfile({ filesystem: fs as never })
 
-    expect(exec).toHaveBeenCalledWith('yarn --no-immutable')
+    expect(spawnSync).toHaveBeenCalledWith('yarn', ['--no-immutable'])
   })
 
-  it('should do nothing if no lockfile', async () => {
+  it('should do nothing if no lockfile', () => {
     setup()
 
-    await updateLockfile({ filesystem: fs as never })
+    updateLockfile({ filesystem: fs as never })
 
-    expect(exec).not.toHaveBeenCalled()
+    expect(spawnSync).not.toHaveBeenCalled()
   })
 })

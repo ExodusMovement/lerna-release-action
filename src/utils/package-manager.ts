@@ -1,22 +1,19 @@
 import * as fs from 'fs'
-import { exec } from './process'
 import { Filesystem } from './types'
+import { spawnSync } from 'child_process'
 
 const lockfileCommands = {
-  'yarn.lock': 'yarn --no-immutable',
-  'package-lock.json': 'npm install',
+  'yarn.lock': { command: 'yarn', args: ['--no-immutable'] },
+  'package-lock.json': { command: 'npm', args: ['install'] },
 }
-
-type Lockfile = keyof typeof lockfileCommands
 
 type UpdateLockfileParams = { filesystem?: Filesystem }
 
-export async function updateLockfile({ filesystem = fs }: UpdateLockfileParams = {}) {
-  const lockfile = Object.keys(lockfileCommands).find((lockfile) =>
-    filesystem.existsSync(lockfile)
-  ) as Lockfile | undefined
-
-  if (lockfile) {
-    await exec(lockfileCommands[lockfile])
+export function updateLockfile({ filesystem = fs }: UpdateLockfileParams = {}) {
+  for (const [lockfile, { command, args }] of Object.entries(lockfileCommands)) {
+    if (filesystem.existsSync(lockfile)) {
+      spawnSync(command, args)
+      return
+    }
   }
 }

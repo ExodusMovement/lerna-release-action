@@ -1,5 +1,4 @@
 import * as fs from 'fs'
-import { exec } from './process'
 import { VersionStrategy } from '../version/strategy'
 
 export type Repo = {
@@ -27,8 +26,6 @@ export type PackageJson = {
 }
 
 export type Filesystem = typeof fs
-
-export type Exec = typeof exec
 
 export type PackageContentByPath = {
   [path: string]: PackageJson
