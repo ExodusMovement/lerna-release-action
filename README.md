@@ -2,6 +2,9 @@
 
 ## ExodusMovement/lerna-release-action
 
+Action that allows selectively releasing packages in a lerna monorepo. It works around lerna's opinionated releasing of every dependant if a package changed. This comes with its own dangers and should be used with caution. The action creates
+a release PR that is assigned to the user that dispatched the workflow.
+
 ### Version workflow
 
 ```yaml
@@ -10,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       packages:
-        description: 'Selected packages as comma separated string, e.g. modules/storage-spec,libraries/formatting'
+        description: 'Selected packages as comma separated string, e.g. @exodus/storage-spec,@exodus/formatting or just storage-spec,formatting'
         type: string
         required: true
 
@@ -29,7 +32,7 @@ jobs:
       - uses: ExodusMovement/lerna-release-action/version@master
         name: Version
         with:
-          github-token: ${{ secrets.GH_AUTOMATION_PAT }}
+          github-token: ${{ secrets.GH_AUTOMATION_PAT }} # should be a PAT so that checks run on the release PR
           packages: ${{ inputs.packages }}
 ```
 
@@ -73,4 +76,29 @@ jobs:
       run: yarn build
     - name: Publish
       uses: ExodusMovement/lerna-release-action/publish@master
+```
+
+### Version dispatch workflow
+
+Automatically start versioning of packages when a PR is merged. Requires using `ExodusMovment/lerna-package-name-action` to label PRs, as these package labels will be used to determine the packages to be versioned.
+
+```yaml
+name: Version dispatch
+on:
+  pull_request:
+    types:
+      - closed
+
+jobs:
+  invoke-versioning:
+    if: contains(github.event.pull_request.labels.*.name , 'publish-on-merge') == false && contains(github.event.pull_request.labels.*.name , 'skip-release') == false
+    name: Invoke version workflow
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ExodusMovement/lerna-release-action/version-dispatch@master
+        with:
+          version-workflow-id: version.yaml
+          github-token: ${{ secrets.GH_AUTOMATION_PAT }}
+          exclude-commit-types: chore,docs,test,ci
 ```
