@@ -179,9 +179,7 @@ export async function getPullRequestsForLabels({
     { search }
   )
 
-  return response.search.edges
-    .map((edge) => edge.node)
-    .filter((pr) => pr.labels.nodes.every((label) => labels.includes(label.name)))
+  return response.search.edges.map((edge) => edge.node)
 }
 
 type ClosePullRequestParams = {
