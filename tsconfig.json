@@ -8,8 +8,8 @@
     "types": ["node", "jest"],
     "strict": true,
     "downlevelIteration": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
   },
   "include": ["src"],
-  "exclude": ["**/*.spec.ts", "src/utils/test.ts", "**/__fixtures__"]
+  "exclude": ["**/*.spec.ts", "src/utils/test.ts", "**/__fixtures__"],
 }

@@ -10,9 +10,9 @@
     "downlevelIteration": true,
     "noUncheckedIndexedAccess": true,
     "paths": {
-      "@exodus/lerna-utils": ["./node_modules/@exodus/lerna-utils"]
-    }
+      "@exodus/lerna-utils": ["./node_modules/@exodus/lerna-utils"],
+    },
   },
   "include": ["src"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
 }

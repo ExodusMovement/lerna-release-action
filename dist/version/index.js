@@ -64339,6 +64339,9 @@ exports["default"] = createPullRequest;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const path = __nccwpck_require__(1017);
 const git = __nccwpck_require__(8682);
+function matches(tag, packageName) {
+    return new RegExp(`@[^/]+/${packageName}@`).test(tag);
+}
 async function getTags(packages) {
     const commit = await git.getCommitSha();
     const names = packages.map((it) => path.basename(it));
@@ -64356,9 +64359,6 @@ async function getTags(packages) {
     });
 }
 exports["default"] = getTags;
-function matches(tag, packageName) {
-    return new RegExp(`@[^/]+/${packageName}@`).test(tag);
-}
 
 
 /***/ }),
@@ -64469,6 +64469,13 @@ const lerna_utils_1 = __nccwpck_require__(4801);
  * is set back to it was prior to calling `lerna version`, aka what's in previousPackageContents
  * under `<package-root>/<package-name>`
  */
+async function updateJson(relativePath, update, { filesystem = fs } = {}) {
+    const json = await (0, fs_1.readJson)(relativePath, { filesystem });
+    if (!json)
+        return;
+    const updated = await update(json);
+    await filesystem.promises.writeFile(relativePath, JSON.stringify(updated));
+}
 async function revertUnwantedDependencyChanges({ packages: selected, previousPackageContents, filesystem = fs, }) {
     const all = await (0, lerna_utils_1.getPackagePaths)({ filesystem });
     const unselected = all.filter((packagePath) => !selected.includes(packagePath));
@@ -64494,13 +64501,6 @@ async function revertUnwantedDependencyChanges({ packages: selected, previousPac
     }, { filesystem })));
 }
 exports["default"] = revertUnwantedDependencyChanges;
-async function updateJson(relativePath, update, { filesystem = fs } = {}) {
-    const json = await (0, fs_1.readJson)(relativePath, { filesystem });
-    if (!json)
-        return;
-    const updated = await update(json);
-    await filesystem.promises.writeFile(relativePath, JSON.stringify(updated));
-}
 
 
 /***/ }),
@@ -73825,6 +73825,14 @@ const strategy_1 = __nccwpck_require__(4741);
 const update_changelog_1 = __nccwpck_require__(8178);
 const close_previous_prs_1 = __nccwpck_require__(4171);
 const errors_1 = __nccwpck_require__(2579);
+if (require.main === require.cache[eval('__filename')]) {
+    version().catch((error) => {
+        if (error.stack) {
+            core.debug(error.stack);
+        }
+        core.setFailed(String(error.message));
+    });
+}
 async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getInput(constants_1.Input.AutoMerge) === 'true', requestReviewers = core.getInput(constants_1.Input.RequestReviewers) === 'true', assignee = core.getInput(constants_1.Input.Assignee), } = {}) {
     (0, strategy_1.assertStrategy)(versionStrategy);
     const { actor, repo } = github.context;
@@ -73888,14 +73896,6 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     return pullRequest;
 }
 exports["default"] = version;
-if (require.main === require.cache[eval('__filename')]) {
-    version().catch((error) => {
-        if (error.stack) {
-            core.debug(error.stack);
-        }
-        core.setFailed(String(error.message));
-    });
-}
 
 })();
 

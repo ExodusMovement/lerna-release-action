@@ -26,6 +26,16 @@ import updateChangelog from './version/update-changelog'
 import closePreviousPrs from './version/close-previous-prs'
 import { unwrapErrorMessage } from './utils/errors'
 
+if (require.main === module) {
+  version().catch((error: Error) => {
+    if (error.stack) {
+      core.debug(error.stack)
+    }
+
+    core.setFailed(String(error.message))
+  })
+}
+
 export default async function version({
   packagesCsv = core.getInput(Input.Packages, { required: true }),
   token = core.getInput(Input.GithubToken, { required: true }),
@@ -111,13 +121,4 @@ export default async function version({
   }
 
   return pullRequest
-}
-
-if (require.main === module) {
-  version().catch((error: Error) => {
-    if (error.stack) {
-      core.debug(error.stack)
-    }
-    core.setFailed(String(error.message))
-  })
 }

@@ -52,6 +52,19 @@ type Params = {
  * is set back to it was prior to calling `lerna version`, aka what's in previousPackageContents
  * under `<package-root>/<package-name>`
  */
+
+async function updateJson<T>(
+  relativePath: string,
+  update: (json: T) => Promise<T>,
+  { filesystem = fs }: { filesystem?: Filesystem } = {}
+) {
+  const json = await readJson<T>(relativePath, { filesystem })
+  if (!json) return
+
+  const updated = await update(json)
+  await filesystem.promises.writeFile(relativePath, JSON.stringify(updated))
+}
+
 export default async function revertUnwantedDependencyChanges({
   packages: selected,
   previousPackageContents,
@@ -99,16 +112,4 @@ export default async function revertUnwantedDependencyChanges({
       )
     )
   )
-}
-
-async function updateJson<T>(
-  relativePath: string,
-  update: (json: T) => Promise<T>,
-  { filesystem = fs }: { filesystem?: Filesystem } = {}
-) {
-  const json = await readJson<T>(relativePath, { filesystem })
-  if (!json) return
-
-  const updated = await update(json)
-  await filesystem.promises.writeFile(relativePath, JSON.stringify(updated))
 }

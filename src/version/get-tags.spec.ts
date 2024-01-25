@@ -6,17 +6,17 @@ jest.mock('../utils/process', () => ({
   exec: jest.fn(),
 }))
 
+function setup(tags: string[]) {
+  const commit = '26d0f601ef58b14de321cad15b059fe2962b37f5'
+
+  when(exec)
+    .calledWith('git rev-parse HEAD')
+    .mockResolvedValue({ stdout: commit, stderr: '' })
+    .calledWith(`git tag --contains ${commit}`)
+    .mockResolvedValue({ stdout: tags.join('\n'), stderr: '' })
+}
+
 describe('getTags', () => {
-  function setup(tags: string[]) {
-    const commit = '26d0f601ef58b14de321cad15b059fe2962b37f5'
-
-    when(exec)
-      .calledWith('git rev-parse HEAD')
-      .mockResolvedValue({ stdout: commit, stderr: '' })
-      .calledWith(`git tag --contains ${commit}`)
-      .mockResolvedValue({ stdout: tags.join('\n'), stderr: '' })
-  }
-
   it('should only return tags from selected packages', async () => {
     setup([
       '@exodus/batcave-entrance@v2.0.1',
