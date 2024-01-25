@@ -12808,9 +12808,7 @@ async function getPullRequestsForLabels({ client, labels, repo, state = 'open', 
     const labelQuery = labels.map((label) => `label:${label}`).join(' ');
     const search = `repo:${repo.owner}/${repo.repo} is:pr state:${state} ${labelQuery}`;
     const response = await client.graphql(SEARCH_PULL_REQUESTS_QUERY, { search });
-    return response.search.edges
-        .map((edge) => edge.node)
-        .filter((pr) => pr.labels.nodes.every((label) => labels.includes(label.name)));
+    return response.search.edges.map((edge) => edge.node);
 }
 exports.getPullRequestsForLabels = getPullRequestsForLabels;
 async function closePullRequest({ client, number, repo }) {
