@@ -1,6 +1,10 @@
 import * as path from 'path'
 import * as git from '../utils/git'
 
+function matches(tag: string, packageName: string): boolean {
+  return new RegExp(`@[^/]+/${packageName}@`).test(tag)
+}
+
 export default function getTags(packages: string[]) {
   const commit = git.getCommitSha()
   const names = packages.map((it) => path.basename(it))
@@ -17,8 +21,4 @@ export default function getTags(packages: string[]) {
       if (indexA < indexB) return -1
       return 0
     })
-}
-
-function matches(tag: string, packageName: string): boolean {
-  return new RegExp(`@[^/]+/${packageName}@`).test(tag)
 }

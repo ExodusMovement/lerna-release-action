@@ -7,16 +7,6 @@ jest.mock('child_process', () => ({
 }))
 
 describe('getTags', () => {
-  function setup(tags: string[]) {
-    const commit = '26d0f601ef58b14de321cad15b059fe2962b37f5'
-
-    when(spawnSync)
-      .calledWith('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' })
-      .mockReturnValue({ stdout: commit, stderr: '', status: 0 } as never)
-      .calledWith('git', ['tag', '--contains', commit], { encoding: 'utf8' })
-      .mockReturnValue({ stdout: tags.join('\n'), stderr: '', status: 0 } as never)
-  }
-
   it('should only return tags from selected packages', () => {
     setup([
       '@exodus/batcave-entrance@v2.0.1',
@@ -50,3 +40,13 @@ describe('getTags', () => {
     ])
   })
 })
+
+function setup(tags: string[]) {
+  const commit = '26d0f601ef58b14de321cad15b059fe2962b37f5'
+
+  when(spawnSync)
+    .calledWith('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' })
+    .mockReturnValue({ stdout: commit, stderr: '', status: 0 } as never)
+    .calledWith('git', ['tag', '--contains', commit], { encoding: 'utf8' })
+    .mockReturnValue({ stdout: tags.join('\n'), stderr: '', status: 0 } as never)
+}
