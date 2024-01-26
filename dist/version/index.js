@@ -64143,9 +64143,7 @@ async function getPullRequestsForLabels({ client, labels, repo, state = 'open', 
     const labelQuery = labels.map((label) => `label:${label}`).join(' ');
     const search = `repo:${repo.owner}/${repo.repo} is:pr state:${state} ${labelQuery}`;
     const response = await client.graphql(SEARCH_PULL_REQUESTS_QUERY, { search });
-    return response.search.edges
-        .map((edge) => edge.node)
-        .filter((pr) => pr.labels.nodes.every((label) => labels.includes(label.name)));
+    return response.search.edges.map((edge) => edge.node);
 }
 exports.getPullRequestsForLabels = getPullRequestsForLabels;
 async function closePullRequest({ client, number, repo }) {
@@ -64279,10 +64277,14 @@ const github_1 = __nccwpck_require__(1225);
 const constants_1 = __nccwpck_require__(9042);
 const path = __nccwpck_require__(1017);
 const core = __nccwpck_require__(2186);
+const lerna_utils_1 = __nccwpck_require__(4801);
 async function closePreviousPrs({ client, repo, pullRequest, packages }) {
+    const allPackages = await (0, lerna_utils_1.getPackagePaths)();
+    const allPackageNames = new Set(allPackages.map((it) => path.basename(it)));
     const labels = [constants_1.RELEASE_PR_LABEL, ...packages.map((it) => path.basename(it))];
     const previousPrs = await (0, github_1.getPullRequestsForLabels)({ client, repo, labels });
-    const filtered = previousPrs.filter((pr) => pr.number !== pullRequest.number);
+    const filtered = previousPrs.filter((pr) => pr.number !== pullRequest.number &&
+        pr.labels.nodes.every((label) => labels.includes(label.name) || !allPackageNames.has(label.name)));
     if (filtered.length === 0) {
         core.info('Found no previous PRs releasing the same packages.');
         return;
