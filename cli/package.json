@@ -1,6 +1,6 @@
 {
   "name": "@exodus/lerna-release-action-cli",
-  "version": "1.3.2",
+  "version": "1.3.4",
   "repository": {
     "type": "git",
     "url": "https://github.com/ExodusMovement/lerna-release-action.git"

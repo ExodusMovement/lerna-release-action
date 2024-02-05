@@ -1,14 +1,23 @@
-import { backoff, exec, sleep } from './process'
-import { exec as execCb, execSync } from 'child_process'
+import { backoff, sleep, spawnSync } from './process'
+import { spawn } from 'child_process'
 import * as fs from 'fs'
 import * as yaml from 'yaml'
 import * as path from 'path'
 import logger from './logger'
 
-export async function getPullRequestUrl() {
-  const { stdout } = await exec(
-    "gh pr list --label publish-on-merge --limit 1 --json url -q '.[0].url' | tee"
-  )
+export function getPullRequestUrl() {
+  const stdout = spawnSync('gh', [
+    'pr',
+    'list',
+    '--label',
+    'publish-on-merge',
+    '--limit',
+    '1',
+    '--json',
+    'url',
+    '-q',
+    '.[0].url',
+  ])
   return stdout.trim()
 }
 
@@ -39,12 +48,12 @@ const SSH_OWNER_NAME_REGEX = /:([^/]+)\/([^.]+)/
 const HTTP_OWNER_NAME_REGEX = /\/([^/]+)\/([^/]+)$/
 
 export function getRepo() {
-  const remotes = execSync('git remote', { encoding: 'utf8' })
+  const remotes = spawnSync('git', ['remote'])
   const remote = remotes.trim().split('\n')[0]?.trim()
 
   if (!remote) throw new Error(`No remotes configured`)
 
-  const url = execSync(`git remote get-url ${remote}`, { encoding: 'utf8' }).trim()
+  const url = spawnSync('git', ['remote', 'get-url', remote]).trim()
   const match = url.match(url.startsWith('http') ? HTTP_OWNER_NAME_REGEX : SSH_OWNER_NAME_REGEX)
   if (!match) throw new Error(`Remote ULR "${url}" not in expected format`)
 
@@ -64,32 +73,50 @@ export async function watchRun() {
 
   const maxRetry = 3
   const capture = async (attempt = 0) => {
-    const { stdout } = await exec(
-      "gh run list --workflow=version.yaml --limit 1 --json databaseId -q '.[0].databaseId' | tee"
-    )
+    const stdout = spawnSync('gh', [
+      'run',
+      'list',
+      '--workflow=version.yaml',
+      '--limit',
+      '1',
+      '--json',
+      'databaseId',
+      '-q',
+      '.[0].databaseId',
+    ])
     const runId = stdout.replace('\n', '')
 
     return new Promise<void>((resolve, reject) => {
-      const run = execCb(`gh run watch ${runId}`, (error, stdout) => {
-        if (stdout.includes('has already completed with')) {
-          return
-        }
+      const command = spawn('gh', ['run', 'watch', runId])
 
-        if (error) {
-          reject(error)
-          return
-        }
+      const cleanup = () => {
+        command.removeAllListeners()
+        command.stdout.removeAllListeners()
+        command.stderr.removeAllListeners()
+      }
 
+      command.on('error', (e) => {
+        cleanup()
+        reject(e)
+      })
+
+      command.on('close', () => {
+        cleanup()
         resolve()
       })
 
-      run.stdout?.on('data', async function (data) {
-        if (!data.includes('has already completed with')) {
-          logger.info(data)
+      command.stderr.on('data', (data) => {
+        console.error(data.toString())
+      })
+
+      command.stdout.on('data', async function (data) {
+        const line = data.toString()
+        if (!line.includes('has already completed with')) {
+          logger.info(line)
           return
         }
 
-        run.stdout?.removeAllListeners('data')
+        cleanup()
 
         if (attempt === maxRetry) {
           return reject(new Error(`Unable capture workflow output`))

@@ -1,10 +1,10 @@
 import * as core from '@actions/core'
 import { Input, RELEASE_PR_LABEL } from './constants'
 import * as github from '@actions/github'
-import { exec } from './utils/process'
 import { Label } from './utils/types'
 import { createTags } from './utils/github'
 import { extractTags } from './publish/extract-tags'
+import { spawnSync } from './utils/process'
 
 async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
@@ -27,7 +27,7 @@ async function publish() {
   }
 
   core.info('Publishing yet unpublished packages')
-  const { stdout } = await exec('npx lerna publish from-package --yes --no-private')
+  const stdout = spawnSync('npx', ['lerna', 'publish', 'from-package', '--yes', '--no-private'])
   core.debug(stdout)
 
   core.info('Identifying published packages')

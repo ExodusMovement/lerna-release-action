@@ -63972,31 +63972,31 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.getRef = exports.getBranch = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
 const process_1 = __nccwpck_require__(9239);
 const objects_1 = __nccwpck_require__(8151);
-async function add(pathSpec) {
-    await (0, process_1.exec)(`git add ${pathSpec}`);
+function add(pathSpec) {
+    (0, process_1.spawnSync)('git', ['add', pathSpec]);
 }
 exports.add = add;
-async function commit({ message, body, flags }) {
-    let command = `git commit ${(0, objects_1.stringifyFlags)(flags)}`;
+function commit({ message, body, flags }) {
+    const args = ['commit', ...(0, objects_1.flagsAsArguments)(flags)];
     if (message) {
-        command += ` -m "${message}"`;
+        args.push('-m', `"${message}"`);
     }
     if (body) {
-        command += ` -m "${body}"`;
+        args.push('-m', `"${body}"`);
     }
-    await (0, process_1.exec)(command);
+    (0, process_1.spawnSync)('git', args);
 }
 exports.commit = commit;
-async function pushHeadToOrigin() {
-    await (0, process_1.exec)('git push origin HEAD');
+function pushHeadToOrigin() {
+    (0, process_1.spawnSync)('git', ['push', 'origin', 'HEAD']);
 }
 exports.pushHeadToOrigin = pushHeadToOrigin;
-async function switchToBranch(branch) {
-    await (0, process_1.exec)(`git switch --create ${branch}`);
+function switchToBranch(branch) {
+    (0, process_1.spawnSync)('git', ['switch', '--create', branch]);
 }
 exports.switchToBranch = switchToBranch;
 async function getBranch() {
-    const { stdout } = await (0, process_1.exec)(`git branch --show-current`);
+    const stdout = (0, process_1.spawnSync)('git', ['branch', '--show-current']);
     return stdout.toString().replaceAll('\n', '').trim();
 }
 exports.getBranch = getBranch;
@@ -64007,40 +64007,44 @@ async function getRef() {
     return getCommitSha(); // in case of detached head
 }
 exports.getRef = getRef;
-async function getTags(commit) {
-    const { stdout: tags } = await (0, process_1.exec)(`git tag --contains ${commit}`);
+function getTags(commit) {
+    const tags = (0, process_1.spawnSync)('git', ['tag', '--contains', commit]);
     return tags.trim().split('\n');
 }
 exports.getTags = getTags;
-async function deleteTags(tags) {
-    await Promise.all(tags.map((tag) => (0, process_1.exec)(`git tag -d ${tag}`)));
+function deleteTags(tags) {
+    tags.forEach((tag) => (0, process_1.spawnSync)('git', ['tag', '-d', tag]));
 }
 exports.deleteTags = deleteTags;
-async function getCommitSha() {
-    const { stdout } = await (0, process_1.exec)(`git rev-parse HEAD`);
+function getCommitSha() {
+    const stdout = (0, process_1.spawnSync)('git', ['rev-parse', 'HEAD']);
     return stdout.toString().replaceAll('\n', '').trim();
 }
 exports.getCommitSha = getCommitSha;
-async function getCommitMessage(commit) {
-    const { stdout } = await (0, process_1.exec)(`git show -s --format=%s "${commit}"`);
+function getCommitMessage(commit) {
+    const stdout = (0, process_1.spawnSync)('git', ['show', '-s', '--format=%s', commit]);
     return stdout.trim();
 }
 exports.getCommitMessage = getCommitMessage;
-async function checkout(ref) {
-    await (0, process_1.exec)(`git checkout ${ref}`);
+function checkout(ref) {
+    (0, process_1.spawnSync)('git', ['checkout', ref]);
 }
 exports.checkout = checkout;
-async function cleanup() {
-    await (0, process_1.exec)(`git stash -u && git stash drop`).catch(() => true);
+function cleanup() {
+    try {
+        (0, process_1.spawnSync)('git', ['stash', '-u']);
+        (0, process_1.spawnSync)('git', ['stash', 'drop']);
+    }
+    catch { }
 }
 exports.cleanup = cleanup;
-async function resetLastCommit({ flags }) {
-    await (0, process_1.exec)(`git reset ${(0, objects_1.stringifyFlags)(flags)} HEAD~1`);
+function resetLastCommit({ flags }) {
+    (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags), 'HEAD~1']);
 }
 exports.resetLastCommit = resetLastCommit;
-async function configureUser({ name, email }) {
-    await (0, process_1.exec)(`git config user.name ${name}`);
-    await (0, process_1.exec)(`git config user.email ${email}`);
+function configureUser({ name, email }) {
+    (0, process_1.spawnSync)('git', ['config', 'user.name', name]);
+    (0, process_1.spawnSync)('git', ['config', 'user.email', email]);
 }
 exports.configureUser = configureUser;
 
@@ -64172,19 +64176,17 @@ exports.commentOnIssue = commentOnIssue;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.stringifyFlags = void 0;
+exports.flagsAsArguments = void 0;
 const strings_1 = __nccwpck_require__(8927);
-function stringifyFlags(flags) {
-    return Object.entries(flags ?? {})
-        .reduce((all, [flag, enabled]) => {
+function flagsAsArguments(flags) {
+    return Object.entries(flags ?? {}).reduce((all, [flag, enabled]) => {
         if (enabled) {
-            return `${all} --${(0, strings_1.toKebabCase)(flag)}`;
+            all.push(`--${(0, strings_1.toKebabCase)(flag)}`);
         }
         return all;
-    }, '')
-        .trim();
+    }, []);
 }
-exports.stringifyFlags = stringifyFlags;
+exports.flagsAsArguments = flagsAsArguments;
 
 
 /***/ }),
@@ -64199,13 +64201,15 @@ exports.updateLockfile = void 0;
 const fs = __nccwpck_require__(7147);
 const process_1 = __nccwpck_require__(9239);
 const lockfileCommands = {
-    'yarn.lock': 'yarn --no-immutable',
-    'package-lock.json': 'npm install',
+    'yarn.lock': { command: 'yarn', args: ['--no-immutable'] },
+    'package-lock.json': { command: 'npm', args: ['install'] },
 };
-async function updateLockfile({ filesystem = fs } = {}) {
-    const lockfile = Object.keys(lockfileCommands).find((lockfile) => filesystem.existsSync(lockfile));
-    if (lockfile) {
-        await (0, process_1.exec)(lockfileCommands[lockfile]);
+function updateLockfile({ filesystem = fs } = {}) {
+    for (const [lockfile, { command, args }] of Object.entries(lockfileCommands)) {
+        if (filesystem.existsSync(lockfile)) {
+            (0, process_1.spawnSync)(command, args);
+            return;
+        }
     }
 }
 exports.updateLockfile = updateLockfile;
@@ -64219,10 +64223,16 @@ exports.updateLockfile = updateLockfile;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.exec = void 0;
-const util = __nccwpck_require__(7261);
-const node_child_process_1 = __nccwpck_require__(7718);
-exports.exec = util.promisify(node_child_process_1.exec);
+exports.spawnSync = void 0;
+const child_process_1 = __nccwpck_require__(2081);
+const spawnSync = (command, args, options = {}) => {
+    const { stdout, stderr, status } = (0, child_process_1.spawnSync)(command, args, { encoding: 'utf8', ...options });
+    if (status !== 0) {
+        throw new Error(stderr);
+    }
+    return stdout;
+};
+exports.spawnSync = spawnSync;
 
 
 /***/ }),
@@ -64344,10 +64354,10 @@ const git = __nccwpck_require__(8682);
 function matches(tag, packageName) {
     return new RegExp(`@[^/]+/${packageName}@`).test(tag);
 }
-async function getTags(packages) {
-    const commit = await git.getCommitSha();
+function getTags(packages) {
+    const commit = git.getCommitSha();
     const names = packages.map((it) => path.basename(it));
-    const tags = await git.getTags(commit);
+    const tags = git.getTags(commit);
     return tags
         .filter((tag) => names.some((name) => matches(tag, name)))
         .sort((a, b) => {
@@ -64633,14 +64643,24 @@ exports["default"] = updateChangelog;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const process_1 = __nccwpck_require__(9239);
 const core = __nccwpck_require__(2186);
 const strategy_1 = __nccwpck_require__(4741);
-async function versionPackages({ extraArgs, versionStrategy }) {
-    let command = `npx lerna version ${(0, strategy_1.strategyAsArgument)(versionStrategy)} --no-push --force-git-tag --yes --no-private --force-publish`;
-    if (extraArgs)
-        command += ` ${extraArgs}`;
-    const { stdout } = await (0, process_1.exec)(command);
+const process_1 = __nccwpck_require__(9239);
+function versionPackages({ extraArgs, versionStrategy }) {
+    const args = [
+        'lerna',
+        'version',
+        (0, strategy_1.strategyAsArgument)(versionStrategy),
+        '--no-push',
+        '--force-git-tag',
+        '--yes',
+        '--no-private',
+        '--force-publish',
+    ];
+    if (extraArgs) {
+        args.push(...extraArgs.split(' '));
+    }
+    const stdout = (0, process_1.spawnSync)('npx', args, { encoding: 'utf8' });
     core.debug(stdout);
 }
 exports["default"] = versionPackages;
@@ -64744,14 +64764,6 @@ module.exports = require("net");
 
 /***/ }),
 
-/***/ 7718:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("node:child_process");
-
-/***/ }),
-
 /***/ 5673:
 /***/ ((module) => {
 
@@ -64773,14 +64785,6 @@ module.exports = require("node:stream");
 
 "use strict";
 module.exports = require("node:string_decoder");
-
-/***/ }),
-
-/***/ 7261:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("node:util");
 
 /***/ }),
 
@@ -73843,40 +73847,40 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
     core.info(`Configure user ${assignee}`);
-    await (0, git_1.configureUser)({
+    (0, git_1.configureUser)({
         name: assignee,
         email: `${assignee}@users.noreply.github.com`,
     });
     core.info('Creating object of previous package.json contents');
     const previousPackageContents = await (0, read_package_jsons_1.default)();
     core.info('Versioning packages');
-    await (0, version_packages_1.default)({ extraArgs: versionExtraArgs, versionStrategy });
-    const tags = await (0, get_tags_1.default)(packages);
+    (0, version_packages_1.default)({ extraArgs: versionExtraArgs, versionStrategy });
+    const tags = (0, get_tags_1.default)(packages);
     core.debug(`Tags found: ${tags}`);
     const branch = `ci/release/${crypto.randomUUID()}`;
-    const sha = await (0, git_1.getCommitSha)();
-    const message = await (0, git_1.getCommitMessage)(sha);
+    const sha = (0, git_1.getCommitSha)();
+    const message = (0, git_1.getCommitMessage)(sha);
     core.debug(`Switching to branch ${branch}`);
-    await (0, git_1.switchToBranch)(branch);
+    (0, git_1.switchToBranch)(branch);
     core.info('Resetting commit created by lerna to stage only selected packages');
-    await (0, git_1.resetLastCommit)({ flags: { mixed: true } });
-    await (0, git_1.add)(packages.join(' '));
-    await (0, git_1.commit)({ message, body: tags.join('\n') });
+    (0, git_1.resetLastCommit)({ flags: { mixed: true } });
+    (0, git_1.add)(packages.join(' '));
+    (0, git_1.commit)({ message, body: tags.join('\n') });
     core.info('Deleting previous tags and cleaning up working directory');
-    await (0, git_1.deleteTags)(tags);
-    await (0, git_1.cleanup)();
+    (0, git_1.deleteTags)(tags);
+    (0, git_1.cleanup)();
     if (versionStrategy !== strategy_1.VersionStrategy.ConventionalCommits) {
         core.info(`Static version strategy used. Trying to generate changelogs manually.`);
         await Promise.all(packages.map((packageDir) => (0, update_changelog_1.default)(packageDir)));
-        await (0, git_1.add)(packages.join(' '));
-        await (0, git_1.commit)({ message: 'chore: update changelogs' });
+        (0, git_1.add)(packages.join(' '));
+        (0, git_1.commit)({ message: 'chore: update changelogs' });
     }
     core.info('Reverting changes to dependencies bumped but not included in release');
     await (0, revert_unwanted_dependency_changes_1.default)({ packages, previousPackageContents });
     await (0, package_manager_1.updateLockfile)();
-    await (0, git_1.commit)({ flags: { all: true, amend: true, noEdit: true } });
+    (0, git_1.commit)({ flags: { all: true, amend: true, noEdit: true } });
     core.info(`Pushing changes to ${branch}`);
-    await (0, git_1.pushHeadToOrigin)();
+    (0, git_1.pushHeadToOrigin)();
     core.info('Creating PR');
     const pullRequest = await (0, create_pull_request_1.default)({
         client,

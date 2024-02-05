@@ -1,16 +1,27 @@
 import versionPackages from './version-packages'
 import { VersionStrategy } from './strategy'
-import { exec } from '../utils/process'
+import { spawnSync } from 'child_process'
 
-jest.mock('../utils/process', () => ({
-  exec: jest.fn(() => ({ stdout: '' })),
+jest.mock('child_process', () => ({
+  spawnSync: jest.fn(() => ({ stdout: '', status: 0 })),
 }))
 
 describe('versionPackages', () => {
   it('should derive bumps using conventional commits', async () => {
-    await versionPackages({ versionStrategy: VersionStrategy.ConventionalCommits })
-    expect(exec).toHaveBeenCalledWith(
-      'npx lerna version --conventional-commits --no-push --force-git-tag --yes --no-private --force-publish'
+    versionPackages({ versionStrategy: VersionStrategy.ConventionalCommits })
+    expect(spawnSync).toHaveBeenCalledWith(
+      'npx',
+      [
+        'lerna',
+        'version',
+        '--conventional-commits',
+        '--no-push',
+        '--force-git-tag',
+        '--yes',
+        '--no-private',
+        '--force-publish',
+      ],
+      { encoding: 'utf8' }
     )
   })
 
@@ -24,8 +35,19 @@ describe('versionPackages', () => {
     [VersionStrategy.Prepatch],
   ])('should derive %s version bumps', async (versionStrategy) => {
     await versionPackages({ versionStrategy })
-    expect(exec).toHaveBeenCalledWith(
-      `npx lerna version ${versionStrategy} --no-push --force-git-tag --yes --no-private --force-publish`
+    expect(spawnSync).toHaveBeenCalledWith(
+      'npx',
+      [
+        'lerna',
+        'version',
+        versionStrategy,
+        '--no-push',
+        '--force-git-tag',
+        '--yes',
+        '--no-private',
+        '--force-publish',
+      ],
+      { encoding: 'utf8' }
     )
   })
 
@@ -34,8 +56,20 @@ describe('versionPackages', () => {
       versionStrategy: VersionStrategy.ConventionalCommits,
       extraArgs: '--let-bruce-wayne-decide',
     })
-    expect(exec).toHaveBeenCalledWith(
-      'npx lerna version --conventional-commits --no-push --force-git-tag --yes --no-private --force-publish --let-bruce-wayne-decide'
+    expect(spawnSync).toHaveBeenCalledWith(
+      'npx',
+      [
+        'lerna',
+        'version',
+        '--conventional-commits',
+        '--no-push',
+        '--force-git-tag',
+        '--yes',
+        '--no-private',
+        '--force-publish',
+        '--let-bruce-wayne-decide',
+      ],
+      { encoding: 'utf8' }
     )
   })
 })

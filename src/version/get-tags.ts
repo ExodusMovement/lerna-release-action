@@ -5,11 +5,12 @@ function matches(tag: string, packageName: string): boolean {
   return new RegExp(`@[^/]+/${packageName}@`).test(tag)
 }
 
-export default async function getTags(packages: string[]) {
-  const commit = await git.getCommitSha()
+export default function getTags(packages: string[]) {
+  const commit = git.getCommitSha()
   const names = packages.map((it) => path.basename(it))
 
-  const tags = await git.getTags(commit)
+  const tags = git.getTags(commit)
+
   return tags
     .filter((tag) => names.some((name) => matches(tag, name)))
     .sort((a, b) => {

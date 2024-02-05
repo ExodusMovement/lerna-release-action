@@ -1,13 +1,13 @@
-import { execSync } from 'child_process'
+import { spawnSync } from './process'
 import logger from './logger'
 
 export const pullTags = () => {
   logger.info('Pulling latest tags')
-  execSync('git pull --tags')
+  spawnSync('git', ['pull', '--tags'])
 }
 
 export const assertCleanCWD = () => {
-  const stdout = execSync('git status --short', { encoding: 'utf8' })
+  const stdout = spawnSync('git', ['status', '--short'])
   const changes = stdout.trim()
 
   if (changes) {
@@ -15,14 +15,14 @@ export const assertCleanCWD = () => {
   }
 
   logger.info('Fetching remote changes')
-  execSync('git fetch', { stdio: 'inherit' })
+  spawnSync('git', ['fetch'], { stdio: 'inherit' })
   try {
-    execSync('git diff HEAD origin/master --exit-code')
+    spawnSync('git', ['diff', 'HEAD', 'origin/master', '--exit-code'])
   } catch {
     throw new Error('Branch has to be up-to-date with master')
   }
 }
 
 export const getUsername = () => {
-  return execSync('git config user.name', { encoding: 'utf8' }).trim()
+  return spawnSync('git', ['config', 'user.name']).trim()
 }

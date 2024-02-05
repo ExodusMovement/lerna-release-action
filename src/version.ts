@@ -56,7 +56,7 @@ export default async function version({
   const client = github.getOctokit(token)
 
   core.info(`Configure user ${assignee}`)
-  await configureUser({
+  configureUser({
     name: assignee,
     email: `${assignee}@users.noreply.github.com`,
   })
@@ -65,41 +65,41 @@ export default async function version({
   const previousPackageContents = await readPackageJsons()
 
   core.info('Versioning packages')
-  await versionPackages({ extraArgs: versionExtraArgs, versionStrategy })
+  versionPackages({ extraArgs: versionExtraArgs, versionStrategy })
 
-  const tags = await getTags(packages)
+  const tags = getTags(packages)
   core.debug(`Tags found: ${tags}`)
 
   const branch = `ci/release/${crypto.randomUUID()}`
-  const sha = await getCommitSha()
-  const message = await getCommitMessage(sha)
+  const sha = getCommitSha()
+  const message = getCommitMessage(sha)
 
   core.debug(`Switching to branch ${branch}`)
-  await switchToBranch(branch)
+  switchToBranch(branch)
 
   core.info('Resetting commit created by lerna to stage only selected packages')
-  await resetLastCommit({ flags: { mixed: true } })
-  await add(packages.join(' '))
-  await commit({ message, body: tags.join('\n') })
+  resetLastCommit({ flags: { mixed: true } })
+  add(packages.join(' '))
+  commit({ message, body: tags.join('\n') })
 
   core.info('Deleting previous tags and cleaning up working directory')
-  await deleteTags(tags)
-  await cleanup()
+  deleteTags(tags)
+  cleanup()
 
   if (versionStrategy !== VersionStrategy.ConventionalCommits) {
     core.info(`Static version strategy used. Trying to generate changelogs manually.`)
     await Promise.all(packages.map((packageDir) => updateChangelog(packageDir)))
-    await add(packages.join(' '))
-    await commit({ message: 'chore: update changelogs' })
+    add(packages.join(' '))
+    commit({ message: 'chore: update changelogs' })
   }
 
   core.info('Reverting changes to dependencies bumped but not included in release')
   await revertUnwantedDependencyChanges({ packages, previousPackageContents })
   await updateLockfile()
-  await commit({ flags: { all: true, amend: true, noEdit: true } })
+  commit({ flags: { all: true, amend: true, noEdit: true } })
 
   core.info(`Pushing changes to ${branch}`)
-  await pushHeadToOrigin()
+  pushHeadToOrigin()
 
   core.info('Creating PR')
   const pullRequest = await createPullRequest({

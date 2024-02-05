@@ -5,7 +5,6 @@ import * as path from 'path'
 import { prompt } from 'enquirer'
 import { byBasenameAsc } from './utils/sort'
 import { getPullRequestUrl, watchRun } from './utils/gh'
-import { exec } from './utils/process'
 import { program } from 'commander'
 import { ProgramOpts } from './utils/types'
 import {
@@ -15,6 +14,7 @@ import {
 } from './action/version/strategy'
 import { version } from './local'
 import logger from './utils/logger'
+import { spawnSync } from './utils/process'
 
 program
   .name('lerna-release-action')
@@ -49,10 +49,10 @@ async function main() {
 
   await validateAllowedStrategies({ packages, versionStrategy })
 
-  const { stdout } = await exec(
-    `echo n | lerna version ${strategyAsArgument(
-      versionStrategy
-    )} --no-git-tag-version --force-publish`
+  const stdout = spawnSync(
+    'lerna',
+    ['version', strategyAsArgument(versionStrategy), '--no-git-tag-version', '--force-publish'],
+    { input: 'n\n' }
   )
 
   const bumps = stdout
@@ -77,18 +77,21 @@ async function main() {
   const selectedPackages = packages.sort(byBasenameAsc).join(',')
 
   try {
-    const { stdout: runStdout, stderr } = await exec(
-      `gh workflow run version --field "packages=${selectedPackages}" --field "version-strategy=${versionStrategy}"`
-    )
-    if (stderr) {
-      logger.error(`${stderr}`)
-    }
+    const stdout = spawnSync('gh', [
+      'workflow',
+      'run',
+      'version',
+      '--field',
+      `packages=${selectedPackages}`,
+      '--field',
+      `version-strategy=${versionStrategy}`,
+    ])
 
-    logger.info(runStdout)
+    logger.info(stdout)
 
     await watchRun()
 
-    const url = await getPullRequestUrl()
+    const url = getPullRequestUrl()
     if (url) {
       logger.info(`Successfully created PR. You can view it here: ${url}`)
     }
