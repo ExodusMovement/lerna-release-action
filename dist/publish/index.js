@@ -12837,10 +12837,16 @@ exports.commentOnIssue = commentOnIssue;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.exec = void 0;
-const util = __nccwpck_require__(7261);
-const node_child_process_1 = __nccwpck_require__(7718);
-exports.exec = util.promisify(node_child_process_1.exec);
+exports.spawnSync = void 0;
+const child_process_1 = __nccwpck_require__(2081);
+const spawnSync = (command, args, options = {}) => {
+    const { stdout, stderr, status } = (0, child_process_1.spawnSync)(command, args, { encoding: 'utf8', ...options });
+    if (status !== 0) {
+        throw new Error(stderr);
+    }
+    return stdout;
+};
+exports.spawnSync = spawnSync;
 
 
 /***/ }),
@@ -12858,6 +12864,14 @@ module.exports = require("assert");
 
 "use strict";
 module.exports = require("buffer");
+
+/***/ }),
+
+/***/ 2081:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("child_process");
 
 /***/ }),
 
@@ -12906,22 +12920,6 @@ module.exports = require("https");
 
 "use strict";
 module.exports = require("net");
-
-/***/ }),
-
-/***/ 7718:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("node:child_process");
-
-/***/ }),
-
-/***/ 7261:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("node:util");
 
 /***/ }),
 
@@ -13117,9 +13115,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __nccwpck_require__(2186);
 const constants_1 = __nccwpck_require__(9042);
 const github = __nccwpck_require__(5438);
-const process_1 = __nccwpck_require__(9239);
 const github_1 = __nccwpck_require__(1225);
 const extract_tags_1 = __nccwpck_require__(4672);
+const process_1 = __nccwpck_require__(9239);
 async function publish() {
     const token = core.getInput(constants_1.Input.GithubToken, { required: true });
     const client = github.getOctokit(token);
@@ -13131,7 +13129,7 @@ async function publish() {
         return;
     }
     core.info('Publishing yet unpublished packages');
-    const { stdout } = await (0, process_1.exec)('npx lerna publish from-package --yes --no-private');
+    const stdout = (0, process_1.spawnSync)('npx', ['lerna', 'publish', 'from-package', '--yes', '--no-private']);
     core.debug(stdout);
     core.info('Identifying published packages');
     const tags = (0, extract_tags_1.extractTags)(stdout);
