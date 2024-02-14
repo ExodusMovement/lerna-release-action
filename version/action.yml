@@ -20,6 +20,9 @@ inputs:
   request-reviewers:
     description: 'Request PR assignees as reviewers'
     default: true
+  default-branch:
+    description: 'Default branch of the repository against which the release PRs are created'
+    default: master
 
 runs:
   using: 'node20'

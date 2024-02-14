@@ -6,6 +6,7 @@ import * as path from 'path'
 type Params = {
   client: GithubClient
   repo: Repo
+  base: string
   tags: string[]
   packages: string[]
   branch: string
@@ -19,6 +20,7 @@ export default async function createPullRequest({
   client,
   tags,
   repo,
+  base,
   branch,
   packages,
   labels,
@@ -34,7 +36,7 @@ export default async function createPullRequest({
   return createGithubPullRequest({
     repo,
     client,
-    base: 'master',
+    base,
     head: branch,
     title: truncate(`chore: release ${tags}`, 120),
     body: `## Release \n${packageList}\n## Tags\nThe following tags will be created automatically on merge:\n ${tags.join(

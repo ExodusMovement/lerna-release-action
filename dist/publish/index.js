@@ -12656,6 +12656,7 @@ var Input;
     Input["VersionStrategy"] = "version-strategy";
     Input["AutoMerge"] = "auto-merge";
     Input["RequestReviewers"] = "request-reviewers";
+    Input["DefaultBranch"] = "default-branch";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {

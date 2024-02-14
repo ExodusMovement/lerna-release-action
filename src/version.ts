@@ -44,6 +44,7 @@ export default async function version({
   autoMerge = core.getInput(Input.AutoMerge) === 'true',
   requestReviewers = core.getInput(Input.RequestReviewers) === 'true',
   assignee = core.getInput(Input.Assignee),
+  defaultBranch = core.getInput(Input.DefaultBranch),
 } = {}) {
   assertStrategy(versionStrategy)
 
@@ -104,6 +105,7 @@ export default async function version({
   core.info('Creating PR')
   const pullRequest = await createPullRequest({
     client,
+    base: defaultBranch,
     repo,
     packages,
     tags,
