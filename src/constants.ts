@@ -7,6 +7,7 @@ export enum Input {
   VersionStrategy = 'version-strategy',
   AutoMerge = 'auto-merge',
   RequestReviewers = 'request-reviewers',
+  DefaultBranch = 'default-branch',
 }
 
 export enum VersionDispatchInput {

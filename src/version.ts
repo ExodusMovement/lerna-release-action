@@ -54,6 +54,9 @@ export default async function version({
   await validateAllowedStrategies({ packages, versionStrategy })
 
   const client = github.getOctokit(token)
+  const {
+    data: { default_branch: defaultBranch },
+  } = await client.rest.repos.get(repo)
 
   core.info(`Configure user ${assignee}`)
   configureUser({
@@ -95,7 +98,7 @@ export default async function version({
 
   core.info('Reverting changes to dependencies bumped but not included in release')
   await revertUnwantedDependencyChanges({ packages, previousPackageContents })
-  await updateLockfile()
+  updateLockfile()
   commit({ flags: { all: true, amend: true, noEdit: true } })
 
   core.info(`Pushing changes to ${branch}`)
@@ -104,6 +107,7 @@ export default async function version({
   core.info('Creating PR')
   const pullRequest = await createPullRequest({
     client,
+    base: defaultBranch,
     repo,
     packages,
     tags,

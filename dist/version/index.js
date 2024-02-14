@@ -63910,6 +63910,7 @@ var Input;
     Input["VersionStrategy"] = "version-strategy";
     Input["AutoMerge"] = "auto-merge";
     Input["RequestReviewers"] = "request-reviewers";
+    Input["DefaultBranch"] = "default-branch";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
@@ -64321,14 +64322,14 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const github_1 = __nccwpck_require__(1225);
 const strings_1 = __nccwpck_require__(8927);
 const path = __nccwpck_require__(1017);
-async function createPullRequest({ client, tags, repo, branch, packages, labels, assignees, autoMerge, requestReviewers, }) {
+async function createPullRequest({ client, tags, repo, base, branch, packages, labels, assignees, autoMerge, requestReviewers, }) {
     const packageNames = packages.map((it) => path.basename(it));
     const packageList = packageNames.map((it) => `- ${it}`).join('\n');
     labels = [...packageNames, ...(labels ?? [])];
     return (0, github_1.createPullRequest)({
         repo,
         client,
-        base: 'master',
+        base,
         head: branch,
         title: (0, strings_1.truncate)(`chore: release ${tags}`, 120),
         body: `## Release \n${packageList}\n## Tags\nThe following tags will be created automatically on merge:\n ${tags.join('\n')}`,
@@ -73846,6 +73847,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     const packages = await (0, normalize_packages_1.default)({ packagesCsv });
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
+    const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
     core.info(`Configure user ${assignee}`);
     (0, git_1.configureUser)({
         name: assignee,
@@ -73877,13 +73879,14 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     }
     core.info('Reverting changes to dependencies bumped but not included in release');
     await (0, revert_unwanted_dependency_changes_1.default)({ packages, previousPackageContents });
-    await (0, package_manager_1.updateLockfile)();
+    (0, package_manager_1.updateLockfile)();
     (0, git_1.commit)({ flags: { all: true, amend: true, noEdit: true } });
     core.info(`Pushing changes to ${branch}`);
     (0, git_1.pushHeadToOrigin)();
     core.info('Creating PR');
     const pullRequest = await (0, create_pull_request_1.default)({
         client,
+        base: defaultBranch,
         repo,
         packages,
         tags,
