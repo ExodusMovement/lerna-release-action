@@ -73840,13 +73840,14 @@ if (require.main === require.cache[eval('__filename')]) {
         core.setFailed(String(error.message));
     });
 }
-async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getInput(constants_1.Input.AutoMerge) === 'true', requestReviewers = core.getInput(constants_1.Input.RequestReviewers) === 'true', assignee = core.getInput(constants_1.Input.Assignee), defaultBranch = core.getInput(constants_1.Input.DefaultBranch), } = {}) {
+async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getInput(constants_1.Input.AutoMerge) === 'true', requestReviewers = core.getInput(constants_1.Input.RequestReviewers) === 'true', assignee = core.getInput(constants_1.Input.Assignee), } = {}) {
     (0, strategy_1.assertStrategy)(versionStrategy);
     const { actor, repo } = github.context;
     assignee = assignee || actor;
     const packages = await (0, normalize_packages_1.default)({ packagesCsv });
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
+    const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
     core.info(`Configure user ${assignee}`);
     (0, git_1.configureUser)({
         name: assignee,
@@ -73878,7 +73879,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     }
     core.info('Reverting changes to dependencies bumped but not included in release');
     await (0, revert_unwanted_dependency_changes_1.default)({ packages, previousPackageContents });
-    await (0, package_manager_1.updateLockfile)();
+    (0, package_manager_1.updateLockfile)();
     (0, git_1.commit)({ flags: { all: true, amend: true, noEdit: true } });
     core.info(`Pushing changes to ${branch}`);
     (0, git_1.pushHeadToOrigin)();
