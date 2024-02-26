@@ -3133,7 +3133,13 @@ const arrays_1 = __nccwpck_require__(8912);
 const glob_1 = __nccwpck_require__(3366);
 async function getPackageRoots({ filesystem = fs } = {}) {
     const lernaConfig = await (0, fs_1.readJson)('lerna.json', { filesystem });
-    const packageRoots = lernaConfig?.packages ?? ['packages/*'];
+    let packageRoots = lernaConfig?.packages;
+    if (!packageRoots) {
+        const packageJson = await (0, fs_1.readJson)('package.json', { filesystem });
+        packageRoots = (Array.isArray(packageJson?.workspaces)
+            ? packageJson?.workspaces
+            : packageJson?.workspaces.packages) ?? ['packages/*'];
+    }
     return (0, glob_1.glob)(packageRoots.map((root) => {
         if (root.endsWith('*'))
             return path.dirname(root);
