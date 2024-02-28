@@ -1,8 +1,8 @@
 import { spawnSync } from './process'
 import { flagsAsArguments } from './objects'
 
-export function add(pathSpec: string) {
-  spawnSync('git', ['add', pathSpec])
+export function add(pathSpecs: string[]) {
+  spawnSync('git', ['add', ...pathSpecs])
 }
 
 type CommitFlags = {

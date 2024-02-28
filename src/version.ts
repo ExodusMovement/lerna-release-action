@@ -82,7 +82,7 @@ export default async function version({
 
   core.info('Resetting commit created by lerna to stage only selected packages')
   resetLastCommit({ flags: { mixed: true } })
-  add(packages.join(' '))
+  add(packages)
   commit({ message, body: tags.join('\n') })
 
   core.info('Deleting previous tags and cleaning up working directory')
@@ -92,7 +92,7 @@ export default async function version({
   if (versionStrategy !== VersionStrategy.ConventionalCommits) {
     core.info(`Static version strategy used. Trying to generate changelogs manually.`)
     await Promise.all(packages.map((packageDir) => updateChangelog(packageDir)))
-    add(packages.join(' '))
+    add(packages)
     commit({ message: 'chore: update changelogs' })
   }
 
