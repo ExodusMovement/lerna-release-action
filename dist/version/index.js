@@ -63979,8 +63979,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.getRef = exports.getBranch = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
 const process_1 = __nccwpck_require__(9239);
 const objects_1 = __nccwpck_require__(8151);
-function add(pathSpec) {
-    (0, process_1.spawnSync)('git', ['add', pathSpec]);
+function add(pathSpecs) {
+    (0, process_1.spawnSync)('git', ['add', ...pathSpecs]);
 }
 exports.add = add;
 function commit({ message, body, flags }) {
@@ -73872,7 +73872,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     (0, git_1.switchToBranch)(branch);
     core.info('Resetting commit created by lerna to stage only selected packages');
     (0, git_1.resetLastCommit)({ flags: { mixed: true } });
-    (0, git_1.add)(packages.join(' '));
+    (0, git_1.add)(packages);
     (0, git_1.commit)({ message, body: tags.join('\n') });
     core.info('Deleting previous tags and cleaning up working directory');
     (0, git_1.deleteTags)(tags);
@@ -73880,7 +73880,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     if (versionStrategy !== strategy_1.VersionStrategy.ConventionalCommits) {
         core.info(`Static version strategy used. Trying to generate changelogs manually.`);
         await Promise.all(packages.map((packageDir) => (0, update_changelog_1.default)(packageDir)));
-        (0, git_1.add)(packages.join(' '));
+        (0, git_1.add)(packages);
         (0, git_1.commit)({ message: 'chore: update changelogs' });
     }
     core.info('Reverting changes to dependencies bumped but not included in release');
