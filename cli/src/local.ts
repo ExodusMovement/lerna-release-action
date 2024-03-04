@@ -35,5 +35,7 @@ export async function version({ packagesCsv, versionStrategy }: VersionParams) {
     requestReviewers: false,
   })
 
-  logger.info(`Pull request opened at ${pullRequest.html_url}`)
+  if (pullRequest) {
+    logger.info(`Pull request opened at ${pullRequest.html_url}`)
+  }
 }
