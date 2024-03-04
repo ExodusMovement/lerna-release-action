@@ -64395,7 +64395,7 @@ async function normalizePackages({ packagesCsv, filesystem = fs }) {
     const pkgs = await (0, lerna_utils_1.parsePackageFiles)('package.json', { filesystem });
     const byFolder = Object.fromEntries(pkgs.map((pkg) => {
         const folder = path.dirname(pkg.path);
-        return [path.basename(folder), { folder, path: pkg.content.private }];
+        return [path.basename(folder), { path: folder, private: pkg.content.private }];
     }));
     const normalized = [];
     const invalid = [];
@@ -64410,8 +64410,8 @@ async function normalizePackages({ packagesCsv, filesystem = fs }) {
             invalid.push(trimmed);
             continue;
         }
-        if (!pkg.path) {
-            normalized.push(pkg.folder);
+        if (!pkg.private) {
+            normalized.push(pkg.path);
         }
     }
     if (invalid.length > 0) {
