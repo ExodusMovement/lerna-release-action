@@ -24,11 +24,17 @@ describe('normalizePackages', () => {
     batman: JSON.stringify({
       name: '@exodus/batman',
     }),
+    batmansIdentity: JSON.stringify({
+      name: '@exodus/batmans-identity',
+      private: true,
+    }),
   }
+
   const lernaConfig = JSON.stringify({
     packages: [
       'libraries/*',
       'modules/*',
+      'private/*',
       'deeply/nested/package/root/*',
       'groups/wayne/{bruce,batman}',
     ],
@@ -48,6 +54,7 @@ describe('normalizePackages', () => {
       'libraries/formatting/package.json': packageContents.formatting,
       'groups/wayne/bruce/package.json': packageContents.bruce,
       'groups/wayne/batman/package.json': packageContents.batman,
+      'private/batmans-identity/package.json': packageContents.batmansIdentity,
     })
   })
 
@@ -113,6 +120,14 @@ describe('normalizePackages', () => {
       filesystem: fs as never,
     })
     expect(result).toEqual(['groups/wayne/bruce', 'groups/wayne/batman'])
+  })
+
+  it('should filter private packages', async () => {
+    const result = await normalizePackages({
+      packagesCsv: 'batman, batmans-identity',
+      filesystem: fs as never,
+    })
+    expect(result).toEqual(['groups/wayne/batman'])
   })
 
   it('should throw for non existing short names', async () => {

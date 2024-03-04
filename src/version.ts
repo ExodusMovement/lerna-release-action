@@ -51,6 +51,12 @@ export default async function version({
   assignee = assignee || actor
 
   const packages = await normalizePackages({ packagesCsv })
+
+  if (packages.length === 0) {
+    core.warning('Nothing to version. Note that private versions are filtered')
+    return
+  }
+
   await validateAllowedStrategies({ packages, versionStrategy })
 
   const client = github.getOctokit(token)

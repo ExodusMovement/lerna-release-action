@@ -64392,7 +64392,11 @@ const lerna_utils_1 = __nccwpck_require__(4801);
 const fs = __nccwpck_require__(7147);
 const path = __nccwpck_require__(1017);
 async function normalizePackages({ packagesCsv, filesystem = fs }) {
-    const byFolder = await (0, lerna_utils_1.getPackagePathsByFolder)({ filesystem });
+    const pkgs = await (0, lerna_utils_1.parsePackageFiles)('package.json', { filesystem });
+    const byFolder = Object.fromEntries(pkgs.map((pkg) => {
+        const folder = path.dirname(pkg.path);
+        return [path.basename(folder), { folder, path: pkg.content.private }];
+    }));
     const normalized = [];
     const invalid = [];
     const packages = packagesCsv.split(',');
@@ -64401,12 +64405,14 @@ async function normalizePackages({ packagesCsv, filesystem = fs }) {
         if (trimmed === '')
             continue;
         const folderName = path.basename(trimmed);
-        const packagePath = byFolder[folderName];
-        if (!packagePath) {
+        const pkg = byFolder[folderName];
+        if (!pkg) {
             invalid.push(trimmed);
             continue;
         }
-        normalized.push(packagePath);
+        if (!pkg.path) {
+            normalized.push(pkg.folder);
+        }
     }
     if (invalid.length > 0) {
         throw new Error(`Encountered invalid package inputs: ${invalid.join(', ')}`);
@@ -73851,6 +73857,10 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     const { actor, repo } = github.context;
     assignee = assignee || actor;
     const packages = await (0, normalize_packages_1.default)({ packagesCsv });
+    if (packages.length === 0) {
+        core.warning('Nothing to version. Note that private versions are filtered');
+        return;
+    }
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
     const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);

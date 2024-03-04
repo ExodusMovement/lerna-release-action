@@ -16,6 +16,7 @@ export type LernaConfig = {
 
 export type PackageJson = {
   name: string
+  private?: boolean
   dependencies?: Record<string, string | undefined>
   devDependencies?: Record<string, string | undefined>
   release?: {

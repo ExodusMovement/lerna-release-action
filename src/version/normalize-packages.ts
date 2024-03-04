@@ -1,7 +1,7 @@
-import { getPackagePathsByFolder } from '@exodus/lerna-utils'
+import { parsePackageFiles } from '@exodus/lerna-utils'
 import * as fs from 'fs'
 import * as path from 'path'
-import { Filesystem } from '../utils/types'
+import { Filesystem, PackageJson } from '../utils/types'
 
 type Params = {
   filesystem?: Filesystem
@@ -9,7 +9,13 @@ type Params = {
 }
 
 export default async function normalizePackages({ packagesCsv, filesystem = fs }: Params) {
-  const byFolder = await getPackagePathsByFolder({ filesystem })
+  const pkgs = await parsePackageFiles<PackageJson>('package.json', { filesystem })
+  const byFolder = Object.fromEntries(
+    pkgs.map((pkg) => {
+      const folder = path.dirname(pkg.path)
+      return [path.basename(folder), { folder, path: pkg.content.private }]
+    })
+  )
 
   const normalized = []
   const invalid = []
@@ -20,14 +26,16 @@ export default async function normalizePackages({ packagesCsv, filesystem = fs }
     if (trimmed === '') continue
 
     const folderName = path.basename(trimmed)
-    const packagePath = byFolder[folderName]
+    const pkg = byFolder[folderName]
 
-    if (!packagePath) {
+    if (!pkg) {
       invalid.push(trimmed)
       continue
     }
 
-    normalized.push(packagePath)
+    if (!pkg.path) {
+      normalized.push(pkg.folder)
+    }
   }
 
   if (invalid.length > 0) {
