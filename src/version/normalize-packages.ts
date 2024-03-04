@@ -13,7 +13,7 @@ export default async function normalizePackages({ packagesCsv, filesystem = fs }
   const byFolder = Object.fromEntries(
     pkgs.map((pkg) => {
       const folder = path.dirname(pkg.path)
-      return [path.basename(folder), { folder, path: pkg.content.private }]
+      return [path.basename(folder), { path: folder, private: pkg.content.private }]
     })
   )
 
@@ -33,8 +33,8 @@ export default async function normalizePackages({ packagesCsv, filesystem = fs }
       continue
     }
 
-    if (!pkg.path) {
-      normalized.push(pkg.folder)
+    if (!pkg.private) {
+      normalized.push(pkg.path)
     }
   }
 
