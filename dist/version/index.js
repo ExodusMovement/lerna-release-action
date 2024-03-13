@@ -64239,7 +64239,11 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.spawnSync = void 0;
 const child_process_1 = __nccwpck_require__(2081);
 const spawnSync = (command, args, options = {}) => {
-    const { stdout, stderr, status } = (0, child_process_1.spawnSync)(command, args, { encoding: 'utf8', ...options });
+    const { stdout, stderr, status } = (0, child_process_1.spawnSync)(command, args, {
+        encoding: 'utf8',
+        ...options,
+        shell: false,
+    });
     if (status !== 0) {
         throw new Error(stderr);
     }

@@ -3,9 +3,13 @@ import { spawnSync as nodeSpawnSync, SpawnSyncOptionsWithStringEncoding } from '
 export const spawnSync = (
   command: string,
   args: string[],
-  options: Partial<SpawnSyncOptionsWithStringEncoding> = {}
+  options: Omit<Partial<SpawnSyncOptionsWithStringEncoding>, 'shell'> = {}
 ) => {
-  const { stdout, stderr, status } = nodeSpawnSync(command, args, { encoding: 'utf8', ...options })
+  const { stdout, stderr, status } = nodeSpawnSync(command, args, {
+    encoding: 'utf8',
+    ...options,
+    shell: false,
+  })
 
   if (status !== 0) {
     throw new Error(stderr)
