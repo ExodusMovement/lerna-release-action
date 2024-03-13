@@ -64356,11 +64356,16 @@ exports["default"] = createPullRequest;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.matches = void 0;
 const path = __nccwpck_require__(1017);
 const git = __nccwpck_require__(8682);
+const assert = __nccwpck_require__(8061);
+const ALLOWED_CHARACTERS = /^[\w/@\\-]+$/;
 function matches(tag, packageName) {
+    assert(ALLOWED_CHARACTERS.test(packageName), 'Regex control characters not allowed in package name');
     return new RegExp(`@[^/]+/${packageName}@`).test(tag);
 }
+exports.matches = matches;
 function getTags(packages) {
     const commit = git.getCommitSha();
     const names = packages.map((it) => path.basename(it));
@@ -64774,6 +64779,14 @@ module.exports = require("module");
 
 "use strict";
 module.exports = require("net");
+
+/***/ }),
+
+/***/ 8061:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:assert");
 
 /***/ }),
 
