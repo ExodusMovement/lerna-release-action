@@ -64360,7 +64360,7 @@ exports.matches = void 0;
 const path = __nccwpck_require__(1017);
 const git = __nccwpck_require__(8682);
 const assert = __nccwpck_require__(8061);
-const ALLOWED_CHARACTERS = /^[\w/@\\-]+$/;
+const ALLOWED_CHARACTERS = /^[\w/@-]+$/;
 function matches(tag, packageName) {
     assert(ALLOWED_CHARACTERS.test(packageName), 'Regex control characters not allowed in package name');
     return new RegExp(`@[^/]+/${packageName}@`).test(tag);

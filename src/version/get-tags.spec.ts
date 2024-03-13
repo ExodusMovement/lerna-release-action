@@ -50,8 +50,22 @@ describe('matches', () => {
     expect(matches('@exodus/abc@v1.0.2', 'def')).toBe(false)
   })
 
-  it('should throw when using regex control characters in package name', () => {
-    expect(() => matches('@exodus/abc@v1.0.2', '(a|a)+')).toThrow(
+  it.each([
+    ['^'],
+    ['$'],
+    ['*'],
+    ['+'],
+    ['('],
+    [')'],
+    ['|'],
+    ['['],
+    [']'],
+    ['\\'],
+    [':'],
+    ['{'],
+    ['}'],
+  ])('should throw when using regex control character %s in package name', (controlChar) => {
+    expect(() => matches('@exodus/abc@v1.0.2', `abc${controlChar}deh`)).toThrow(
       'Regex control characters not allowed in package name'
     )
   })

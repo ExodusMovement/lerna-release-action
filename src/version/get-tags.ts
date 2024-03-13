@@ -2,7 +2,7 @@ import * as path from 'path'
 import * as git from '../utils/git'
 import * as assert from 'node:assert'
 
-const ALLOWED_CHARACTERS = /^[\w/@\\-]+$/
+const ALLOWED_CHARACTERS = /^[\w/@-]+$/
 
 export function matches(tag: string, packageName: string): boolean {
   assert(
