@@ -1,7 +1,20 @@
 import * as path from 'path'
 import * as git from '../utils/git'
+import * as assert from 'node:assert'
 
-function matches(tag: string, packageName: string): boolean {
+const ALLOWED_CHARACTERS = /^[\w/@-]+$/
+const MAX_TAG_LENGTH = 230
+
+export function matches(tag: string, packageName: string): boolean {
+  assert(
+    ALLOWED_CHARACTERS.test(packageName),
+    'Regex control characters not allowed in package name'
+  )
+  assert(
+    tag.length <= MAX_TAG_LENGTH,
+    `Received abnormally long tag of ${tag.length} characters. Max ${MAX_TAG_LENGTH} characters allowed`
+  )
+
   return new RegExp(`@[^/]+/${packageName}@`).test(tag)
 }
 

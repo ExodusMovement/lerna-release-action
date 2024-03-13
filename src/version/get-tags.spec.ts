@@ -1,5 +1,5 @@
 import { when } from 'jest-when'
-import getTags from './get-tags'
+import getTags, { matches } from './get-tags'
 import { spawnSync } from 'child_process'
 
 jest.mock('child_process', () => ({
@@ -38,6 +38,42 @@ describe('getTags', () => {
       '@exodus/batcave@v1.0.1',
       '@exodus/batcave-formatting@v2.0.1',
     ])
+  })
+})
+
+describe('matches', () => {
+  it('returns true for matching package', () => {
+    expect(matches('@exodus/abc@v1.0.2', 'abc')).toBe(true)
+  })
+
+  it('returns false for other package', () => {
+    expect(matches('@exodus/abc@v1.0.2', 'def')).toBe(false)
+  })
+
+  it('throws when receiving abnormally long tag', () => {
+    expect(() => matches('a'.repeat(231), 'abc')).toThrow(
+      'Received abnormally long tag of 231 characters. Max 230 characters allowed'
+    )
+  })
+
+  it.each([
+    ['^'],
+    ['$'],
+    ['*'],
+    ['+'],
+    ['('],
+    [')'],
+    ['|'],
+    ['['],
+    [']'],
+    ['\\'],
+    [':'],
+    ['{'],
+    ['}'],
+  ])('throws when using regex control character %s in package name', (controlChar) => {
+    expect(() => matches('@exodus/abc@v1.0.2', `abc${controlChar}deh`)).toThrow(
+      'Regex control characters not allowed in package name'
+    )
   })
 })
 
