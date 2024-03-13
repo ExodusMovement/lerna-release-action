@@ -64361,8 +64361,10 @@ const path = __nccwpck_require__(1017);
 const git = __nccwpck_require__(8682);
 const assert = __nccwpck_require__(8061);
 const ALLOWED_CHARACTERS = /^[\w/@-]+$/;
+const MAX_TAG_LENGTH = 230;
 function matches(tag, packageName) {
     assert(ALLOWED_CHARACTERS.test(packageName), 'Regex control characters not allowed in package name');
+    assert(tag.length <= MAX_TAG_LENGTH, `Received abnormally long tag of ${tag.length} characters. Max ${MAX_TAG_LENGTH} characters allowed`);
     return new RegExp(`@[^/]+/${packageName}@`).test(tag);
 }
 exports.matches = matches;

@@ -50,6 +50,12 @@ describe('matches', () => {
     expect(matches('@exodus/abc@v1.0.2', 'def')).toBe(false)
   })
 
+  it('throws when receiving abnormally long tag', () => {
+    expect(() => matches('a'.repeat(231), 'abc')).toThrow(
+      'Received abnormally long tag of 231 characters. Max 230 characters allowed'
+    )
+  })
+
   it.each([
     ['^'],
     ['$'],
@@ -64,7 +70,7 @@ describe('matches', () => {
     [':'],
     ['{'],
     ['}'],
-  ])('should throw when using regex control character %s in package name', (controlChar) => {
+  ])('throws when using regex control character %s in package name', (controlChar) => {
     expect(() => matches('@exodus/abc@v1.0.2', `abc${controlChar}deh`)).toThrow(
       'Regex control characters not allowed in package name'
     )
