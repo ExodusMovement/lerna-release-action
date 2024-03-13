@@ -63979,12 +63979,15 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.getRef = exports.getBranch = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
 const process_1 = __nccwpck_require__(9239);
 const objects_1 = __nccwpck_require__(8151);
+const assert = __nccwpck_require__(8061);
 function add(pathSpecs) {
+    assert(pathSpecs.every((it) => !it.startsWith('-')), 'Options are not allowed. Please supply paths to the files you want to add only.');
     (0, process_1.spawnSync)('git', ['add', ...pathSpecs]);
 }
 exports.add = add;
+const commitFlags = ['amend', 'all', 'noEdit'];
 function commit({ message, body, flags }) {
-    const args = ['commit', ...(0, objects_1.flagsAsArguments)(flags)];
+    const args = ['commit', ...(0, objects_1.flagsAsArguments)(flags, commitFlags)];
     if (message) {
         args.push('-m', `"${message}"`);
     }
@@ -64045,8 +64048,9 @@ function cleanup() {
     catch { }
 }
 exports.cleanup = cleanup;
+const resetFlags = ['mixed'];
 function resetLastCommit({ flags }) {
-    (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags), 'HEAD~1']);
+    (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags, resetFlags), 'HEAD~1']);
 }
 exports.resetLastCommit = resetLastCommit;
 function configureUser({ name, email }) {
@@ -64185,8 +64189,10 @@ exports.commentOnIssue = commentOnIssue;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.flagsAsArguments = void 0;
 const strings_1 = __nccwpck_require__(8927);
-function flagsAsArguments(flags) {
+const assert = __nccwpck_require__(8061);
+function flagsAsArguments(flags, whitelistedFlags) {
     return Object.entries(flags ?? {}).reduce((all, [flag, enabled]) => {
+        assert(whitelistedFlags.includes(flag), `Only the following flags are allowed: ${whitelistedFlags.join(', ')}`);
         if (enabled) {
             all.push(`--${(0, strings_1.toKebabCase)(flag)}`);
         }
