@@ -3,12 +3,12 @@ import * as assert from 'node:assert'
 
 export function flagsAsArguments(
   flags: { [key: string]: boolean } | undefined,
-  whitelistedFlags?: string[]
+  whitelistedFlags: string[]
 ): string[] {
   return Object.entries(flags ?? {}).reduce<string[]>((all, [flag, enabled]) => {
     assert(
-      !whitelistedFlags || whitelistedFlags.includes(flag),
-      `Only the following flags are allowed: ${whitelistedFlags?.join(', ')}`
+      whitelistedFlags.includes(flag),
+      `Only the following flags are allowed: ${whitelistedFlags.join(', ')}`
     )
 
     if (enabled) {
