@@ -1,7 +1,13 @@
 import { spawnSync } from './process'
 import { flagsAsArguments } from './objects'
+import * as assert from 'node:assert'
 
 export function add(pathSpecs: string[]) {
+  assert(
+    pathSpecs.every((it) => !it.startsWith('-')),
+    'Options are not allowed. Please supply paths to the files you want to add only.'
+  )
+
   spawnSync('git', ['add', ...pathSpecs])
 }
 
@@ -16,8 +22,11 @@ type CommitParams = {
   body?: string
   flags?: CommitFlags
 }
+
+const commitFlags = ['amend', 'all', 'noEdit']
+
 export function commit({ message, body, flags }: CommitParams) {
-  const args = ['commit', ...flagsAsArguments(flags)]
+  const args = ['commit', ...flagsAsArguments(flags, commitFlags)]
 
   if (message) {
     args.push('-m', `"${message}"`)
@@ -88,8 +97,10 @@ type ResetLastCommitParams = {
   flags: ResetFlags
 }
 
+const resetFlags = ['mixed']
+
 export function resetLastCommit({ flags }: ResetLastCommitParams) {
-  spawnSync('git', ['reset', ...flagsAsArguments(flags), 'HEAD~1'])
+  spawnSync('git', ['reset', ...flagsAsArguments(flags, resetFlags), 'HEAD~1'])
 }
 
 type ConfigureUserParams = {
