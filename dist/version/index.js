@@ -63980,8 +63980,9 @@ exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.chec
 const process_1 = __nccwpck_require__(9239);
 const objects_1 = __nccwpck_require__(8151);
 const assert = __nccwpck_require__(8061);
+const PATH_CHARACTERS = /^[\w./-]+$/;
 function add(pathSpecs) {
-    assert(pathSpecs.every((it) => !it.startsWith('-')), 'Options are not allowed. Please supply paths to the files you want to add only.');
+    assert(pathSpecs.every((it) => !it.startsWith('-') && PATH_CHARACTERS.test(it)), 'Options are not allowed. Please supply paths to the files you want to add only.');
     (0, process_1.spawnSync)('git', ['add', ...pathSpecs]);
 }
 exports.add = add;
@@ -64239,7 +64240,11 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.spawnSync = void 0;
 const child_process_1 = __nccwpck_require__(2081);
 const spawnSync = (command, args, options = {}) => {
-    const { stdout, stderr, status } = (0, child_process_1.spawnSync)(command, args, { encoding: 'utf8', ...options });
+    const { stdout, stderr, status } = (0, child_process_1.spawnSync)(command, args, {
+        encoding: 'utf8',
+        ...options,
+        shell: false,
+    });
     if (status !== 0) {
         throw new Error(stderr);
     }

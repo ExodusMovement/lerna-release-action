@@ -2,9 +2,11 @@ import { spawnSync } from './process'
 import { flagsAsArguments } from './objects'
 import * as assert from 'node:assert'
 
+const PATH_CHARACTERS = /^[\w./-]+$/
+
 export function add(pathSpecs: string[]) {
   assert(
-    pathSpecs.every((it) => !it.startsWith('-')),
+    pathSpecs.every((it) => !it.startsWith('-') && PATH_CHARACTERS.test(it)),
     'Options are not allowed. Please supply paths to the files you want to add only.'
   )
 

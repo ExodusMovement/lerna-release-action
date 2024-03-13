@@ -81,8 +81,8 @@ function setup(tags: string[]) {
   const commit = '26d0f601ef58b14de321cad15b059fe2962b37f5'
 
   when(spawnSync)
-    .calledWith('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' })
+    .calledWith('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', shell: false })
     .mockReturnValue({ stdout: commit, stderr: '', status: 0 } as never)
-    .calledWith('git', ['tag', '--contains', commit], { encoding: 'utf8' })
+    .calledWith('git', ['tag', '--contains', commit], { encoding: 'utf8', shell: false })
     .mockReturnValue({ stdout: tags.join('\n'), stderr: '', status: 0 } as never)
 }

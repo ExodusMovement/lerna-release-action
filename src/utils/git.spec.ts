@@ -1,9 +1,19 @@
 import { add, commit, resetLastCommit } from './git'
 
 describe('add', () => {
+  it('should allow valid paths', () => {
+    expect(() => add(['./some-path', 'package.json'])).not.toThrow('Options are not allowed')
+    expect(() => add(['/some-absolute-path'])).not.toThrow('Options are not allowed')
+  })
+
   it('should throw when trying to use flags', () => {
     expect(() => add(['--force', '.yarnrc.yml'])).toThrow('Options are not allowed')
     expect(() => add(['--force', '.yarnrc.yml'])).toThrow('Options are not allowed')
+  })
+
+  it('should throw trying to hide flags', () => {
+    expect(() => add(['``--force', '.yarnrc.yml'])).toThrow('Options are not allowed')
+    expect(() => add(['${}--force', '.yarnrc.yml'])).toThrow('Options are not allowed')
   })
 })
 
