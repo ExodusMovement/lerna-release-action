@@ -21,7 +21,7 @@ describe('versionPackages', () => {
         '--no-private',
         '--force-publish',
       ],
-      { encoding: 'utf8' }
+      { encoding: 'utf8', shell: false }
     )
   })
 
@@ -47,7 +47,7 @@ describe('versionPackages', () => {
         '--no-private',
         '--force-publish',
       ],
-      { encoding: 'utf8' }
+      { encoding: 'utf8', shell: false }
     )
   })
 
@@ -69,7 +69,7 @@ describe('versionPackages', () => {
         '--force-publish',
         '--let-bruce-wayne-decide',
       ],
-      { encoding: 'utf8' }
+      { encoding: 'utf8', shell: false }
     )
   })
 })
