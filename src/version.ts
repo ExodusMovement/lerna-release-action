@@ -48,7 +48,10 @@ export default async function version({
   assignee = core.getInput(Input.Assignee),
 } = {}) {
   assertStrategy(versionStrategy)
-  assert(!(draft && autoMerge), 'A pull-request can either be created as draft, or with auto-merge enabled, but not both at the same time.')
+  assert(
+    !(draft && autoMerge),
+    'A pull-request can either be created as draft, or with auto-merge enabled, but not both at the same time.'
+  )
 
   const { actor, repo } = github.context
   assignee = assignee || actor
