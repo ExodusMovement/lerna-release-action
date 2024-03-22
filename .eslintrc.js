@@ -2,10 +2,6 @@ module.exports = {
   extends: '@exodus/eslint-config/javascript',
   overrides: [
     {
-      files: ['*.js'],
-      extends: ['@exodus/eslint-config/javascript'],
-    },
-    {
       files: ['*.graphql'],
       parserOptions: {
         schema: './tools/schemas/github.graphql',
