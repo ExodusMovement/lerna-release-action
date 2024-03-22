@@ -25,6 +25,7 @@ import { assertStrategy, validateAllowedStrategies, VersionStrategy } from './ve
 import updateChangelog from './version/update-changelog'
 import closePreviousPrs from './version/close-previous-prs'
 import { unwrapErrorMessage } from './utils/errors'
+import * as assert from 'assert'
 
 if (require.main === module) {
   version().catch((error: Error) => {
@@ -41,11 +42,13 @@ export default async function version({
   token = core.getInput(Input.GithubToken, { required: true }),
   versionExtraArgs = core.getInput(Input.VersionExtraArgs),
   versionStrategy = core.getInput(Input.VersionStrategy),
-  autoMerge = core.getInput(Input.AutoMerge) === 'true',
-  requestReviewers = core.getInput(Input.RequestReviewers) === 'true',
+  autoMerge = core.getBooleanInput(Input.AutoMerge),
+  draft = core.getBooleanInput(Input.Draft),
+  requestReviewers = core.getBooleanInput(Input.RequestReviewers),
   assignee = core.getInput(Input.Assignee),
 } = {}) {
   assertStrategy(versionStrategy)
+  assert(!(draft && autoMerge), 'A pull-request can either be created as draft, or with auto-merge enabled, but not both at the same time.')
 
   const { actor, repo } = github.context
   assignee = assignee || actor
@@ -113,6 +116,7 @@ export default async function version({
   core.info('Creating PR')
   const pullRequest = await createPullRequest({
     client,
+    draft,
     base: defaultBranch,
     repo,
     packages,

@@ -25,6 +25,7 @@ type CreatePullRequestsParams = {
   body?: string
   labels?: string[]
   autoMerge?: boolean
+  draft?: boolean
   reviewers?: string[]
 }
 
@@ -38,6 +39,7 @@ export async function createPullRequest({
   labels,
   assignees,
   autoMerge,
+  draft,
   reviewers,
 }: CreatePullRequestsParams) {
   core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`)
@@ -47,6 +49,7 @@ export async function createPullRequest({
     head,
     base,
     body,
+    draft,
   })
 
   const promises = []

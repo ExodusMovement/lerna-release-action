@@ -12655,6 +12655,7 @@ var Input;
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
     Input["AutoMerge"] = "auto-merge";
+    Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
     Input["DefaultBranch"] = "default-branch";
 })(Input = exports.Input || (exports.Input = {}));
@@ -12721,7 +12722,7 @@ exports.joinNatural = joinNatural;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
-async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, reviewers, }) {
+async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
     const response = await client.rest.pulls.create({
         ...repo,
@@ -12729,6 +12730,7 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
         head,
         base,
         body,
+        draft,
     });
     const promises = [];
     if (labels) {

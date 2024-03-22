@@ -63915,6 +63915,7 @@ var Input;
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
     Input["AutoMerge"] = "auto-merge";
+    Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
     Input["DefaultBranch"] = "default-branch";
 })(Input = exports.Input || (exports.Input = {}));
@@ -64071,7 +64072,7 @@ exports.configureUser = configureUser;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
-async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, reviewers, }) {
+async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
     const response = await client.rest.pulls.create({
         ...repo,
@@ -64079,6 +64080,7 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
         head,
         base,
         body,
+        draft,
     });
     const promises = [];
     if (labels) {
@@ -64339,7 +64341,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const github_1 = __nccwpck_require__(1225);
 const strings_1 = __nccwpck_require__(8927);
 const path = __nccwpck_require__(1017);
-async function createPullRequest({ client, tags, repo, base, branch, packages, labels, assignees, autoMerge, requestReviewers, }) {
+async function createPullRequest({ client, tags, repo, base, branch, packages, labels, assignees, autoMerge, draft, requestReviewers, }) {
     const packageNames = packages.map((it) => path.basename(it));
     const packageList = packageNames.map((it) => `- ${it}`).join('\n');
     labels = [...packageNames, ...(labels ?? [])];
@@ -64353,6 +64355,7 @@ async function createPullRequest({ client, tags, repo, base, branch, packages, l
         labels,
         assignees,
         autoMerge,
+        draft,
         reviewers: requestReviewers ? assignees : undefined,
     });
 }
@@ -73870,6 +73873,7 @@ const strategy_1 = __nccwpck_require__(4741);
 const update_changelog_1 = __nccwpck_require__(8178);
 const close_previous_prs_1 = __nccwpck_require__(4171);
 const errors_1 = __nccwpck_require__(2579);
+const assert = __nccwpck_require__(9491);
 if (require.main === require.cache[eval('__filename')]) {
     version().catch((error) => {
         if (error.stack) {
@@ -73878,8 +73882,9 @@ if (require.main === require.cache[eval('__filename')]) {
         core.setFailed(String(error.message));
     });
 }
-async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getInput(constants_1.Input.AutoMerge) === 'true', requestReviewers = core.getInput(constants_1.Input.RequestReviewers) === 'true', assignee = core.getInput(constants_1.Input.Assignee), } = {}) {
+async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), } = {}) {
     (0, strategy_1.assertStrategy)(versionStrategy);
+    assert(!(draft && autoMerge), 'A pull-request can either be created as draft, or with auto-merge enabled, but not both at the same time.');
     const { actor, repo } = github.context;
     assignee = assignee || actor;
     const packages = await (0, normalize_packages_1.default)({ packagesCsv });
@@ -73928,6 +73933,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     core.info('Creating PR');
     const pullRequest = await (0, create_pull_request_1.default)({
         client,
+        draft,
         base: defaultBranch,
         repo,
         packages,
