@@ -20,6 +20,9 @@ inputs:
   request-reviewers:
     description: 'Request PR assignees as reviewers'
     default: true
+  draft:
+    description: 'Creates the release PR as draft'
+    default: false
 
 runs:
   using: 'node20'

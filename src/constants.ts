@@ -6,6 +6,7 @@ export enum Input {
   VersionExtraArgs = 'version-extra-args',
   VersionStrategy = 'version-strategy',
   AutoMerge = 'auto-merge',
+  Draft = 'draft',
   RequestReviewers = 'request-reviewers',
   DefaultBranch = 'default-branch',
 }

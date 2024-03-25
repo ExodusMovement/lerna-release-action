@@ -13109,6 +13109,7 @@ var Input;
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
     Input["AutoMerge"] = "auto-merge";
+    Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
     Input["DefaultBranch"] = "default-branch";
 })(Input = exports.Input || (exports.Input = {}));
