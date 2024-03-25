@@ -86,18 +86,19 @@ export async function createPullRequest({
 
   if (autoMerge) {
     const autoMergePromise = client.graphql<EnablePullRequestAutoMergeResponse>(
-      `mutation enableAutoMerge($pullRequestId: ID!) {
-        enablePullRequestAutoMerge(input: {
-          pullRequestId: $pullRequestId,
-          mergeMethod: SQUASH,
-        }) {
-          pullRequest {
-            autoMergeRequest {
-              enabledAt
+      /* GraphQL */ `
+        mutation EnableAutoMerge($pullRequestId: ID!) {
+          enablePullRequestAutoMerge(
+            input: { pullRequestId: $pullRequestId, mergeMethod: SQUASH }
+          ) {
+            pullRequest {
+              autoMergeRequest {
+                enabledAt
+              }
             }
           }
         }
-      }`,
+      `,
       {
         pullRequestId: response.data.node_id,
       }
@@ -138,29 +139,26 @@ type GetPullRequestsForLabelsResponse = {
   }
 }
 
-const SEARCH_PULL_REQUESTS_QUERY = `
-query searchPullRequests($search: String!) {
-  search(
-    query: $search
-    type: ISSUE
-    first: 100
-  ) {
-    edges {
-      node {
-        ... on PullRequest {
-          number
-          title
-          url
-          labels(first: 100) {
-            nodes {
-              name
+const SEARCH_PULL_REQUESTS_QUERY = /* GraphQL */ `
+  query SearchPullRequests($search: String!) {
+    search(query: $search, type: ISSUE, first: 100) {
+      edges {
+        node {
+          ... on PullRequest {
+            number
+            title
+            url
+            labels(first: 100) {
+              nodes {
+                name
+              }
             }
           }
         }
       }
     }
   }
-}`
+`
 
 type GetPullRequestForLabelsParams = {
   labels: string[]

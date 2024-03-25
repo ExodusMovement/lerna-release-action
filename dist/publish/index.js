@@ -12755,18 +12755,20 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
         }));
     }
     if (autoMerge) {
-        const autoMergePromise = client.graphql(`mutation enableAutoMerge($pullRequestId: ID!) {
-        enablePullRequestAutoMerge(input: {
-          pullRequestId: $pullRequestId,
-          mergeMethod: SQUASH,
-        }) {
-          pullRequest {
-            autoMergeRequest {
-              enabledAt
+        const autoMergePromise = client.graphql(
+        /* GraphQL */ `
+        mutation EnableAutoMerge($pullRequestId: ID!) {
+          enablePullRequestAutoMerge(
+            input: { pullRequestId: $pullRequestId, mergeMethod: SQUASH }
+          ) {
+            pullRequest {
+              autoMergeRequest {
+                enabledAt
+              }
             }
           }
         }
-      }`, {
+      `, {
             pullRequestId: response.data.node_id,
         });
         promises.push(autoMergePromise);
@@ -12784,29 +12786,26 @@ async function createTags({ client, repo, sha, tags }) {
     })));
 }
 exports.createTags = createTags;
-const SEARCH_PULL_REQUESTS_QUERY = `
-query searchPullRequests($search: String!) {
-  search(
-    query: $search
-    type: ISSUE
-    first: 100
-  ) {
-    edges {
-      node {
-        ... on PullRequest {
-          number
-          title
-          url
-          labels(first: 100) {
-            nodes {
-              name
+const SEARCH_PULL_REQUESTS_QUERY = /* GraphQL */ `
+  query SearchPullRequests($search: String!) {
+    search(query: $search, type: ISSUE, first: 100) {
+      edges {
+        node {
+          ... on PullRequest {
+            number
+            title
+            url
+            labels(first: 100) {
+              nodes {
+                name
+              }
             }
           }
         }
       }
     }
   }
-}`;
+`;
 async function getPullRequestsForLabels({ client, labels, repo, state = 'open', }) {
     const labelQuery = labels.map((label) => `label:${label}`).join(' ');
     const search = `repo:${repo.owner}/${repo.repo} is:pr state:${state} ${labelQuery}`;
