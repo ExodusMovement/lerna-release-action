@@ -47,6 +47,16 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
   }
 
   const client = github.getOctokit(token)
+
+  const {
+    data: { default_branch: defaultBranch },
+  } = await client.rest.repos.get(repo)
+
+  if (pr.base.ref !== defaultBranch) {
+    core.notice(`Skipped versioning for PR not targeting ${defaultBranch}`)
+    return
+  }
+
   const packagePaths = await getPackagePaths({ filesystem })
   const affected = packagePaths.filter((it) =>
     pr.labels.some((label: { name: string }) => label.name === path.basename(it))

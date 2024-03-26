@@ -50,6 +50,13 @@ describe('versionDispatch', () => {
   beforeEach(() => {
     client = {
       rest: {
+        repos: {
+          get: jest.fn(async () => ({
+            data: {
+              default_branch: ref,
+            },
+          })) as unknown,
+        },
         issues: {
           createComment: jest.fn() as unknown as CreateComment,
         },
@@ -85,6 +92,9 @@ describe('versionDispatch', () => {
         user: {
           login: 'brucewayne',
         },
+        base: {
+          ref,
+        },
         labels: [
           { name: 'blockchain-metadata' },
           { name: 'balances' },
@@ -117,6 +127,9 @@ describe('versionDispatch', () => {
         user: {
           login: 'brucewayne',
         },
+        base: {
+          ref,
+        },
         labels: [
           { name: 'blockchain-metadata' },
           { name: 'balances' },
@@ -139,6 +152,9 @@ describe('versionDispatch', () => {
       user: {
         login: 'brucewayne',
       },
+      base: {
+        ref,
+      },
     }
 
     it.each<[string, any]>([
@@ -147,6 +163,17 @@ describe('versionDispatch', () => {
         {
           comment: {
             id: 1,
+          },
+        },
+      ],
+      [
+        'for not targeting the default branch',
+        {
+          pull_request: {
+            ...defaults,
+            base: {
+              ref: 'wayne-foundation/batmobile-v2',
+            },
           },
         },
       ],
