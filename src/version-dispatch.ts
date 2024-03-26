@@ -57,8 +57,6 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
     return
   }
 
-  core.notice(`Default branch ${defaultBranch}. Pr base: ${JSON.stringify(pr.base)}`)
-
   const packagePaths = await getPackagePaths({ filesystem })
   const affected = packagePaths.filter((it) =>
     pr.labels.some((label: { name: string }) => label.name === path.basename(it))

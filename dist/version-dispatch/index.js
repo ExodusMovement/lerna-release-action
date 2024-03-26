@@ -22263,7 +22263,6 @@ async function versionDispatch({ filesystem = fs } = {}) {
         core.notice(`Skipped versioning for PR not targeting ${defaultBranch}`);
         return;
     }
-    core.notice(`Default branch ${defaultBranch}. Pr base: ${JSON.stringify(pr.base)}`);
     const packagePaths = await (0, lerna_utils_1.getPackagePaths)({ filesystem });
     const affected = packagePaths.filter((it) => pr.labels.some((label) => label.name === path.basename(it)));
     if (affected.length === 0) {
