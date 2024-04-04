@@ -61,5 +61,8 @@
     "conventional-changelog-conventionalcommits": "^5.0.0",
     "conventional-changelog-core": "^4.2.4",
     "get-stream": "^6.0.1"
+  },
+  "resolutions": {
+    "xml2js": "^0.5.0"
   }
 }
