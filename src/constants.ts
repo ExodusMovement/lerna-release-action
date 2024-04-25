@@ -8,6 +8,7 @@ export enum Input {
   AutoMerge = 'auto-merge',
   Draft = 'draft',
   RequestReviewers = 'request-reviewers',
+  Committer = 'committer',
   DefaultBranch = 'default-branch',
 }
 
