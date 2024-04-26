@@ -46,6 +46,7 @@ export default async function version({
   draft = core.getBooleanInput(Input.Draft),
   requestReviewers = core.getBooleanInput(Input.RequestReviewers),
   assignee = core.getInput(Input.Assignee),
+  committer = core.getInput(Input.Committer),
 } = {}) {
   assertStrategy(versionStrategy)
   assert(
@@ -70,10 +71,12 @@ export default async function version({
     data: { default_branch: defaultBranch },
   } = await client.rest.repos.get(repo)
 
-  core.info(`Configure user ${assignee}`)
+  committer = committer || assignee
+  core.info(`Configure git user as ${committer}`)
+
   configureUser({
-    name: assignee,
-    email: `${assignee}@users.noreply.github.com`,
+    name: committer,
+    email: `${committer}@users.noreply.github.com`,
   })
 
   core.info('Creating object of previous package.json contents')

@@ -14,6 +14,9 @@ inputs:
     description: 'Additional args appended to the lerna version call'
   assignee:
     description: 'User to assign the workflow to. When triggered through workflow_dispatch, this will default to the user who invoked the workflow.'
+  committer:
+    description: 'User creating the commit, defaults to the assignee'
+    required: false
   auto-merge:
     description: 'Enables auto-merging on the created pull request when set to `true`. Defaults to `false`.'
     default: false

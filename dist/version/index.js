@@ -63917,6 +63917,7 @@ var Input;
     Input["AutoMerge"] = "auto-merge";
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
+    Input["Committer"] = "committer";
     Input["DefaultBranch"] = "default-branch";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
@@ -73881,7 +73882,7 @@ if (require.main === require.cache[eval('__filename')]) {
         core.setFailed(String(error.message));
     });
 }
-async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), } = {}) {
+async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), committer = core.getInput(constants_1.Input.Committer), } = {}) {
     (0, strategy_1.assertStrategy)(versionStrategy);
     assert(!(draft && autoMerge), 'A pull-request can either be created as draft, or with auto-merge enabled, but not both at the same time.');
     const { actor, repo } = github.context;
@@ -73894,10 +73895,11 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
     const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
-    core.info(`Configure user ${assignee}`);
+    committer = committer || assignee;
+    core.info(`Configure git user as ${committer}`);
     (0, git_1.configureUser)({
-        name: assignee,
-        email: `${assignee}@users.noreply.github.com`,
+        name: committer,
+        email: `${committer}@users.noreply.github.com`,
     });
     core.info('Creating object of previous package.json contents');
     const previousPackageContents = await (0, read_package_jsons_1.default)();
