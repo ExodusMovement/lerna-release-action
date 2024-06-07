@@ -49,16 +49,9 @@ export function switchToBranch(branch: string) {
   spawnSync('git', ['switch', '--create', branch])
 }
 
-export async function getBranch(): Promise<string> {
+export function getBranch(): string {
   const stdout = spawnSync('git', ['branch', '--show-current'])
   return stdout.toString().replaceAll('\n', '').trim()
-}
-
-export async function getRef(): Promise<string> {
-  const branch = await getBranch()
-  if (branch) return branch
-
-  return getCommitSha() // in case of detached head
 }
 
 export function getTags(commit: string): string[] {

@@ -26,6 +26,9 @@ inputs:
   draft:
     description: 'Creates the release PR as draft'
     default: false
+  base-branch:
+    description: 'Branch to create the PR against. Defaults to the repository default branch.'
+    required: false
 
 runs:
   using: 'node20'

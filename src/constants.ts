@@ -9,7 +9,7 @@ export enum Input {
   Draft = 'draft',
   RequestReviewers = 'request-reviewers',
   Committer = 'committer',
-  DefaultBranch = 'default-branch',
+  BaseBranch = 'base-branch',
 }
 
 export enum VersionDispatchInput {

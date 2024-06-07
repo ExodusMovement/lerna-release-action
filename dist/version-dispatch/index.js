@@ -13112,7 +13112,7 @@ var Input;
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
     Input["Committer"] = "committer";
-    Input["DefaultBranch"] = "default-branch";
+    Input["BaseBranch"] = "base-branch";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
@@ -13174,7 +13174,7 @@ exports.readJson = readJson;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.strategyAsArgument = exports.validateAllowedStrategies = exports.assertStrategy = exports.VersionStrategy = void 0;
+exports.strategyAsArgument = exports.validateAllowedStrategies = exports.assertStrategy = exports.isPreReleaseStrategy = exports.VersionStrategy = void 0;
 const fs = __nccwpck_require__(7147);
 const fs_1 = __nccwpck_require__(1716);
 const lerna_utils_1 = __nccwpck_require__(4801);
@@ -13189,6 +13189,15 @@ var VersionStrategy;
     VersionStrategy["Prepatch"] = "prepatch";
     VersionStrategy["Prerelease"] = "prerelease";
 })(VersionStrategy = exports.VersionStrategy || (exports.VersionStrategy = {}));
+function isPreReleaseStrategy(strategy) {
+    return [
+        VersionStrategy.Premajor,
+        VersionStrategy.Preminor,
+        VersionStrategy.Prepatch,
+        VersionStrategy.Prerelease,
+    ].includes(strategy);
+}
+exports.isPreReleaseStrategy = isPreReleaseStrategy;
 function assertStrategy(input) {
     const strategies = Object.values(VersionStrategy);
     if (!strategies.includes(input)) {

@@ -14,6 +14,15 @@ export enum VersionStrategy {
   Prerelease = 'prerelease',
 }
 
+export function isPreReleaseStrategy(strategy: VersionStrategy): boolean {
+  return [
+    VersionStrategy.Premajor,
+    VersionStrategy.Preminor,
+    VersionStrategy.Prepatch,
+    VersionStrategy.Prerelease,
+  ].includes(strategy)
+}
+
 export function assertStrategy(input: unknown): asserts input is VersionStrategy {
   const strategies: unknown[] = Object.values(VersionStrategy)
 

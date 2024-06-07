@@ -21,11 +21,17 @@ import revertUnwantedDependencyChanges from './version/revert-unwanted-dependenc
 import versionPackages from './version/version-packages'
 import { updateLockfile } from './utils/package-manager'
 import createPullRequest from './version/create-pull-request'
-import { assertStrategy, validateAllowedStrategies, VersionStrategy } from './version/strategy'
+import {
+  assertStrategy,
+  isPreReleaseStrategy,
+  validateAllowedStrategies,
+  VersionStrategy,
+} from './version/strategy'
 import updateChangelog from './version/update-changelog'
 import closePreviousPrs from './version/close-previous-prs'
 import { unwrapErrorMessage } from './utils/errors'
 import * as assert from 'assert'
+import { getDefaultBranch } from './utils/github'
 
 if (require.main === module) {
   version().catch((error: Error) => {
@@ -47,6 +53,7 @@ export default async function version({
   requestReviewers = core.getBooleanInput(Input.RequestReviewers),
   assignee = core.getInput(Input.Assignee),
   committer = core.getInput(Input.Committer),
+  baseBranch = core.getInput(Input.BaseBranch),
 } = {}) {
   assertStrategy(versionStrategy)
   assert(
@@ -67,9 +74,14 @@ export default async function version({
   await validateAllowedStrategies({ packages, versionStrategy })
 
   const client = github.getOctokit(token)
-  const {
-    data: { default_branch: defaultBranch },
-  } = await client.rest.repos.get(repo)
+  const defaultBranch = await getDefaultBranch({ client, repo })
+
+  if (baseBranch && baseBranch !== defaultBranch && !isPreReleaseStrategy(versionStrategy)) {
+    core.setFailed('Can only pre-release from branches that are not the repository default branch')
+    return
+  }
+
+  const base = baseBranch || defaultBranch
 
   committer = committer || assignee
   core.info(`Configure git user as ${committer}`)
@@ -123,7 +135,7 @@ export default async function version({
   const pullRequest = await createPullRequest({
     client,
     draft,
-    base: defaultBranch,
+    base,
     repo,
     packages,
     tags,
