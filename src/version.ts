@@ -21,7 +21,12 @@ import revertUnwantedDependencyChanges from './version/revert-unwanted-dependenc
 import versionPackages from './version/version-packages'
 import { updateLockfile } from './utils/package-manager'
 import createPullRequest from './version/create-pull-request'
-import { assertStrategy, validateAllowedStrategies, VersionStrategy } from './version/strategy'
+import {
+  assertStrategy,
+  isPreReleaseStrategy,
+  validateAllowedStrategies,
+  VersionStrategy,
+} from './version/strategy'
 import updateChangelog from './version/update-changelog'
 import closePreviousPrs from './version/close-previous-prs'
 import { unwrapErrorMessage } from './utils/errors'
@@ -69,7 +74,14 @@ export default async function version({
   await validateAllowedStrategies({ packages, versionStrategy })
 
   const client = github.getOctokit(token)
-  const base = baseBranch || (await getDefaultBranch({ client, repo }))
+  const defaultBranch = await getDefaultBranch({ client, repo })
+
+  if (baseBranch && baseBranch !== defaultBranch && !isPreReleaseStrategy(versionStrategy)) {
+    core.setFailed('Can only pre-release from branches that are not the repository default branch')
+    return
+  }
+
+  const base = baseBranch || defaultBranch
 
   committer = committer || assignee
   core.info(`Configure git user as ${committer}`)

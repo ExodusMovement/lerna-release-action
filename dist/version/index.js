@@ -64555,7 +64555,7 @@ exports["default"] = revertUnwantedDependencyChanges;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.strategyAsArgument = exports.validateAllowedStrategies = exports.assertStrategy = exports.VersionStrategy = void 0;
+exports.strategyAsArgument = exports.validateAllowedStrategies = exports.assertStrategy = exports.isPreReleaseStrategy = exports.VersionStrategy = void 0;
 const fs = __nccwpck_require__(7147);
 const fs_1 = __nccwpck_require__(1716);
 const lerna_utils_1 = __nccwpck_require__(4801);
@@ -64570,6 +64570,15 @@ var VersionStrategy;
     VersionStrategy["Prepatch"] = "prepatch";
     VersionStrategy["Prerelease"] = "prerelease";
 })(VersionStrategy = exports.VersionStrategy || (exports.VersionStrategy = {}));
+function isPreReleaseStrategy(strategy) {
+    return [
+        VersionStrategy.Premajor,
+        VersionStrategy.Preminor,
+        VersionStrategy.Prepatch,
+        VersionStrategy.Prerelease,
+    ].includes(strategy);
+}
+exports.isPreReleaseStrategy = isPreReleaseStrategy;
 function assertStrategy(input) {
     const strategies = Object.values(VersionStrategy);
     if (!strategies.includes(input)) {
@@ -73893,7 +73902,12 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     }
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
-    const base = baseBranch || (await (0, github_1.getDefaultBranch)({ client, repo }));
+    const defaultBranch = await (0, github_1.getDefaultBranch)({ client, repo });
+    if (baseBranch && baseBranch !== defaultBranch && !(0, strategy_1.isPreReleaseStrategy)(versionStrategy)) {
+        core.setFailed('Can only pre-release from branches that are not the repository default branch');
+        return;
+    }
+    const base = baseBranch || defaultBranch;
     committer = committer || assignee;
     core.info(`Configure git user as ${committer}`);
     (0, git_1.configureUser)({
