@@ -12658,7 +12658,7 @@ var Input;
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
     Input["Committer"] = "committer";
-    Input["DefaultBranch"] = "default-branch";
+    Input["BaseBranch"] = "base-branch";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
@@ -12721,7 +12721,7 @@ exports.joinNatural = joinNatural;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
+exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
@@ -12830,6 +12830,11 @@ async function commentOnIssue({ client, number, repo, body }) {
     });
 }
 exports.commentOnIssue = commentOnIssue;
+async function getDefaultBranch({ client, repo }) {
+    const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
+    return defaultBranch;
+}
+exports.getDefaultBranch = getDefaultBranch;
 
 
 /***/ }),

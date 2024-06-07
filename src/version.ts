@@ -26,6 +26,7 @@ import updateChangelog from './version/update-changelog'
 import closePreviousPrs from './version/close-previous-prs'
 import { unwrapErrorMessage } from './utils/errors'
 import * as assert from 'assert'
+import { getDefaultBranch } from './utils/github'
 
 if (require.main === module) {
   version().catch((error: Error) => {
@@ -47,6 +48,7 @@ export default async function version({
   requestReviewers = core.getBooleanInput(Input.RequestReviewers),
   assignee = core.getInput(Input.Assignee),
   committer = core.getInput(Input.Committer),
+  baseBranch = core.getInput(Input.BaseBranch),
 } = {}) {
   assertStrategy(versionStrategy)
   assert(
@@ -67,9 +69,7 @@ export default async function version({
   await validateAllowedStrategies({ packages, versionStrategy })
 
   const client = github.getOctokit(token)
-  const {
-    data: { default_branch: defaultBranch },
-  } = await client.rest.repos.get(repo)
+  const base = baseBranch || (await getDefaultBranch({ client, repo }))
 
   committer = committer || assignee
   core.info(`Configure git user as ${committer}`)
@@ -123,7 +123,7 @@ export default async function version({
   const pullRequest = await createPullRequest({
     client,
     draft,
-    base: defaultBranch,
+    base,
     repo,
     packages,
     tags,

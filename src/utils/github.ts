@@ -211,3 +211,16 @@ export async function commentOnIssue({ client, number, repo, body }: CommentOnIs
     body,
   })
 }
+
+type GetDefaultBranchParams = {
+  client: GithubClient
+  repo: Repo
+}
+
+export async function getDefaultBranch({ client, repo }: GetDefaultBranchParams) {
+  const {
+    data: { default_branch: defaultBranch },
+  } = await client.rest.repos.get(repo)
+
+  return defaultBranch
+}

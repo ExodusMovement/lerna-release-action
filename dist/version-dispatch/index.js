@@ -13112,7 +13112,7 @@ var Input;
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
     Input["Committer"] = "committer";
-    Input["DefaultBranch"] = "default-branch";
+    Input["BaseBranch"] = "base-branch";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {

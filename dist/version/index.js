@@ -63918,7 +63918,7 @@ var Input;
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
     Input["Committer"] = "committer";
-    Input["DefaultBranch"] = "default-branch";
+    Input["BaseBranch"] = "base-branch";
 })(Input = exports.Input || (exports.Input = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
@@ -63978,7 +63978,7 @@ exports.readJson = readJson;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.getRef = exports.getBranch = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
+exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.getBranch = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
 const process_1 = __nccwpck_require__(9239);
 const objects_1 = __nccwpck_require__(8151);
 const assert = __nccwpck_require__(8061);
@@ -64008,18 +64008,11 @@ function switchToBranch(branch) {
     (0, process_1.spawnSync)('git', ['switch', '--create', branch]);
 }
 exports.switchToBranch = switchToBranch;
-async function getBranch() {
+function getBranch() {
     const stdout = (0, process_1.spawnSync)('git', ['branch', '--show-current']);
     return stdout.toString().replaceAll('\n', '').trim();
 }
 exports.getBranch = getBranch;
-async function getRef() {
-    const branch = await getBranch();
-    if (branch)
-        return branch;
-    return getCommitSha(); // in case of detached head
-}
-exports.getRef = getRef;
 function getTags(commit) {
     const tags = (0, process_1.spawnSync)('git', ['tag', '--contains', commit]);
     return tags.trim().split('\n');
@@ -64071,7 +64064,7 @@ exports.configureUser = configureUser;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
+exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
@@ -64180,6 +64173,11 @@ async function commentOnIssue({ client, number, repo, body }) {
     });
 }
 exports.commentOnIssue = commentOnIssue;
+async function getDefaultBranch({ client, repo }) {
+    const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
+    return defaultBranch;
+}
+exports.getDefaultBranch = getDefaultBranch;
 
 
 /***/ }),
@@ -73874,6 +73872,7 @@ const update_changelog_1 = __nccwpck_require__(8178);
 const close_previous_prs_1 = __nccwpck_require__(4171);
 const errors_1 = __nccwpck_require__(2579);
 const assert = __nccwpck_require__(9491);
+const github_1 = __nccwpck_require__(1225);
 if (require.main === require.cache[eval('__filename')]) {
     version().catch((error) => {
         if (error.stack) {
@@ -73882,7 +73881,7 @@ if (require.main === require.cache[eval('__filename')]) {
         core.setFailed(String(error.message));
     });
 }
-async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), committer = core.getInput(constants_1.Input.Committer), } = {}) {
+async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), committer = core.getInput(constants_1.Input.Committer), baseBranch = core.getInput(constants_1.Input.BaseBranch), } = {}) {
     (0, strategy_1.assertStrategy)(versionStrategy);
     assert(!(draft && autoMerge), 'A pull-request can either be created as draft, or with auto-merge enabled, but not both at the same time.');
     const { actor, repo } = github.context;
@@ -73894,7 +73893,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     }
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
-    const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
+    const base = baseBranch || (await (0, github_1.getDefaultBranch)({ client, repo }));
     committer = committer || assignee;
     core.info(`Configure git user as ${committer}`);
     (0, git_1.configureUser)({
@@ -73935,7 +73934,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     const pullRequest = await (0, create_pull_request_1.default)({
         client,
         draft,
-        base: defaultBranch,
+        base,
         repo,
         packages,
         tags,
