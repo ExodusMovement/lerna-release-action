@@ -2,6 +2,7 @@ import * as core from '@actions/core'
 import * as github from '@actions/github'
 
 import { Repo } from './types'
+import { unwrapErrorMessage } from './errors'
 
 export type GithubClient = ReturnType<typeof github.getOctokit>
 
@@ -85,29 +86,35 @@ export async function createPullRequest({
   }
 
   if (autoMerge) {
-    const autoMergePromise = client.graphql<EnablePullRequestAutoMergeResponse>(
-      /* GraphQL */ `
-        mutation EnableAutoMerge($pullRequestId: ID!) {
-          enablePullRequestAutoMerge(
-            input: { pullRequestId: $pullRequestId, mergeMethod: SQUASH }
-          ) {
-            pullRequest {
-              autoMergeRequest {
-                enabledAt
+    const autoMergePromise = client
+      .graphql<EnablePullRequestAutoMergeResponse>(
+        /* GraphQL */ `
+          mutation EnableAutoMerge($pullRequestId: ID!) {
+            enablePullRequestAutoMerge(
+              input: { pullRequestId: $pullRequestId, mergeMethod: SQUASH }
+            ) {
+              pullRequest {
+                autoMergeRequest {
+                  enabledAt
+                }
               }
             }
           }
+        `,
+        {
+          pullRequestId: response.data.node_id,
         }
-      `,
-      {
-        pullRequestId: response.data.node_id,
-      }
-    )
+      )
+      .then(({ enablePullRequestAutoMerge: { pullRequest } }) =>
+        core.debug(`Auto-merge enabled at ${pullRequest.autoMergeRequest.enabledAt}`)
+      )
+      .catch((error) => {
+        core.warning(
+          `Failed to enable auto-merge: ${unwrapErrorMessage(error, 'for unknown reasons')}`
+        )
+      })
 
     promises.push(autoMergePromise)
-    autoMergePromise.then(({ enablePullRequestAutoMerge: { pullRequest } }) =>
-      core.debug(`Auto-merge enabled at ${pullRequest.autoMergeRequest.enabledAt}`)
-    )
   }
 
   await Promise.all(promises)

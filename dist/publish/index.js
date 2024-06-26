@@ -12715,6 +12715,23 @@ exports.joinNatural = joinNatural;
 
 /***/ }),
 
+/***/ 2579:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.unwrapErrorMessage = void 0;
+const unwrapErrorMessage = (error, defaultMessage) => {
+    if (error instanceof Error)
+        return error.message;
+    return defaultMessage;
+};
+exports.unwrapErrorMessage = unwrapErrorMessage;
+
+
+/***/ }),
+
 /***/ 1225:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -12723,6 +12740,7 @@ exports.joinNatural = joinNatural;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
+const errors_1 = __nccwpck_require__(2579);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
     const response = await client.rest.pulls.create({
@@ -12756,24 +12774,28 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
         }));
     }
     if (autoMerge) {
-        const autoMergePromise = client.graphql(
+        const autoMergePromise = client
+            .graphql(
         /* GraphQL */ `
-        mutation EnableAutoMerge($pullRequestId: ID!) {
-          enablePullRequestAutoMerge(
-            input: { pullRequestId: $pullRequestId, mergeMethod: SQUASH }
-          ) {
-            pullRequest {
-              autoMergeRequest {
-                enabledAt
+          mutation EnableAutoMerge($pullRequestId: ID!) {
+            enablePullRequestAutoMerge(
+              input: { pullRequestId: $pullRequestId, mergeMethod: SQUASH }
+            ) {
+              pullRequest {
+                autoMergeRequest {
+                  enabledAt
+                }
               }
             }
           }
-        }
-      `, {
+        `, {
             pullRequestId: response.data.node_id,
+        })
+            .then(({ enablePullRequestAutoMerge: { pullRequest } }) => core.debug(`Auto-merge enabled at ${pullRequest.autoMergeRequest.enabledAt}`))
+            .catch((error) => {
+            core.warning(`Failed to enable auto-merge: ${(0, errors_1.unwrapErrorMessage)(error, 'for unknown reasons')}`);
         });
         promises.push(autoMergePromise);
-        autoMergePromise.then(({ enablePullRequestAutoMerge: { pullRequest } }) => core.debug(`Auto-merge enabled at ${pullRequest.autoMergeRequest.enabledAt}`));
     }
     await Promise.all(promises);
     return response.data;
