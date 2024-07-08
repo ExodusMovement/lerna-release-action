@@ -3,7 +3,7 @@ import * as github from '@actions/github'
 import { VersionDispatchInput as Input } from './constants'
 import { Filesystem } from './utils/types'
 import * as fs from 'fs'
-import { getPackagePaths } from '@exodus/lerna-utils'
+import { getPackagePaths, getPathsByPackageNames } from '@exodus/lerna-utils'
 import * as path from 'path'
 import { VersionStrategy } from './version/strategy'
 import { parseMessage } from './utils/conventional-commits'
@@ -57,9 +57,12 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
     return
   }
 
-  const packagePaths = await getPackagePaths({ filesystem })
-  const affected = packagePaths.filter((it) =>
-    pr.labels.some((label: { name: string }) => label.name === path.basename(it))
+  const byPackageName = await getPathsByPackageNames({ filesystem })
+
+  const affected = Object.keys(byPackageName).filter((name) =>
+    pr.labels.some(
+      (label: { name: string }) => label.name === name || label.name === name.split('/').pop()
+    )
   )
 
   if (affected.length === 0) {
