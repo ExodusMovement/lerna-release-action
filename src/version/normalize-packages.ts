@@ -8,14 +8,21 @@ type Params = {
   packagesCsv: string
 }
 
+type PackageDetails = { path: string; private?: boolean }
+
 export default async function normalizePackages({ packagesCsv, filesystem = fs }: Params) {
   const pkgs = await parsePackageFiles<PackageJson>('package.json', { filesystem })
-  const byFolder = Object.fromEntries(
-    pkgs.map((pkg) => {
-      const folder = path.dirname(pkg.path)
-      return [path.basename(folder), { path: folder, private: pkg.content.private }]
-    })
-  )
+
+  const byFolder = new Map<string, PackageDetails>()
+  const byName = new Map<string, PackageDetails>()
+
+  for (const pkg of pkgs) {
+    const folder = path.dirname(pkg.path)
+    const entry = { path: folder, private: pkg.content.private }
+
+    byFolder.set(path.basename(folder), entry)
+    byName.set(pkg.content.name, entry)
+  }
 
   const normalized = []
   const invalid = []
@@ -26,7 +33,7 @@ export default async function normalizePackages({ packagesCsv, filesystem = fs }
     if (trimmed === '') continue
 
     const folderName = path.basename(trimmed)
-    const pkg = byFolder[folderName]
+    const pkg = byName.get(trimmed) ?? byFolder.get(folderName)
 
     if (!pkg) {
       invalid.push(trimmed)

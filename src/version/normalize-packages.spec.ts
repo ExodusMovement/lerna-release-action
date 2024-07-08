@@ -28,6 +28,9 @@ describe('normalizePackages', () => {
       name: '@exodus/batmans-identity',
       private: true,
     }),
+    batcave: JSON.stringify({
+      name: '@exodus/batcave',
+    }),
   }
 
   const lernaConfig = JSON.stringify({
@@ -55,6 +58,7 @@ describe('normalizePackages', () => {
       'groups/wayne/bruce/package.json': packageContents.bruce,
       'groups/wayne/batman/package.json': packageContents.batman,
       'private/batmans-identity/package.json': packageContents.batmansIdentity,
+      'libraries/wayne-manor/package.json': packageContents.batcave,
     })
   })
 
@@ -88,6 +92,14 @@ describe('normalizePackages', () => {
       filesystem: fs as never,
     })
     expect(result).toEqual(['libraries/formatting', 'modules/config'])
+  })
+
+  it('should normalize package names not matching folder names', async () => {
+    const result = await normalizePackages({
+      packagesCsv: '@exodus/batcave',
+      filesystem: fs as never,
+    })
+    expect(result).toEqual(['libraries/wayne-manor'])
   })
 
   it('should normalize deeply nested package name', async () => {
