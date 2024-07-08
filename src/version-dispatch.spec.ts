@@ -113,7 +113,42 @@ describe('versionDispatch', () => {
       inputs: {
         assignee: 'brucewayne',
         'version-strategy': 'conventional-commits',
-        packages: 'libraries/atoms,modules/blockchain-metadata,modules/balances',
+        packages: '@exodus/atoms,@exodus/blockchain-metadata,@exodus/balances',
+      },
+    })
+  })
+
+  it('should invoke version workflow with packages affected by PR when using scoped labels', async () => {
+    github.context.payload = {
+      pull_request: {
+        title: 'feat: added a lot of new features',
+        number: 123,
+        merged: true,
+        user: {
+          login: 'brucewayne',
+        },
+        base: {
+          ref,
+        },
+        labels: [
+          { name: '@exodus/blockchain-metadata' },
+          { name: '@exodus/balances' },
+          { name: '@exodus/atoms' },
+          { name: 'refactor' },
+        ],
+      },
+    }
+
+    await versionDispatch({ filesystem: fs as never })
+
+    expect(client.rest.actions.createWorkflowDispatch).toHaveBeenCalledWith({
+      ...repo,
+      ref,
+      workflow_id: workflowId,
+      inputs: {
+        assignee: 'brucewayne',
+        'version-strategy': 'conventional-commits',
+        packages: '@exodus/atoms,@exodus/blockchain-metadata,@exodus/balances',
       },
     })
   })

@@ -22239,7 +22239,6 @@ const github = __nccwpck_require__(5438);
 const constants_1 = __nccwpck_require__(9042);
 const fs = __nccwpck_require__(7147);
 const lerna_utils_1 = __nccwpck_require__(4801);
-const path = __nccwpck_require__(1017);
 const strategy_1 = __nccwpck_require__(4741);
 const conventional_commits_1 = __nccwpck_require__(9879);
 async function versionDispatch({ filesystem = fs } = {}) {
@@ -22273,8 +22272,8 @@ async function versionDispatch({ filesystem = fs } = {}) {
         core.notice(`Skipped versioning for PR not targeting ${defaultBranch}`);
         return;
     }
-    const packagePaths = await (0, lerna_utils_1.getPackagePaths)({ filesystem });
-    const affected = packagePaths.filter((it) => pr.labels.some((label) => label.name === path.basename(it)));
+    const byPackageName = await (0, lerna_utils_1.getPathsByPackageNames)({ filesystem });
+    const affected = Object.keys(byPackageName).filter((name) => pr.labels.some((label) => label.name === name || label.name === name.split('/').pop()));
     if (affected.length === 0) {
         core.notice('No packages were affected.');
         return;
