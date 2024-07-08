@@ -64417,10 +64417,14 @@ const fs = __nccwpck_require__(7147);
 const path = __nccwpck_require__(1017);
 async function normalizePackages({ packagesCsv, filesystem = fs }) {
     const pkgs = await (0, lerna_utils_1.parsePackageFiles)('package.json', { filesystem });
-    const byFolder = Object.fromEntries(pkgs.map((pkg) => {
+    const byFolder = new Map();
+    const byName = new Map();
+    for (const pkg of pkgs) {
         const folder = path.dirname(pkg.path);
-        return [path.basename(folder), { path: folder, private: pkg.content.private }];
-    }));
+        const entry = { path: folder, private: pkg.content.private };
+        byFolder.set(path.basename(folder), entry);
+        byName.set(pkg.content.name, entry);
+    }
     const normalized = [];
     const invalid = [];
     const packages = packagesCsv.split(',');
@@ -64429,7 +64433,7 @@ async function normalizePackages({ packagesCsv, filesystem = fs }) {
         if (trimmed === '')
             continue;
         const folderName = path.basename(trimmed);
-        const pkg = byFolder[folderName];
+        const pkg = byName.get(trimmed) ?? byFolder.get(folderName);
         if (!pkg) {
             invalid.push(trimmed);
             continue;
