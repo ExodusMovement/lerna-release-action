@@ -73912,8 +73912,10 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
     const defaultBranch = await (0, github_1.getDefaultBranch)({ client, repo });
-    if (baseBranch && baseBranch !== defaultBranch && !(0, strategy_1.isPreReleaseStrategy)(versionStrategy)) {
-        core.setFailed('Can only pre-release from branches that are not the repository default branch');
+    if (baseBranch &&
+        baseBranch !== defaultBranch &&
+        [strategy_1.VersionStrategy.Major, strategy_1.VersionStrategy.ConventionalCommits].includes(versionStrategy)) {
+        core.setFailed('Cannot use major or conventional commits versioning strategy from branches that are not the repository default branch');
         return;
     }
     const base = baseBranch || defaultBranch;

@@ -76,8 +76,14 @@ export default async function version({
   const client = github.getOctokit(token)
   const defaultBranch = await getDefaultBranch({ client, repo })
 
-  if (baseBranch && baseBranch !== defaultBranch && !isPreReleaseStrategy(versionStrategy)) {
-    core.setFailed('Can only pre-release from branches that are not the repository default branch')
+  if (
+    baseBranch &&
+    baseBranch !== defaultBranch &&
+    [VersionStrategy.Major, VersionStrategy.ConventionalCommits].includes(versionStrategy)
+  ) {
+    core.setFailed(
+      'Cannot use major or conventional commits versioning strategy from branches that are not the repository default branch'
+    )
     return
   }
 
