@@ -32019,7 +32019,7 @@ const github_1 = __nccwpck_require__(1225);
 const extract_tags_1 = __nccwpck_require__(4672);
 async function publish() {
     const token = core.getInput(constants_1.PublishInput.GithubToken, { required: true });
-    const requiredRulsets = core.getMultilineInput(constants_1.PublishInput.BaseBranchProtectedBy);
+    const requiredRulesets = core.getMultilineInput(constants_1.PublishInput.BaseBranchProtectedBy);
     const client = github.getOctokit(token);
     const { repo, eventName, payload: { pull_request: pr }, } = github.context;
     const sha = pr?.merge_commit_sha ?? github.context.sha;
@@ -32028,14 +32028,14 @@ async function publish() {
         core.info('Skipped action as it was neither triggered through workflow_dispatch or merging of a release PR');
         return;
     }
-    if (requiredRulsets.length > 0) {
+    if (requiredRulesets.length > 0) {
         const publishBranch = pr?.base.ref ?? github.context.ref;
         const { data: rules } = await client.rest.repos.getBranchRules({
             ...repo,
             branch: publishBranch,
         });
         const ids = new Set(rules.map((it) => String(it.ruleset_id)));
-        const missing = requiredRulsets.filter((it) => !ids.has(it));
+        const missing = requiredRulesets.filter((it) => !ids.has(it));
         if (missing.length > 0) {
             core.setFailed(`Publishing from "${publishBranch}" is only possible if it is protected by the following rulesets: ${missing.join(', ')}`);
             return;

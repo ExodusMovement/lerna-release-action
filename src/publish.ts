@@ -8,7 +8,7 @@ import { extractTags } from './publish/extract-tags'
 
 export async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
-  const requiredRulsets = core.getMultilineInput(Input.BaseBranchProtectedBy)
+  const requiredRulesets = core.getMultilineInput(Input.BaseBranchProtectedBy)
   const client = github.getOctokit(token)
 
   const {
@@ -27,7 +27,7 @@ export async function publish() {
     return
   }
 
-  if (requiredRulsets.length > 0) {
+  if (requiredRulesets.length > 0) {
     const publishBranch = pr?.base.ref ?? github.context.ref
     const { data: rules } = await client.rest.repos.getBranchRules({
       ...repo,
@@ -35,7 +35,7 @@ export async function publish() {
     })
 
     const ids = new Set(rules.map((it) => String(it.ruleset_id)))
-    const missing = requiredRulsets.filter((it) => !ids.has(it))
+    const missing = requiredRulesets.filter((it) => !ids.has(it))
 
     if (missing.length > 0) {
       core.setFailed(
