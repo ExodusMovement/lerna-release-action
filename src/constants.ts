@@ -12,6 +12,11 @@ export enum Input {
   BaseBranch = 'base-branch',
 }
 
+export enum PublishInput {
+  GithubToken = 'github-token',
+  BaseBranchProtectedBy = 'base-branch-protected-by',
+}
+
 export enum VersionDispatchInput {
   GithubToken = 'github-token',
   Ref = 'ref',
