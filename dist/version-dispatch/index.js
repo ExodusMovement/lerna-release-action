@@ -30359,7 +30359,7 @@ var Input;
 var PublishInput;
 (function (PublishInput) {
     PublishInput["GithubToken"] = "github-token";
-    PublishInput["BaseBranchProtectedBy"] = "base-branch-protected-by";
+    PublishInput["RequiredBranchRulesets"] = "required-branch-rulesets";
 })(PublishInput = exports.PublishInput || (exports.PublishInput = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {

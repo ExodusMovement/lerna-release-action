@@ -29905,7 +29905,7 @@ var Input;
 var PublishInput;
 (function (PublishInput) {
     PublishInput["GithubToken"] = "github-token";
-    PublishInput["BaseBranchProtectedBy"] = "base-branch-protected-by";
+    PublishInput["RequiredBranchRulesets"] = "required-branch-rulesets";
 })(PublishInput = exports.PublishInput || (exports.PublishInput = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
@@ -32019,7 +32019,7 @@ const github_1 = __nccwpck_require__(1225);
 const extract_tags_1 = __nccwpck_require__(4672);
 async function publish() {
     const token = core.getInput(constants_1.PublishInput.GithubToken, { required: true });
-    const requiredRulesets = core.getMultilineInput(constants_1.PublishInput.BaseBranchProtectedBy);
+    const requiredRulesets = core.getMultilineInput(constants_1.PublishInput.RequiredBranchRulesets);
     const client = github.getOctokit(token);
     const { repo, eventName, payload: { pull_request: pr }, } = github.context;
     const sha = pr?.merge_commit_sha ?? github.context.sha;

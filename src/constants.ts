@@ -14,7 +14,7 @@ export enum Input {
 
 export enum PublishInput {
   GithubToken = 'github-token',
-  BaseBranchProtectedBy = 'base-branch-protected-by',
+  RequiredBranchRulesets = 'required-branch-rulesets',
 }
 
 export enum VersionDispatchInput {

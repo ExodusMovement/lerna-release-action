@@ -8,7 +8,7 @@ import { extractTags } from './publish/extract-tags'
 
 export async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
-  const requiredRulesets = core.getMultilineInput(Input.BaseBranchProtectedBy)
+  const requiredRulesets = core.getMultilineInput(Input.RequiredBranchRulesets)
   const client = github.getOctokit(token)
 
   const {

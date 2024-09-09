@@ -84,7 +84,7 @@ describe('publish', () => {
       } as any)
 
     when(core.getMultilineInput)
-      .calledWith('base-branch-protected-by')
+      .calledWith('required-branch-rulesets')
       .mockReturnValue(['42', '73'])
 
     await publish()
@@ -103,7 +103,7 @@ describe('publish', () => {
       } as any)
 
     when(core.getMultilineInput)
-      .calledWith('base-branch-protected-by')
+      .calledWith('required-branch-rulesets')
       .mockReturnValue(['42', '73'])
 
     await publish()
@@ -136,7 +136,7 @@ describe('publish', () => {
       } as any)
 
     when(core.getMultilineInput)
-      .calledWith('base-branch-protected-by')
+      .calledWith('required-branch-rulesets')
       .mockReturnValue(['42', '73'])
 
     await publish()
