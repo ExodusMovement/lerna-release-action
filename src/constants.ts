@@ -12,6 +12,11 @@ export enum Input {
   BaseBranch = 'base-branch',
 }
 
+export enum PublishInput {
+  GithubToken = 'github-token',
+  RequiredBranchRulesets = 'required-branch-rulesets',
+}
+
 export enum VersionDispatchInput {
   GithubToken = 'github-token',
   Ref = 'ref',

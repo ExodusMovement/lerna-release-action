@@ -1,13 +1,14 @@
+import { execFileSync } from 'node:child_process'
 import * as core from '@actions/core'
-import { Input, RELEASE_PR_LABEL } from './constants'
+import { PublishInput as Input, RELEASE_PR_LABEL } from './constants'
 import * as github from '@actions/github'
 import { Label } from './utils/types'
 import { createTags } from './utils/github'
 import { extractTags } from './publish/extract-tags'
-import { spawnSync } from './utils/process'
 
-async function publish() {
+export async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
+  const requiredRulesets = core.getMultilineInput(Input.RequiredBranchRulesets)
   const client = github.getOctokit(token)
 
   const {
@@ -26,8 +27,30 @@ async function publish() {
     return
   }
 
+  if (requiredRulesets.length > 0) {
+    const publishBranch = pr?.base.ref ?? github.context.ref
+    const { data: rules } = await client.rest.repos.getBranchRules({
+      ...repo,
+      branch: publishBranch,
+    })
+
+    const ids = new Set(rules.map((it) => String(it.ruleset_id)))
+    const missing = requiredRulesets.filter((it) => !ids.has(it))
+
+    if (missing.length > 0) {
+      core.setFailed(
+        `Publishing from "${publishBranch}" is only possible if it is protected by the following rulesets: ${missing.join(', ')}`
+      )
+      return
+    }
+  }
+
   core.info('Publishing yet unpublished packages')
-  const stdout = spawnSync('npx', ['lerna', 'publish', 'from-package', '--yes', '--no-private'])
+  const stdout = execFileSync(
+    'npx',
+    ['lerna', 'publish', 'from-package', '--yes', '--no-private'],
+    { encoding: 'utf8' }
+  )
   core.debug(stdout)
 
   core.info('Identifying published packages')
