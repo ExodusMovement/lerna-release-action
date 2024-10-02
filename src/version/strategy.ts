@@ -14,9 +14,10 @@ export enum VersionStrategy {
   Prerelease = 'prerelease',
 }
 
-export function isPreReleaseStrategy(strategy: VersionStrategy): boolean {
+export function canUseFromNonDefaultBranch(strategy: VersionStrategy): boolean {
   return [
-    VersionStrategy.Premajor,
+    VersionStrategy.Minor,
+    VersionStrategy.Patch,
     VersionStrategy.Preminor,
     VersionStrategy.Prepatch,
     VersionStrategy.Prerelease,
