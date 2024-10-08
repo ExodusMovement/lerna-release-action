@@ -32029,7 +32029,7 @@ async function publish() {
         return;
     }
     if (requiredRulesets.length > 0) {
-        const publishBranch = pr?.base.ref ?? github.context.ref;
+        const publishBranch = pr?.base.ref ?? github.context.ref.replace(/^refs\/heads\//, '');
         const { data: rules } = await client.rest.repos.getBranchRules({
             ...repo,
             branch: publishBranch,
