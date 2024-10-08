@@ -115,10 +115,43 @@ describe('publish', () => {
     )
   })
 
+  test('publishes if all rulesets are applied when triggered through workflow dispatch', async () => {
+    Object.defineProperty(github, 'context', {
+      value: {
+        ref: 'refs/heads/wallet-accounts/10.x',
+        repo,
+        eventName: 'workflow_dispatch',
+        payload: {},
+        sha: 'abc123',
+      },
+    })
+
+    when(client.rest.repos.getBranchRules)
+      .calledWith({
+        ...repo,
+        branch: 'wallet-accounts/10.x',
+      })
+      .mockResolvedValue({
+        data: [{ ruleset_id: 42 }, { ruleset_id: 73 }],
+      } as any)
+
+    when(core.getMultilineInput)
+      .calledWith('required-branch-rulesets')
+      .mockReturnValue(['42', '73'])
+
+    await publish()
+
+    expect(execFileSync).toHaveBeenCalledWith(
+      'npx',
+      ['lerna', 'publish', 'from-package', '--yes', '--no-private'],
+      { encoding: 'utf8' }
+    )
+  })
+
   test('does not publish if required ruleset is missing when triggerd by workflow dispatch', async () => {
     Object.defineProperty(github, 'context', {
       value: {
-        ref: 'wallet-accounts/10.x',
+        ref: 'refs/heads/wallet-accounts/10.x',
         repo,
         eventName: 'workflow_dispatch',
         payload: {},
