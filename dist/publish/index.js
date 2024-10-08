@@ -6729,6 +6729,99 @@ function onceStrict (fn) {
 
 /***/ }),
 
+/***/ 2548:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const retry = __nccwpck_require__(8465);
+
+const networkErrorMsgs = [
+	'Failed to fetch', // Chrome
+	'NetworkError when attempting to fetch resource.', // Firefox
+	'The Internet connection appears to be offline.', // Safari
+	'Network request failed' // `cross-fetch`
+];
+
+class AbortError extends Error {
+	constructor(message) {
+		super();
+
+		if (message instanceof Error) {
+			this.originalError = message;
+			({message} = message);
+		} else {
+			this.originalError = new Error(message);
+			this.originalError.stack = this.stack;
+		}
+
+		this.name = 'AbortError';
+		this.message = message;
+	}
+}
+
+const decorateErrorWithCounts = (error, attemptNumber, options) => {
+	// Minus 1 from attemptNumber because the first attempt does not count as a retry
+	const retriesLeft = options.retries - (attemptNumber - 1);
+
+	error.attemptNumber = attemptNumber;
+	error.retriesLeft = retriesLeft;
+	return error;
+};
+
+const isNetworkError = errorMessage => networkErrorMsgs.includes(errorMessage);
+
+const pRetry = (input, options) => new Promise((resolve, reject) => {
+	options = {
+		onFailedAttempt: () => {},
+		retries: 10,
+		...options
+	};
+
+	const operation = retry.operation(options);
+
+	operation.attempt(async attemptNumber => {
+		try {
+			resolve(await input(attemptNumber));
+		} catch (error) {
+			if (!(error instanceof Error)) {
+				reject(new TypeError(`Non-error was thrown: "${error}". You should only throw errors.`));
+				return;
+			}
+
+			if (error instanceof AbortError) {
+				operation.stop();
+				reject(error.originalError);
+			} else if (error instanceof TypeError && !isNetworkError(error.message)) {
+				operation.stop();
+				reject(error);
+			} else {
+				decorateErrorWithCounts(error, attemptNumber, options);
+
+				try {
+					await options.onFailedAttempt(error);
+				} catch (error) {
+					reject(error);
+					return;
+				}
+
+				if (!operation.retry(error)) {
+					reject(operation.mainError());
+				}
+			}
+		}
+	});
+});
+
+module.exports = pRetry;
+// TODO: remove this in the next major version
+module.exports["default"] = pRetry;
+
+module.exports.AbortError = AbortError;
+
+
+/***/ }),
+
 /***/ 8465:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -30270,7 +30363,7 @@ exports.unwrapErrorMessage = unwrapErrorMessage;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
-const p_retry_1 = __nccwpck_require__(5728);
+const p_retry_1 = __nccwpck_require__(2548);
 const errors_1 = __nccwpck_require__(2579);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
@@ -32253,155 +32346,6 @@ function parseParams (str) {
 module.exports = parseParams
 
 
-/***/ }),
-
-/***/ 5728:
-/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
-
-"use strict";
-// ESM COMPAT FLAG
-__nccwpck_require__.r(__webpack_exports__);
-
-// EXPORTS
-__nccwpck_require__.d(__webpack_exports__, {
-  "AbortError": () => (/* binding */ AbortError),
-  "default": () => (/* binding */ pRetry)
-});
-
-// EXTERNAL MODULE: ./node_modules/p-retry/node_modules/retry/index.js
-var retry = __nccwpck_require__(8465);
-;// CONCATENATED MODULE: ./node_modules/is-network-error/index.js
-const objectToString = Object.prototype.toString;
-
-const isError = value => objectToString.call(value) === '[object Error]';
-
-const errorMessages = new Set([
-	'network error', // Chrome
-	'Failed to fetch', // Chrome
-	'NetworkError when attempting to fetch resource.', // Firefox
-	'The Internet connection appears to be offline.', // Safari 16
-	'Load failed', // Safari 17+
-	'Network request failed', // `cross-fetch`
-	'fetch failed', // Undici (Node.js)
-	'terminated', // Undici (Node.js)
-]);
-
-function isNetworkError(error) {
-	const isValid = error
-		&& isError(error)
-		&& error.name === 'TypeError'
-		&& typeof error.message === 'string';
-
-	if (!isValid) {
-		return false;
-	}
-
-	// We do an extra check for Safari 17+ as it has a very generic error message.
-	// Network errors in Safari have no stack.
-	if (error.message === 'Load failed') {
-		return error.stack === undefined;
-	}
-
-	return errorMessages.has(error.message);
-}
-
-;// CONCATENATED MODULE: ./node_modules/p-retry/index.js
-
-
-
-class AbortError extends Error {
-	constructor(message) {
-		super();
-
-		if (message instanceof Error) {
-			this.originalError = message;
-			({message} = message);
-		} else {
-			this.originalError = new Error(message);
-			this.originalError.stack = this.stack;
-		}
-
-		this.name = 'AbortError';
-		this.message = message;
-	}
-}
-
-const decorateErrorWithCounts = (error, attemptNumber, options) => {
-	// Minus 1 from attemptNumber because the first attempt does not count as a retry
-	const retriesLeft = options.retries - (attemptNumber - 1);
-
-	error.attemptNumber = attemptNumber;
-	error.retriesLeft = retriesLeft;
-	return error;
-};
-
-async function pRetry(input, options) {
-	return new Promise((resolve, reject) => {
-		options = {
-			onFailedAttempt() {},
-			retries: 10,
-			shouldRetry: () => true,
-			...options,
-		};
-
-		const operation = retry.operation(options);
-
-		const abortHandler = () => {
-			operation.stop();
-			reject(options.signal?.reason);
-		};
-
-		if (options.signal && !options.signal.aborted) {
-			options.signal.addEventListener('abort', abortHandler, {once: true});
-		}
-
-		const cleanUp = () => {
-			options.signal?.removeEventListener('abort', abortHandler);
-			operation.stop();
-		};
-
-		operation.attempt(async attemptNumber => {
-			try {
-				const result = await input(attemptNumber);
-				cleanUp();
-				resolve(result);
-			} catch (error) {
-				try {
-					if (!(error instanceof Error)) {
-						throw new TypeError(`Non-error was thrown: "${error}". You should only throw errors.`);
-					}
-
-					if (error instanceof AbortError) {
-						throw error.originalError;
-					}
-
-					if (error instanceof TypeError && !isNetworkError(error)) {
-						throw error;
-					}
-
-					decorateErrorWithCounts(error, attemptNumber, options);
-
-					if (!(await options.shouldRetry(error))) {
-						operation.stop();
-						reject(error);
-					}
-
-					await options.onFailedAttempt(error);
-
-					if (!operation.retry(error)) {
-						throw operation.mainError();
-					}
-				} catch (finalError) {
-					decorateErrorWithCounts(finalError, attemptNumber, options);
-					cleanUp();
-					reject(finalError);
-				}
-			}
-		});
-	});
-}
-
-
 /***/ })
 
 /******/ 	});
@@ -32437,34 +32381,6 @@ async function pRetry(input, options) {
 /******/ 	}
 /******/ 	
 /************************************************************************/
-/******/ 	/* webpack/runtime/define property getters */
-/******/ 	(() => {
-/******/ 		// define getter functions for harmony exports
-/******/ 		__nccwpck_require__.d = (exports, definition) => {
-/******/ 			for(var key in definition) {
-/******/ 				if(__nccwpck_require__.o(definition, key) && !__nccwpck_require__.o(exports, key)) {
-/******/ 					Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
-/******/ 				}
-/******/ 			}
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/hasOwnProperty shorthand */
-/******/ 	(() => {
-/******/ 		__nccwpck_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/make namespace object */
-/******/ 	(() => {
-/******/ 		// define __esModule on exports
-/******/ 		__nccwpck_require__.r = (exports) => {
-/******/ 			if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
-/******/ 				Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
-/******/ 			}
-/******/ 			Object.defineProperty(exports, '__esModule', { value: true });
-/******/ 		};
-/******/ 	})();
-/******/ 	
 /******/ 	/* webpack/runtime/compat */
 /******/ 	
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
