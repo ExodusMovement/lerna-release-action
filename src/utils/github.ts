@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
+import retry from 'p-retry'
 
 import { Repo } from './types'
 import { unwrapErrorMessage } from './errors'
@@ -130,13 +131,25 @@ type CreateTagsParams = {
 
 export async function createTags({ client, repo, sha, tags }: CreateTagsParams) {
   await Promise.all(
-    tags.map((tag) =>
-      client.rest.git.createRef({
-        ...repo,
-        ref: `refs/tags/${tag.replace(/\r/, '')}`,
-        sha,
-      })
-    )
+    tags.map((tag) => {
+      const ref = `refs/tags/${tag.replace(/\r/, '')}`
+
+      return retry(
+        () =>
+          client.rest.git.createRef({
+            ...repo,
+            ref,
+            sha,
+          }),
+        {
+          retries: 5,
+          onFailedAttempt: (error) =>
+            core.warning(
+              `Failed to create ref ${ref}: ${error.message}. There are ${error.retriesLeft} retries left`
+            ),
+        }
+      )
+    })
   )
 }
 

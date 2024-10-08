@@ -31,6 +31,7 @@
   "devDependencies": {
     "@exodus/eslint-config": "^5.22.0",
     "@exodus/prettier": "^1.0.0",
+    "@exodus/test": "^1.0.0-rc.56",
     "@graphql-eslint/eslint-plugin": "^3.20.1",
     "@octokit/plugin-rest-endpoint-methods": "^6.7.0",
     "@types/jest": "^27.4.1",
@@ -60,7 +61,8 @@
     "@exodus/lerna-utils": "^1.5.0",
     "conventional-changelog-conventionalcommits": "^5.0.0",
     "conventional-changelog-core": "^4.2.4",
-    "get-stream": "^6.0.1"
+    "get-stream": "^6.0.1",
+    "p-retry": "^4.6.2"
   },
   "resolutions": {
     "xml2js": "^0.5.0"
