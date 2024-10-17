@@ -76,7 +76,7 @@ export default async function version({
   const client = github.getOctokit(token)
   const defaultBranch = await getDefaultBranch({ client, repo })
 
-  if (baseBranch && baseBranch !== defaultBranch && canUseFromNonDefaultBranch(versionStrategy)) {
+  if (baseBranch && baseBranch !== defaultBranch && !canUseFromNonDefaultBranch(versionStrategy)) {
     core.setFailed(`Version strategy ${versionStrategy} cannot be used from a non-default branch`)
     return
   }
