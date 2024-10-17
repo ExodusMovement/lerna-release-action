@@ -96106,7 +96106,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
     const client = github.getOctokit(token);
     const defaultBranch = await (0, github_1.getDefaultBranch)({ client, repo });
-    if (baseBranch && baseBranch !== defaultBranch && (0, strategy_1.canUseFromNonDefaultBranch)(versionStrategy)) {
+    if (baseBranch && baseBranch !== defaultBranch && !(0, strategy_1.canUseFromNonDefaultBranch)(versionStrategy)) {
         core.setFailed(`Version strategy ${versionStrategy} cannot be used from a non-default branch`);
         return;
     }
