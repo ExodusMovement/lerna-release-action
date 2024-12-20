@@ -143,10 +143,16 @@ export async function createTags({ client, repo, sha, tags }: CreateTagsParams) 
           }),
         {
           retries: 5,
-          onFailedAttempt: (error) =>
+          onFailedAttempt: (error) => {
+            if (error.message.includes('already exists')) {
+              core.warning(`Tag ${tag} already exists`)
+              throw new Error(error.message)
+            }
+
             core.warning(
               `Failed to create ref ${ref}: ${error.message}. There are ${error.retriesLeft} retries left`
-            ),
+            )
+          },
         }
       )
     })

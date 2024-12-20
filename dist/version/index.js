@@ -84698,7 +84698,13 @@ async function createTags({ client, repo, sha, tags }) {
             sha,
         }), {
             retries: 5,
-            onFailedAttempt: (error) => core.warning(`Failed to create ref ${ref}: ${error.message}. There are ${error.retriesLeft} retries left`),
+            onFailedAttempt: (error) => {
+                if (error.message.includes('already exists')) {
+                    core.warning(`Tag ${tag} already exists`);
+                    throw new Error(error.message);
+                }
+                core.warning(`Failed to create ref ${ref}: ${error.message}. There are ${error.retriesLeft} retries left`);
+            },
         });
     }));
 }
