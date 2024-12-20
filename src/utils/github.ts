@@ -134,21 +134,30 @@ export async function createTags({ client, repo, sha, tags }: CreateTagsParams) 
     tags.map((tag) => {
       const ref = `refs/tags/${tag.replace(/\r/, '')}`
 
-      return retry(
-        () =>
-          client.rest.git.createRef({
+      const createTag = async () => {
+        try {
+          await client.rest.git.createRef({
             ...repo,
             ref,
             sha,
-          }),
-        {
-          retries: 5,
-          onFailedAttempt: (error) =>
-            core.warning(
-              `Failed to create ref ${ref}: ${error.message}. There are ${error.retriesLeft} retries left`
-            ),
+          })
+        } catch (e) {
+          if (e instanceof Error && e.message.includes('Reference already exists')) {
+            return
+          }
+
+          throw e
         }
-      )
+      }
+
+      return retry(createTag, {
+        retries: 5,
+        onFailedAttempt: (error) => {
+          core.warning(
+            `Failed to create ref ${ref}: ${error.message}. There are ${error.retriesLeft} retries left`
+          )
+        },
+      })
     })
   )
 }

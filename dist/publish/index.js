@@ -30428,13 +30428,26 @@ exports.createPullRequest = createPullRequest;
 async function createTags({ client, repo, sha, tags }) {
     await Promise.all(tags.map((tag) => {
         const ref = `refs/tags/${tag.replace(/\r/, '')}`;
-        return (0, p_retry_1.default)(() => client.rest.git.createRef({
-            ...repo,
-            ref,
-            sha,
-        }), {
+        const createTag = async () => {
+            try {
+                await client.rest.git.createRef({
+                    ...repo,
+                    ref,
+                    sha,
+                });
+            }
+            catch (e) {
+                if (e instanceof Error && e.message.includes('Reference already exists')) {
+                    return;
+                }
+                throw e;
+            }
+        };
+        return (0, p_retry_1.default)(createTag, {
             retries: 5,
-            onFailedAttempt: (error) => core.warning(`Failed to create ref ${ref}: ${error.message}. There are ${error.retriesLeft} retries left`),
+            onFailedAttempt: (error) => {
+                core.warning(`Failed to create ref ${ref}: ${error.message}. There are ${error.retriesLeft} retries left`);
+            },
         });
     }));
 }
