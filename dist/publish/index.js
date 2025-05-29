@@ -30305,7 +30305,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.extractTags = void 0;
 function extractTags(publishStdout) {
     const parts = publishStdout.split('Successfully published:');
-    const lines = parts.pop()?.trim().split('\n');
+    const lines = parts[1]?.trim().split('\n');
     if (!lines) {
         return;
     }

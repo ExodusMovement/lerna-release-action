@@ -1,6 +1,6 @@
 export function extractTags(publishStdout: string) {
   const parts = publishStdout.split('Successfully published:')
-  const lines = parts.pop()?.trim().split('\n')
+  const lines = parts[1]?.trim().split('\n')
 
   if (!lines) {
     return
