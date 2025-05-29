@@ -30297,43 +30297,21 @@ exports.RELEASE_PR_LABEL = 'publish-on-merge';
 /***/ }),
 
 /***/ 4672:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.extractTags = void 0;
-const arrays_1 = __nccwpck_require__(8873);
-function extractTags(publishStdout) {
-    const matches = publishStdout.match(/@exodus\/\S+@\d+\.\d+.\d+(-\w+\.\d+)?/g);
-    if (!matches) {
-        return;
-    }
-    return (0, arrays_1.unique)(matches);
-}
-exports.extractTags = extractTags;
-
-
-/***/ }),
-
-/***/ 8873:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.joinNatural = exports.unique = void 0;
-function unique(array) {
-    return array.filter((e, i) => array.indexOf(e) === i);
+exports.extractTags = void 0;
+function extractTags(publishStdout) {
+    const parts = publishStdout.split('Successfully published:');
+    const lines = parts.pop()?.trim().split('\n');
+    if (!lines) {
+        return;
+    }
+    return lines.map((line) => line.trim().replace(/^-\s+/, '')).filter(Boolean);
 }
-exports.unique = unique;
-function joinNatural(array) {
-    if (array.length === 1)
-        return array[0]; // eslint-disable-line @typescript-eslint/no-non-null-assertion
-    const [last] = array.slice(-1);
-    return array.slice(0, -1).join(', ') + `, and ${last}`;
-}
-exports.joinNatural = joinNatural;
+exports.extractTags = extractTags;
 
 
 /***/ }),
