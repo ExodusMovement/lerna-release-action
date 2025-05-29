@@ -34,4 +34,5 @@ lerna notice
 Successfully published:
  - @exodus/arkham-asylum@2.1.7-alpha.1
  - @exodus/wayne-manor@1.9.12
+ - secure-container@3.0.0
 `.trim()

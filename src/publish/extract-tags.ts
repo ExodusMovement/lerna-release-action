@@ -1,10 +1,10 @@
-import { unique } from '../utils/arrays'
-
 export function extractTags(publishStdout: string) {
-  const matches = publishStdout.match(/@exodus\/\S+@\d+\.\d+.\d+(-\w+\.\d+)?/g)
-  if (!matches) {
+  const parts = publishStdout.split('Successfully published:')
+  const lines = parts.pop()?.trim().split('\n')
+
+  if (!lines) {
     return
   }
 
-  return unique(matches)
+  return lines.map((line) => line.trim().replace(/^-\s+/, '')).filter(Boolean)
 }
