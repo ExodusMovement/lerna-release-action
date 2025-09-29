@@ -4,6 +4,7 @@ import { spawnSync } from './process'
 
 const lockfileCommands = {
   'yarn.lock': { command: 'yarn', args: ['--no-immutable'] },
+  'pnpm-workspace.yaml': { command: 'pnpm', args: ['--frozen-lockfile', 'false'] },
   'package-lock.json': { command: 'npm', args: ['install'] },
 }
 
