@@ -84802,7 +84802,7 @@ const fs = __nccwpck_require__(7147);
 const process_1 = __nccwpck_require__(9239);
 const lockfileCommands = {
     'yarn.lock': { command: 'yarn', args: ['--no-immutable'] },
-    'pnpm-lock.yaml': { command: 'pnpm', args: ['--frozen-lockfile', 'false'] },
+    'pnpm-lock.yaml': { command: 'pnpm', args: [] },
     'package-lock.json': { command: 'npm', args: ['install'] },
 };
 function updateLockfile({ filesystem = fs } = {}) {
