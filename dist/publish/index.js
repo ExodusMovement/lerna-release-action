@@ -30282,6 +30282,7 @@ var PublishInput;
 (function (PublishInput) {
     PublishInput["GithubToken"] = "github-token";
     PublishInput["RequiredBranchRulesets"] = "required-branch-rulesets";
+    PublishInput["DistTag"] = "dist-tag";
 })(PublishInput = exports.PublishInput || (exports.PublishInput = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
@@ -32395,6 +32396,7 @@ async function publish() {
     const token = core.getInput(constants_1.PublishInput.GithubToken, { required: true });
     const requiredRulesets = core.getMultilineInput(constants_1.PublishInput.RequiredBranchRulesets);
     const client = github.getOctokit(token);
+    const distTag = core.getInput(constants_1.PublishInput.DistTag);
     const { repo, eventName, payload: { pull_request: pr }, } = github.context;
     const sha = pr?.merge_commit_sha ?? github.context.sha;
     const isReleasePr = pr?.merged && pr.labels.some(({ name }) => name === constants_1.RELEASE_PR_LABEL);
@@ -32416,7 +32418,11 @@ async function publish() {
         }
     }
     core.info('Publishing yet unpublished packages');
-    const stdout = (0, node_child_process_1.execFileSync)('npx', ['lerna', 'publish', 'from-package', '--yes', '--no-private'], { encoding: 'utf8' });
+    const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private'];
+    if (distTag) {
+        lernaArgs.push('--dist-tag', distTag);
+    }
+    const stdout = (0, node_child_process_1.execFileSync)('npx', lernaArgs, { encoding: 'utf8' });
     core.debug(stdout);
     core.info('Identifying published packages');
     const tags = (0, extract_tags_1.extractTags)(stdout);
