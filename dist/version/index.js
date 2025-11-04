@@ -84480,6 +84480,7 @@ var PublishInput;
 (function (PublishInput) {
     PublishInput["GithubToken"] = "github-token";
     PublishInput["RequiredBranchRulesets"] = "required-branch-rulesets";
+    PublishInput["DistTag"] = "dist-tag";
 })(PublishInput = exports.PublishInput || (exports.PublishInput = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
