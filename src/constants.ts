@@ -15,6 +15,7 @@ export enum Input {
 export enum PublishInput {
   GithubToken = 'github-token',
   RequiredBranchRulesets = 'required-branch-rulesets',
+  DistTag = 'dist-tag',
 }
 
 export enum VersionDispatchInput {

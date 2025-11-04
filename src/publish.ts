@@ -10,6 +10,7 @@ export async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
   const requiredRulesets = core.getMultilineInput(Input.RequiredBranchRulesets)
   const client = github.getOctokit(token)
+  const distTag = core.getInput(Input.DistTag)
 
   const {
     repo,
@@ -46,11 +47,14 @@ export async function publish() {
   }
 
   core.info('Publishing yet unpublished packages')
-  const stdout = execFileSync(
-    'npx',
-    ['lerna', 'publish', 'from-package', '--yes', '--no-private'],
-    { encoding: 'utf8' }
-  )
+
+  const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private']
+
+  if (distTag) {
+    lernaArgs.push('--dist-tag', distTag)
+  }
+
+  const stdout = execFileSync('npx', lernaArgs, { encoding: 'utf8' })
   core.debug(stdout)
 
   core.info('Identifying published packages')
