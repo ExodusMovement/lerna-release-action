@@ -1,10 +1,10 @@
-import { execFileSync } from 'node:child_process'
 import * as core from '@actions/core'
 import { PublishInput as Input, RELEASE_PR_LABEL } from './constants'
 import * as github from '@actions/github'
 import { Label } from './utils/types'
 import { createTags } from './utils/github'
 import { extractTags } from './publish/extract-tags'
+import { spawnSync } from 'node:child_process'
 
 export async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
@@ -54,14 +54,20 @@ export async function publish() {
     lernaArgs.push('--dist-tag', distTag)
   }
 
-  const stdout = execFileSync('npx', lernaArgs, { encoding: 'utf8' })
+  const { stdout, stderr, status } = spawnSync('npx', lernaArgs, { encoding: 'utf8' })
+  if (status !== 0) {
+    core.setFailed('Failed to publish some packages')
+    core.error(stderr)
+    core.error(stdout)
+  }
+
   core.debug(stdout)
 
   core.info('Identifying published packages')
   const tags = extractTags(stdout)
 
-  if (!tags) {
-    core.notice('No new packages versions found. Publish aborted.')
+  if (tags.length === 0) {
+    core.notice('No new packages versions found. Tagging aborted.')
     return
   }
 
