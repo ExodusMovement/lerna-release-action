@@ -30304,13 +30304,19 @@ exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.extractTags = void 0;
+const PUBLISH_SUCCESS_LINE_REGEX = /^lerna success published (\S+ \d+\.\d+\.\d+\S*)$/i;
 function extractTags(publishStdout) {
-    const parts = publishStdout.split('Successfully published:');
-    const lines = parts[1]?.trim().split('\n');
-    if (!lines) {
-        return;
-    }
-    return lines.map((line) => line.trim().replace(/^-\s+/, '')).filter(Boolean);
+    const lines = publishStdout.split('\n');
+    return lines
+        .map((line) => {
+        const trimmed = line.trim();
+        const [, match] = trimmed.match(PUBLISH_SUCCESS_LINE_REGEX) ?? [];
+        if (!match) {
+            return;
+        }
+        return match.replace(' ', '@');
+    })
+        .filter((value) => !!value);
 }
 exports.extractTags = extractTags;
 
@@ -32386,12 +32392,12 @@ var exports = __webpack_exports__;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.publish = void 0;
-const node_child_process_1 = __nccwpck_require__(7718);
 const core = __nccwpck_require__(2186);
 const constants_1 = __nccwpck_require__(9042);
 const github = __nccwpck_require__(5438);
 const github_1 = __nccwpck_require__(1225);
 const extract_tags_1 = __nccwpck_require__(4672);
+const node_child_process_1 = __nccwpck_require__(7718);
 async function publish() {
     const token = core.getInput(constants_1.PublishInput.GithubToken, { required: true });
     const requiredRulesets = core.getMultilineInput(constants_1.PublishInput.RequiredBranchRulesets);
@@ -32422,12 +32428,17 @@ async function publish() {
     if (distTag) {
         lernaArgs.push('--dist-tag', distTag);
     }
-    const stdout = (0, node_child_process_1.execFileSync)('npx', lernaArgs, { encoding: 'utf8' });
+    const { stdout, stderr, status } = (0, node_child_process_1.spawnSync)('npx', lernaArgs, { encoding: 'utf8' });
+    if (status !== 0) {
+        core.setFailed('Failed to publish some packages');
+        core.error(stderr);
+        core.error(stdout);
+    }
     core.debug(stdout);
     core.info('Identifying published packages');
     const tags = (0, extract_tags_1.extractTags)(stdout);
-    if (!tags) {
-        core.notice('No new packages versions found. Publish aborted.');
+    if (tags.length === 0) {
+        core.notice('No new packages versions found. Tagging aborted.');
         return;
     }
     const publishedPackages = tags.join(',');

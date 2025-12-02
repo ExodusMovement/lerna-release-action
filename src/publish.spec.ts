@@ -1,12 +1,17 @@
 import * as github from '@actions/github'
-import { GithubClient } from './utils/github'
+import { createTags, GithubClient } from './utils/github'
 import { publish } from './publish'
-import { execFileSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import * as core from '@actions/core'
 import { when } from 'jest-when'
+import { PUBLISH_OUTPUT_WITH_FAILURE } from './__fixtures__/publish'
 
 jest.mock('node:child_process', () => ({
-  execFileSync: jest.fn(() => ''),
+  spawnSync: jest.fn(() => ({ stdout: '', status: 0 })),
+}))
+
+jest.mock('./utils/github', () => ({
+  createTags: jest.fn(),
 }))
 
 jest.mock('@actions/core', () => ({
@@ -18,6 +23,7 @@ jest.mock('@actions/core', () => ({
   error: jest.fn(),
   notice: jest.fn(),
   setFailed: jest.fn(),
+  setOutput: jest.fn(),
 }))
 
 describe('publish', () => {
@@ -60,12 +66,18 @@ describe('publish', () => {
         sha: 'abc123',
       },
     })
+
+    jest.mocked(spawnSync).mockReturnValue({
+      status: 0,
+      stdout: '',
+      stderr: '',
+    } as never)
   })
 
   test('aborts when no new packages', async () => {
     await publish()
 
-    expect(execFileSync).toHaveBeenCalledWith(
+    expect(spawnSync).toHaveBeenCalledWith(
       'npx',
       ['lerna', 'publish', 'from-package', '--yes', '--no-private'],
       { encoding: 'utf8' }
@@ -89,7 +101,7 @@ describe('publish', () => {
 
     await publish()
 
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(spawnSync).not.toHaveBeenCalled()
   })
 
   test('publishes if all rulesets are applied', async () => {
@@ -108,10 +120,40 @@ describe('publish', () => {
 
     await publish()
 
-    expect(execFileSync).toHaveBeenCalledWith(
+    expect(spawnSync).toHaveBeenCalledWith(
       'npx',
       ['lerna', 'publish', 'from-package', '--yes', '--no-private'],
       { encoding: 'utf8' }
+    )
+  })
+
+  test('sets action to failed and applies partial tags on failed publish', async () => {
+    when(client.rest.repos.getBranchRules)
+      .calledWith({
+        ...repo,
+        branch: 'master',
+      })
+      .mockResolvedValue({
+        data: [{ ruleset_id: 42 }, { ruleset_id: 73 }],
+      } as any)
+
+    when(core.getMultilineInput)
+      .calledWith('required-branch-rulesets')
+      .mockReturnValue(['42', '73'])
+
+    jest.mocked(spawnSync).mockReturnValue({
+      stdout: PUBLISH_OUTPUT_WITH_FAILURE,
+      stderr: '',
+      status: 4,
+    } as never)
+
+    await publish()
+
+    expect(core.setFailed).toHaveBeenCalled()
+    expect(createTags).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ['@exodus/pay-schemas@2.8.0'],
+      })
     )
   })
 
@@ -141,7 +183,7 @@ describe('publish', () => {
 
     await publish()
 
-    expect(execFileSync).toHaveBeenCalledWith(
+    expect(spawnSync).toHaveBeenCalledWith(
       'npx',
       ['lerna', 'publish', 'from-package', '--yes', '--no-private'],
       { encoding: 'utf8' }
@@ -174,6 +216,6 @@ describe('publish', () => {
 
     await publish()
 
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(spawnSync).not.toHaveBeenCalled()
   })
 })
