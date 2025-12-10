@@ -1,10 +1,10 @@
 import * as core from '@actions/core'
-import { PublishInput as Input, RELEASE_PR_LABEL } from './constants'
+import { PublishInput as Input } from './constants'
 import * as github from '@actions/github'
-import { Label } from './utils/types'
-import { createTags } from './utils/github'
+import { createTags, getReleasePr } from './utils/github'
 import { extractTags } from './publish/extract-tags'
 import { spawnSync } from 'node:child_process'
+import { checkout } from './utils/git'
 
 export async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
@@ -12,24 +12,21 @@ export async function publish() {
   const client = github.getOctokit(token)
   const distTag = core.getInput(Input.DistTag)
 
-  const {
-    repo,
-    eventName,
-    payload: { pull_request: pr },
-  } = github.context
+  const { repo, eventName, sha } = github.context
 
-  const sha = pr?.merge_commit_sha ?? github.context.sha
-
-  const isReleasePr = pr?.merged && pr.labels.some(({ name }: Label) => name === RELEASE_PR_LABEL)
-  if (!(eventName === 'workflow_dispatch' || isReleasePr)) {
-    core.info(
-      'Skipped action as it was neither triggered through workflow_dispatch or merging of a release PR'
-    )
+  if (!['workflow_dispatch', 'push'].includes(eventName)) {
+    core.info('Skipping action as it was neither triggered through push nor workflow_dispatch.')
     return
   }
 
-  if (requiredRulesets.length > 0) {
-    const publishBranch = pr?.base.ref ?? github.context.ref.replace(/^refs\/heads\//, '')
+  const pr = await getReleasePr({ client, repo, sha })
+  if (eventName === 'push' && !pr) {
+    core.info('Skipping action as the pushed commit is not a release commit.')
+    return
+  }
+
+  if (pr && requiredRulesets.length > 0) {
+    const publishBranch = pr.base.ref
     const { data: rules } = await client.rest.repos.getBranchRules({
       ...repo,
       branch: publishBranch,
@@ -44,6 +41,9 @@ export async function publish() {
       )
       return
     }
+
+    core.info(`Checking out ${pr.url} to avoid publishing more recent changes.`)
+    checkout(pr.head.sha)
   }
 
   core.info('Publishing yet unpublished packages')

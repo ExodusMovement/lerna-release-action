@@ -30340,16 +30340,103 @@ exports.unwrapErrorMessage = unwrapErrorMessage;
 
 /***/ }),
 
+/***/ 8682:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.getBranch = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
+const process_1 = __nccwpck_require__(9239);
+const objects_1 = __nccwpck_require__(8151);
+const assert = __nccwpck_require__(8061);
+const PATH_CHARACTERS = /^[\w./-]+$/;
+function add(pathSpecs) {
+    assert(pathSpecs.every((it) => !it.startsWith('-') && PATH_CHARACTERS.test(it)), 'Options are not allowed. Please supply paths to the files you want to add only.');
+    (0, process_1.spawnSync)('git', ['add', ...pathSpecs]);
+}
+exports.add = add;
+const commitFlags = ['amend', 'all', 'noEdit'];
+function commit({ message, body, flags }) {
+    const args = ['commit', ...(0, objects_1.flagsAsArguments)(flags, commitFlags)];
+    if (message) {
+        args.push('-m', `"${message}"`);
+    }
+    if (body) {
+        args.push('-m', `"${body}"`);
+    }
+    (0, process_1.spawnSync)('git', args);
+}
+exports.commit = commit;
+function pushHeadToOrigin() {
+    (0, process_1.spawnSync)('git', ['push', 'origin', 'HEAD']);
+}
+exports.pushHeadToOrigin = pushHeadToOrigin;
+function switchToBranch(branch) {
+    (0, process_1.spawnSync)('git', ['switch', '--create', branch]);
+}
+exports.switchToBranch = switchToBranch;
+function getBranch() {
+    const stdout = (0, process_1.spawnSync)('git', ['branch', '--show-current']);
+    return stdout.toString().replaceAll('\n', '').trim();
+}
+exports.getBranch = getBranch;
+function getTags(commit) {
+    const tags = (0, process_1.spawnSync)('git', ['tag', '--contains', commit]);
+    return tags.trim().split('\n');
+}
+exports.getTags = getTags;
+function deleteTags(tags) {
+    tags.forEach((tag) => (0, process_1.spawnSync)('git', ['tag', '-d', tag]));
+}
+exports.deleteTags = deleteTags;
+function getCommitSha() {
+    const stdout = (0, process_1.spawnSync)('git', ['rev-parse', 'HEAD']);
+    return stdout.toString().replaceAll('\n', '').trim();
+}
+exports.getCommitSha = getCommitSha;
+function getCommitMessage(commit) {
+    const stdout = (0, process_1.spawnSync)('git', ['show', '-s', '--format=%s', commit]);
+    return stdout.trim();
+}
+exports.getCommitMessage = getCommitMessage;
+function checkout(ref) {
+    (0, process_1.spawnSync)('git', ['checkout', ref]);
+}
+exports.checkout = checkout;
+function cleanup() {
+    try {
+        (0, process_1.spawnSync)('git', ['stash', '-u']);
+        (0, process_1.spawnSync)('git', ['stash', 'drop']);
+    }
+    catch { }
+}
+exports.cleanup = cleanup;
+const resetFlags = ['mixed'];
+function resetLastCommit({ flags }) {
+    (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags, resetFlags), 'HEAD~1']);
+}
+exports.resetLastCommit = resetLastCommit;
+function configureUser({ name, email }) {
+    (0, process_1.spawnSync)('git', ['config', 'user.name', name]);
+    (0, process_1.spawnSync)('git', ['config', 'user.email', email]);
+}
+exports.configureUser = configureUser;
+
+
+/***/ }),
+
 /***/ 1225:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
+exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
 const p_retry_1 = __nccwpck_require__(2548);
 const errors_1 = __nccwpck_require__(2579);
+const constants_1 = __nccwpck_require__(9042);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
     const response = await client.rest.pulls.create({
@@ -30485,6 +30572,101 @@ async function getDefaultBranch({ client, repo }) {
     return defaultBranch;
 }
 exports.getDefaultBranch = getDefaultBranch;
+async function getReleasePr({ client, repo, sha }) {
+    const { data } = await client.rest.repos.listPullRequestsAssociatedWithCommit({
+        ...repo,
+        commit_sha: sha,
+    });
+    return data.find((pr) => pr.merged_at && pr.labels.some(({ name }) => name === constants_1.RELEASE_PR_LABEL));
+}
+exports.getReleasePr = getReleasePr;
+
+
+/***/ }),
+
+/***/ 8151:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.flagsAsArguments = void 0;
+const strings_1 = __nccwpck_require__(8927);
+const assert = __nccwpck_require__(8061);
+function flagsAsArguments(flags, whitelistedFlags) {
+    return Object.entries(flags ?? {}).reduce((all, [flag, enabled]) => {
+        assert(whitelistedFlags.includes(flag), `Only the following flags are allowed: ${whitelistedFlags.join(', ')}`);
+        if (enabled) {
+            all.push(`--${(0, strings_1.toKebabCase)(flag)}`);
+        }
+        return all;
+    }, []);
+}
+exports.flagsAsArguments = flagsAsArguments;
+
+
+/***/ }),
+
+/***/ 9239:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.spawnSync = void 0;
+const child_process_1 = __nccwpck_require__(2081);
+const spawnSync = (command, args, options = {}) => {
+    const { stdout, stderr, status } = (0, child_process_1.spawnSync)(command, args, {
+        encoding: 'utf8',
+        ...options,
+        shell: false,
+    });
+    if (status !== 0) {
+        throw new Error(stderr);
+    }
+    return stdout;
+};
+exports.spawnSync = spawnSync;
+
+
+/***/ }),
+
+/***/ 8927:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.pluralize = exports.truncate = exports.toKebabCase = void 0;
+function toKebabCase(text) {
+    return text.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
+}
+exports.toKebabCase = toKebabCase;
+const ellipsis = '...';
+function truncate(text, maxLen) {
+    if (text.length < maxLen) {
+        return text;
+    }
+    const { indexes } = text.split(/[\s,.:]/).reduce(({ indexes, cursor }, word) => {
+        const index = text.indexOf(word, cursor);
+        indexes.push([index, word]);
+        return { indexes, cursor: index + word.length };
+    }, { indexes: [], cursor: 0 });
+    const lastValidIndex = indexes.findIndex(([index, word]) => index + word.length + ellipsis.length >= maxLen) - 1;
+    if (lastValidIndex === -1) {
+        return ellipsis.slice(0, maxLen);
+    }
+    const [index, word] = indexes[lastValidIndex]; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    const splitAt = index + word.length;
+    return `${text.slice(0, splitAt)}${ellipsis}`;
+}
+exports.truncate = truncate;
+function pluralize(word, count) {
+    if (count === 1)
+        return word;
+    return `${word}s`;
+}
+exports.pluralize = pluralize;
 
 
 /***/ }),
@@ -30510,6 +30692,14 @@ module.exports = require("async_hooks");
 
 "use strict";
 module.exports = require("buffer");
+
+/***/ }),
+
+/***/ 2081:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("child_process");
 
 /***/ }),
 
@@ -30582,6 +30772,14 @@ module.exports = require("https");
 
 "use strict";
 module.exports = require("net");
+
+/***/ }),
+
+/***/ 8061:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:assert");
 
 /***/ }),
 
@@ -32398,20 +32596,24 @@ const github = __nccwpck_require__(5438);
 const github_1 = __nccwpck_require__(1225);
 const extract_tags_1 = __nccwpck_require__(4672);
 const node_child_process_1 = __nccwpck_require__(7718);
+const git_1 = __nccwpck_require__(8682);
 async function publish() {
     const token = core.getInput(constants_1.PublishInput.GithubToken, { required: true });
     const requiredRulesets = core.getMultilineInput(constants_1.PublishInput.RequiredBranchRulesets);
     const client = github.getOctokit(token);
     const distTag = core.getInput(constants_1.PublishInput.DistTag);
-    const { repo, eventName, payload: { pull_request: pr }, } = github.context;
-    const sha = pr?.merge_commit_sha ?? github.context.sha;
-    const isReleasePr = pr?.merged && pr.labels.some(({ name }) => name === constants_1.RELEASE_PR_LABEL);
-    if (!(eventName === 'workflow_dispatch' || isReleasePr)) {
-        core.info('Skipped action as it was neither triggered through workflow_dispatch or merging of a release PR');
+    const { repo, eventName, sha } = github.context;
+    if (!['workflow_dispatch', 'push'].includes(eventName)) {
+        core.info('Skipping action as it was neither triggered through push nor workflow_dispatch.');
         return;
     }
-    if (requiredRulesets.length > 0) {
-        const publishBranch = pr?.base.ref ?? github.context.ref.replace(/^refs\/heads\//, '');
+    const pr = await (0, github_1.getReleasePr)({ client, repo, sha });
+    if (eventName === 'push' && !pr) {
+        core.info('Skipping action as the pushed commit is not a release commit.');
+        return;
+    }
+    if (pr && requiredRulesets.length > 0) {
+        const publishBranch = pr.base.ref;
         const { data: rules } = await client.rest.repos.getBranchRules({
             ...repo,
             branch: publishBranch,
@@ -32422,6 +32624,8 @@ async function publish() {
             core.setFailed(`Publishing from "${publishBranch}" is only possible if it is protected by the following rulesets: ${missing.join(', ')}`);
             return;
         }
+        core.info(`Checking out ${pr.url} to avoid publishing more recent changes.`);
+        (0, git_1.checkout)(pr.head.sha);
     }
     core.info('Publishing yet unpublished packages');
     const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private'];

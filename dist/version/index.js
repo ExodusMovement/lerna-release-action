@@ -84626,10 +84626,11 @@ exports.configureUser = configureUser;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
+exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
 const p_retry_1 = __nccwpck_require__(2548);
 const errors_1 = __nccwpck_require__(2579);
+const constants_1 = __nccwpck_require__(9042);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
     const response = await client.rest.pulls.create({
@@ -84765,6 +84766,14 @@ async function getDefaultBranch({ client, repo }) {
     return defaultBranch;
 }
 exports.getDefaultBranch = getDefaultBranch;
+async function getReleasePr({ client, repo, sha }) {
+    const { data } = await client.rest.repos.listPullRequestsAssociatedWithCommit({
+        ...repo,
+        commit_sha: sha,
+    });
+    return data.find((pr) => pr.merged_at && pr.labels.some(({ name }) => name === constants_1.RELEASE_PR_LABEL));
+}
+exports.getReleasePr = getReleasePr;
 
 
 /***/ }),

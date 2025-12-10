@@ -4,6 +4,7 @@ import retry from 'p-retry'
 
 import { Repo } from './types'
 import { unwrapErrorMessage } from './errors'
+import { RELEASE_PR_LABEL } from '../constants'
 
 export type GithubClient = ReturnType<typeof github.getOctokit>
 
@@ -252,4 +253,19 @@ export async function getDefaultBranch({ client, repo }: GetDefaultBranchParams)
   } = await client.rest.repos.get(repo)
 
   return defaultBranch
+}
+
+type GetReleasePrParams = {
+  client: GithubClient
+  repo: Repo
+  sha: string
+}
+
+export async function getReleasePr({ client, repo, sha }: GetReleasePrParams) {
+  const { data } = await client.rest.repos.listPullRequestsAssociatedWithCommit({
+    ...repo,
+    commit_sha: sha,
+  })
+
+  return data.find((pr) => pr.merged_at && pr.labels.some(({ name }) => name === RELEASE_PR_LABEL))
 }
