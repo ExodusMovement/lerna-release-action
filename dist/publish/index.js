@@ -30313,11 +30313,11 @@ function extractTags() {
         return [];
     }
     try {
-        const summary = JSON.parse(fs.readFileSync('./lerna-publish-summary.json', { encoding: 'utf8' }));
+        const summary = JSON.parse(fs.readFileSync(summaryFilePath, { encoding: 'utf8' }));
         return summary.map(({ packageName, version }) => [packageName, version].join('@'));
     }
     catch (e) {
-        core.error(`Unable to read tags: ${(0, errors_1.unwrapErrorMessage)(e, 'unknown error')}`);
+        core.error(`Unable to parse tags: ${(0, errors_1.unwrapErrorMessage)(e, 'unknown error')}`);
         throw new Error('Failed to extract tags');
     }
 }

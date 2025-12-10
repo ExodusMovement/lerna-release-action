@@ -16,12 +16,12 @@ export function extractTags() {
 
   try {
     const summary = JSON.parse(
-      fs.readFileSync('./lerna-publish-summary.json', { encoding: 'utf8' })
+      fs.readFileSync(summaryFilePath, { encoding: 'utf8' })
     ) as PublishedVersion[]
 
     return summary.map(({ packageName, version }) => [packageName, version].join('@'))
   } catch (e) {
-    core.error(`Unable to read tags: ${unwrapErrorMessage(e, 'unknown error')}`)
+    core.error(`Unable to parse tags: ${unwrapErrorMessage(e, 'unknown error')}`)
 
     throw new Error('Failed to extract tags')
   }
