@@ -30307,7 +30307,11 @@ exports.extractTags = void 0;
 const fs = __nccwpck_require__(7561);
 const core = __nccwpck_require__(2186);
 const errors_1 = __nccwpck_require__(2579);
+const summaryFilePath = './lerna-publish-summary.json';
 function extractTags() {
+    if (!fs.existsSync(summaryFilePath)) {
+        return [];
+    }
     try {
         const summary = JSON.parse(fs.readFileSync('./lerna-publish-summary.json', { encoding: 'utf8' }));
         return summary.map(({ packageName, version }) => [packageName, version].join('@'));
@@ -32637,13 +32641,13 @@ async function publish() {
         core.info('Skipping action as it was neither triggered through push nor workflow_dispatch.');
         return;
     }
-    const pr = await (0, github_1.getReleasePr)({ client, repo, sha });
+    const pr = eventName === 'push' ? await (0, github_1.getReleasePr)({ client, repo, sha }) : undefined;
     if (eventName === 'push' && !pr) {
         core.info('Skipping action as the pushed commit is not a release commit.');
         return;
     }
-    if (pr && requiredRulesets.length > 0) {
-        const publishBranch = pr.base.ref;
+    if (requiredRulesets.length > 0) {
+        const publishBranch = pr?.base.ref ?? github.context.ref.replace(/^refs\/heads\//, '');
         const { data: rules } = await client.rest.repos.getBranchRules({
             ...repo,
             branch: publishBranch,
@@ -32654,6 +32658,8 @@ async function publish() {
             core.setFailed(`Publishing from "${publishBranch}" is only possible if it is protected by the following rulesets: ${missing.join(', ')}`);
             return;
         }
+    }
+    if (pr) {
         core.info(`Checking out ${pr.html_url} to avoid publishing more recent changes.`);
         await (0, git_1.checkoutPr)({ pr, client });
     }
