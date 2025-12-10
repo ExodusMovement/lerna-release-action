@@ -3,7 +3,7 @@ import * as github from '@actions/github'
 import retry from 'p-retry'
 
 import { Repo } from './types'
-import { isHttpError, unwrapErrorMessage } from './errors'
+import { unwrapErrorMessage } from './errors'
 import { RELEASE_PR_LABEL } from '../constants'
 
 export type GithubClient = ReturnType<typeof github.getOctokit>
@@ -140,10 +140,6 @@ async function createRef({ client, ref, sha, repo }: CreateRefParams) {
   } catch (e) {
     if (e instanceof Error && e.message.includes('Reference already exists')) {
       return
-    }
-
-    if (isHttpError(e)) {
-      core.error(JSON.stringify(e.response))
     }
 
     throw e

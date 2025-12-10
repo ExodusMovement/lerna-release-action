@@ -30332,17 +30332,13 @@ exports.extractTags = extractTags;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.isHttpError = exports.unwrapErrorMessage = void 0;
+exports.unwrapErrorMessage = void 0;
 const unwrapErrorMessage = (error, defaultMessage) => {
     if (error instanceof Error)
         return error.message;
     return defaultMessage;
 };
 exports.unwrapErrorMessage = unwrapErrorMessage;
-function isHttpError(error) {
-    return error instanceof Error && 'response' in error;
-}
-exports.isHttpError = isHttpError;
 
 
 /***/ }),
@@ -30525,9 +30521,6 @@ async function createRef({ client, ref, sha, repo }) {
     catch (e) {
         if (e instanceof Error && e.message.includes('Reference already exists')) {
             return;
-        }
-        if ((0, errors_1.isHttpError)(e)) {
-            core.error(JSON.stringify(e.response));
         }
         throw e;
     }
