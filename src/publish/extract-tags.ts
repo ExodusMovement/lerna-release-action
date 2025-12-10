@@ -4,7 +4,7 @@ import { unwrapErrorMessage } from '../utils/errors'
 
 type PublishedVersion = {
   packageName: string
-  version: `v${string}`
+  version: string
 }
 
 const summaryFilePath = './lerna-publish-summary.json'
