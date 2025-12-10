@@ -30298,25 +30298,24 @@ exports.RELEASE_PR_LABEL = 'publish-on-merge';
 /***/ }),
 
 /***/ 4672:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.extractTags = void 0;
-const PUBLISH_SUCCESS_LINE_REGEX = /^lerna success published (\S+ \d+\.\d+\.\d+\S*)$/i;
-function extractTags(publishStdout) {
-    const lines = publishStdout.split('\n');
-    return lines
-        .map((line) => {
-        const trimmed = line.trim();
-        const [, match] = trimmed.match(PUBLISH_SUCCESS_LINE_REGEX) ?? [];
-        if (!match) {
-            return;
-        }
-        return match.replace(' ', '@');
-    })
-        .filter((value) => !!value);
+const fs = __nccwpck_require__(7561);
+const core = __nccwpck_require__(2186);
+const errors_1 = __nccwpck_require__(2579);
+function extractTags() {
+    try {
+        const summary = JSON.parse(fs.readFileSync('./lerna-publish-summary.json', { encoding: 'utf8' }));
+        return summary.map(({ packageName, version }) => [packageName, version].join('@'));
+    }
+    catch (e) {
+        core.error(`Unable to read tags: ${(0, errors_1.unwrapErrorMessage)(e, 'unknown error')}`);
+        throw new Error('Failed to extract tags');
+    }
 }
 exports.extractTags = extractTags;
 
@@ -30819,6 +30818,14 @@ module.exports = require("node:child_process");
 
 "use strict";
 module.exports = require("node:events");
+
+/***/ }),
+
+/***/ 7561:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:fs");
 
 /***/ }),
 
@@ -32651,29 +32658,22 @@ async function publish() {
         await (0, git_1.checkoutPr)({ pr, client });
     }
     core.info('Publishing yet unpublished packages');
-    const lernaArgs = [
-        'lerna',
-        'publish',
-        'from-package',
-        '--yes',
-        '--no-private',
-        '--git-head',
-        (0, git_1.getCommitSha)(),
-        '--no-git-reset',
-    ];
+    const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private', '--summary-file'];
     if (distTag) {
         lernaArgs.push('--dist-tag', distTag);
     }
-    const { stdout, stderr, status } = (0, node_child_process_1.spawnSync)('npx', lernaArgs, { encoding: 'utf8' });
+    const { stdout, stderr, status } = (0, node_child_process_1.spawnSync)('npx', lernaArgs, {
+        encoding: 'utf8',
+        maxBuffer: Number.MAX_SAFE_INTEGER,
+    });
+    const lernaOutput = stdout + stderr;
     if (status !== 0) {
         core.setFailed('Failed to publish some packages');
-        core.error(stderr);
-        core.error(stdout);
+        core.error(lernaOutput);
     }
-    core.info(stdout);
-    core.error(stderr);
+    core.debug(lernaOutput);
     core.info('Identifying published packages');
-    const tags = (0, extract_tags_1.extractTags)(stdout);
+    const tags = (0, extract_tags_1.extractTags)();
     if (tags.length === 0) {
         core.notice('No new packages versions found. Tagging aborted.');
         return;

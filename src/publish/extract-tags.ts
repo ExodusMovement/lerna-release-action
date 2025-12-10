@@ -1,17 +1,22 @@
-const PUBLISH_SUCCESS_LINE_REGEX = /^lerna success published (\S+ \d+\.\d+\.\d+\S*)$/i
+import * as fs from 'node:fs'
+import * as core from '@actions/core'
+import { unwrapErrorMessage } from '../utils/errors'
 
-export function extractTags(publishStdout: string) {
-  const lines = publishStdout.split('\n')
+type PublishedVersion = {
+  packageName: string
+  version: `v${string}`
+}
 
-  return lines
-    .map((line) => {
-      const trimmed = line.trim()
-      const [, match] = trimmed.match(PUBLISH_SUCCESS_LINE_REGEX) ?? []
-      if (!match) {
-        return
-      }
+export function extractTags() {
+  try {
+    const summary = JSON.parse(
+      fs.readFileSync('./lerna-publish-summary.json', { encoding: 'utf8' })
+    ) as PublishedVersion[]
 
-      return match.replace(' ', '@')
-    })
-    .filter((value): value is string => !!value)
+    return summary.map(({ packageName, version }) => [packageName, version].join('@'))
+  } catch (e) {
+    core.error(`Unable to read tags: ${unwrapErrorMessage(e, 'unknown error')}`)
+
+    throw new Error('Failed to extract tags')
+  }
 }

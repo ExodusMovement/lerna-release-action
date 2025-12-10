@@ -4,7 +4,7 @@ import * as github from '@actions/github'
 import { createTags, getReleasePr } from './utils/github'
 import { extractTags } from './publish/extract-tags'
 import { spawnSync } from 'node:child_process'
-import { checkoutPr, getCommitSha } from './utils/git'
+import { checkoutPr } from './utils/git'
 
 export async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
@@ -48,33 +48,28 @@ export async function publish() {
 
   core.info('Publishing yet unpublished packages')
 
-  const lernaArgs = [
-    'lerna',
-    'publish',
-    'from-package',
-    '--yes',
-    '--no-private',
-    '--git-head',
-    getCommitSha(),
-    '--no-git-reset',
-  ]
+  const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private', '--summary-file']
 
   if (distTag) {
     lernaArgs.push('--dist-tag', distTag)
   }
 
-  const { stdout, stderr, status } = spawnSync('npx', lernaArgs, { encoding: 'utf8' })
+  const { stdout, stderr, status } = spawnSync('npx', lernaArgs, {
+    encoding: 'utf8',
+    maxBuffer: Number.MAX_SAFE_INTEGER,
+  })
+
+  const lernaOutput = stdout + stderr
+
   if (status !== 0) {
     core.setFailed('Failed to publish some packages')
-    core.error(stderr)
-    core.error(stdout)
+    core.error(lernaOutput)
   }
 
-  core.info(stdout)
-  core.error(stderr)
+  core.debug(lernaOutput)
 
   core.info('Identifying published packages')
-  const tags = extractTags(stdout)
+  const tags = extractTags()
 
   if (tags.length === 0) {
     core.notice('No new packages versions found. Tagging aborted.')
