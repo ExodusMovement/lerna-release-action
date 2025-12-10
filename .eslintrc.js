@@ -5,13 +5,13 @@ module.exports = {
       files: ['*.graphql'],
       parserOptions: {
         schema: './tools/schemas/github.graphql',
-        operations: ['./src/**/*.ts']
+        operations: ['./src/**/*.ts'],
       },
       extends: ['plugin:@graphql-eslint/operations-recommended'],
       rules: {
         '@graphql-eslint/executable-definitions': 'off',
         '@graphql-eslint/require-id-when-available': 'off',
-      }
+      },
     },
     {
       files: ['*.{ts,tsx}'],
@@ -22,6 +22,7 @@ module.exports = {
       },
       rules: {
         'unicorn/prefer-top-level-await': 'off',
+        'unicorn/no-useless-undefined': 'off',
         'import/no-extraneous-dependencies': [
           'error',
           { devDependencies: ['src/utils/testing.ts', '**/*.spec.ts'] },

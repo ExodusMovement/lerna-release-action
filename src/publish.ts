@@ -1,10 +1,10 @@
 import * as core from '@actions/core'
-import { PublishInput as Input, RELEASE_PR_LABEL } from './constants'
+import { PublishInput as Input } from './constants'
 import * as github from '@actions/github'
-import { Label } from './utils/types'
-import { createTags } from './utils/github'
+import { createTags, getReleasePr } from './utils/github'
 import { extractTags } from './publish/extract-tags'
 import { spawnSync } from 'node:child_process'
+import { checkoutPr } from './utils/git'
 
 export async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
@@ -12,19 +12,16 @@ export async function publish() {
   const client = github.getOctokit(token)
   const distTag = core.getInput(Input.DistTag)
 
-  const {
-    repo,
-    eventName,
-    payload: { pull_request: pr },
-  } = github.context
+  const { repo, eventName, sha } = github.context
 
-  const sha = pr?.merge_commit_sha ?? github.context.sha
+  if (!['workflow_dispatch', 'push'].includes(eventName)) {
+    core.info('Skipping action as it was neither triggered through push nor workflow_dispatch.')
+    return
+  }
 
-  const isReleasePr = pr?.merged && pr.labels.some(({ name }: Label) => name === RELEASE_PR_LABEL)
-  if (!(eventName === 'workflow_dispatch' || isReleasePr)) {
-    core.info(
-      'Skipped action as it was neither triggered through workflow_dispatch or merging of a release PR'
-    )
+  const pr = eventName === 'push' ? await getReleasePr({ client, repo, sha }) : undefined
+  if (eventName === 'push' && !pr) {
+    core.info('Skipping action as the pushed commit is not a release commit.')
     return
   }
 
@@ -46,25 +43,35 @@ export async function publish() {
     }
   }
 
+  if (pr) {
+    core.info(`Checking out ${pr.html_url} to avoid publishing more recent changes.`)
+    await checkoutPr({ pr, client })
+  }
+
   core.info('Publishing yet unpublished packages')
 
-  const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private']
+  const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private', '--summary-file']
 
   if (distTag) {
     lernaArgs.push('--dist-tag', distTag)
   }
 
-  const { stdout, stderr, status } = spawnSync('npx', lernaArgs, { encoding: 'utf8' })
+  const { stdout, stderr, status } = spawnSync('npx', lernaArgs, {
+    encoding: 'utf8',
+    maxBuffer: Number.MAX_SAFE_INTEGER,
+  })
+
+  const lernaOutput = stdout + stderr
+
   if (status !== 0) {
     core.setFailed('Failed to publish some packages')
-    core.error(stderr)
-    core.error(stdout)
+    core.error(lernaOutput)
   }
 
-  core.debug(stdout)
+  core.debug(lernaOutput)
 
   core.info('Identifying published packages')
-  const tags = extractTags(stdout)
+  const tags = extractTags()
 
   if (tags.length === 0) {
     core.notice('No new packages versions found. Tagging aborted.')

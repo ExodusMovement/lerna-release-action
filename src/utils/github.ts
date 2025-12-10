@@ -4,6 +4,7 @@ import retry from 'p-retry'
 
 import { Repo } from './types'
 import { unwrapErrorMessage } from './errors'
+import { RELEASE_PR_LABEL } from '../constants'
 
 export type GithubClient = ReturnType<typeof github.getOctokit>
 
@@ -122,6 +123,29 @@ export async function createPullRequest({
   return response.data
 }
 
+type CreateRefParams = {
+  client: GithubClient
+  repo: Repo
+  sha: string
+  ref: string
+}
+
+async function createRef({ client, ref, sha, repo }: CreateRefParams) {
+  try {
+    await client.rest.git.createRef({
+      ...repo,
+      ref,
+      sha,
+    })
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('Reference already exists')) {
+      return
+    }
+
+    throw e
+  }
+}
+
 type CreateTagsParams = {
   client: GithubClient
   repo: Repo
@@ -134,21 +158,13 @@ export async function createTags({ client, repo, sha, tags }: CreateTagsParams) 
     tags.map((tag) => {
       const ref = `refs/tags/${tag.replace(/\r/, '')}`
 
-      const createTag = async () => {
-        try {
-          await client.rest.git.createRef({
-            ...repo,
-            ref,
-            sha,
-          })
-        } catch (e) {
-          if (e instanceof Error && e.message.includes('Reference already exists')) {
-            return
-          }
-
-          throw e
-        }
-      }
+      const createTag = () =>
+        createRef({
+          client,
+          repo,
+          sha,
+          ref,
+        })
 
       return retry(createTag, {
         retries: 5,
@@ -252,4 +268,19 @@ export async function getDefaultBranch({ client, repo }: GetDefaultBranchParams)
   } = await client.rest.repos.get(repo)
 
   return defaultBranch
+}
+
+type GetReleasePrParams = {
+  client: GithubClient
+  repo: Repo
+  sha: string
+}
+
+export async function getReleasePr({ client, repo, sha }: GetReleasePrParams) {
+  const { data } = await client.rest.repos.listPullRequestsAssociatedWithCommit({
+    ...repo,
+    commit_sha: sha,
+  })
+
+  return data.find((pr) => pr.merged_at && pr.labels.some(({ name }) => name === RELEASE_PR_LABEL))
 }

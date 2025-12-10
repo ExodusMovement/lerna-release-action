@@ -84540,10 +84540,11 @@ exports.readJson = readJson;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.getBranch = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
+exports.checkoutPr = exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
 const process_1 = __nccwpck_require__(9239);
 const objects_1 = __nccwpck_require__(8151);
 const assert = __nccwpck_require__(8061);
+const core = __nccwpck_require__(2186);
 const PATH_CHARACTERS = /^[\w./-]+$/;
 function add(pathSpecs) {
     assert(pathSpecs.every((it) => !it.startsWith('-') && PATH_CHARACTERS.test(it)), 'Options are not allowed. Please supply paths to the files you want to add only.');
@@ -84570,11 +84571,6 @@ function switchToBranch(branch) {
     (0, process_1.spawnSync)('git', ['switch', '--create', branch]);
 }
 exports.switchToBranch = switchToBranch;
-function getBranch() {
-    const stdout = (0, process_1.spawnSync)('git', ['branch', '--show-current']);
-    return stdout.toString().replaceAll('\n', '').trim();
-}
-exports.getBranch = getBranch;
 function getTags(commit) {
     const tags = (0, process_1.spawnSync)('git', ['tag', '--contains', commit]);
     return tags.trim().split('\n');
@@ -84616,6 +84612,20 @@ function configureUser({ name, email }) {
     (0, process_1.spawnSync)('git', ['config', 'user.email', email]);
 }
 exports.configureUser = configureUser;
+async function checkoutPr({ pr }) {
+    core.info(`Pulling +refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`);
+    // Fetch PR head ref which is available even if the branch was deleted
+    const stdout = (0, process_1.spawnSync)('git', [
+        'fetch',
+        'origin',
+        `+refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`,
+    ]);
+    core.debug(stdout);
+    const branchName = `pr-${pr.number}`;
+    (0, process_1.spawnSync)('git', ['checkout', '-B', branchName, pr.head.sha]);
+    core.info(`HEAD is ${getCommitSha()}`);
+}
+exports.checkoutPr = checkoutPr;
 
 
 /***/ }),
@@ -84626,10 +84636,11 @@ exports.configureUser = configureUser;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
+exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
 const p_retry_1 = __nccwpck_require__(2548);
 const errors_1 = __nccwpck_require__(2579);
+const constants_1 = __nccwpck_require__(9042);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
     core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
     const response = await client.rest.pulls.create({
@@ -84690,24 +84701,30 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
     return response.data;
 }
 exports.createPullRequest = createPullRequest;
+async function createRef({ client, ref, sha, repo }) {
+    try {
+        await client.rest.git.createRef({
+            ...repo,
+            ref,
+            sha,
+        });
+    }
+    catch (e) {
+        if (e instanceof Error && e.message.includes('Reference already exists')) {
+            return;
+        }
+        throw e;
+    }
+}
 async function createTags({ client, repo, sha, tags }) {
     await Promise.all(tags.map((tag) => {
         const ref = `refs/tags/${tag.replace(/\r/, '')}`;
-        const createTag = async () => {
-            try {
-                await client.rest.git.createRef({
-                    ...repo,
-                    ref,
-                    sha,
-                });
-            }
-            catch (e) {
-                if (e instanceof Error && e.message.includes('Reference already exists')) {
-                    return;
-                }
-                throw e;
-            }
-        };
+        const createTag = () => createRef({
+            client,
+            repo,
+            sha,
+            ref,
+        });
         return (0, p_retry_1.default)(createTag, {
             retries: 5,
             onFailedAttempt: (error) => {
@@ -84765,6 +84782,14 @@ async function getDefaultBranch({ client, repo }) {
     return defaultBranch;
 }
 exports.getDefaultBranch = getDefaultBranch;
+async function getReleasePr({ client, repo, sha }) {
+    const { data } = await client.rest.repos.listPullRequestsAssociatedWithCommit({
+        ...repo,
+        commit_sha: sha,
+    });
+    return data.find((pr) => pr.merged_at && pr.labels.some(({ name }) => name === constants_1.RELEASE_PR_LABEL));
+}
+exports.getReleasePr = getReleasePr;
 
 
 /***/ }),
