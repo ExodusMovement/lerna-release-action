@@ -30329,13 +30329,17 @@ exports.extractTags = extractTags;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.unwrapErrorMessage = void 0;
+exports.isHttpError = exports.unwrapErrorMessage = void 0;
 const unwrapErrorMessage = (error, defaultMessage) => {
     if (error instanceof Error)
         return error.message;
     return defaultMessage;
 };
 exports.unwrapErrorMessage = unwrapErrorMessage;
+function isHttpError(error) {
+    return error instanceof Error && 'response' in error;
+}
+exports.isHttpError = isHttpError;
 
 
 /***/ }),
@@ -30346,10 +30350,11 @@ exports.unwrapErrorMessage = unwrapErrorMessage;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.getBranch = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
+exports.checkoutPr = exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
 const process_1 = __nccwpck_require__(9239);
 const objects_1 = __nccwpck_require__(8151);
 const assert = __nccwpck_require__(8061);
+const core = __nccwpck_require__(2186);
 const PATH_CHARACTERS = /^[\w./-]+$/;
 function add(pathSpecs) {
     assert(pathSpecs.every((it) => !it.startsWith('-') && PATH_CHARACTERS.test(it)), 'Options are not allowed. Please supply paths to the files you want to add only.');
@@ -30376,11 +30381,6 @@ function switchToBranch(branch) {
     (0, process_1.spawnSync)('git', ['switch', '--create', branch]);
 }
 exports.switchToBranch = switchToBranch;
-function getBranch() {
-    const stdout = (0, process_1.spawnSync)('git', ['branch', '--show-current']);
-    return stdout.toString().replaceAll('\n', '').trim();
-}
-exports.getBranch = getBranch;
 function getTags(commit) {
     const tags = (0, process_1.spawnSync)('git', ['tag', '--contains', commit]);
     return tags.trim().split('\n');
@@ -30422,6 +30422,20 @@ function configureUser({ name, email }) {
     (0, process_1.spawnSync)('git', ['config', 'user.email', email]);
 }
 exports.configureUser = configureUser;
+async function checkoutPr({ pr }) {
+    core.info(`Pulling +refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`);
+    // Fetch PR head ref which is available even if the branch was deleted
+    const stdout = (0, process_1.spawnSync)('git', [
+        'fetch',
+        'origin',
+        `+refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`,
+    ]);
+    core.debug(stdout);
+    const branchName = `pr-${pr.number}`;
+    (0, process_1.spawnSync)('git', ['checkout', '-B', branchName, pr.head.sha]);
+    core.info(`HEAD is ${getCommitSha()}`);
+}
+exports.checkoutPr = checkoutPr;
 
 
 /***/ }),
@@ -30497,24 +30511,33 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
     return response.data;
 }
 exports.createPullRequest = createPullRequest;
+async function createRef({ client, ref, sha, repo }) {
+    try {
+        await client.rest.git.createRef({
+            ...repo,
+            ref,
+            sha,
+        });
+    }
+    catch (e) {
+        if (e instanceof Error && e.message.includes('Reference already exists')) {
+            return;
+        }
+        if ((0, errors_1.isHttpError)(e)) {
+            core.error(JSON.stringify(e.response));
+        }
+        throw e;
+    }
+}
 async function createTags({ client, repo, sha, tags }) {
     await Promise.all(tags.map((tag) => {
         const ref = `refs/tags/${tag.replace(/\r/, '')}`;
-        const createTag = async () => {
-            try {
-                await client.rest.git.createRef({
-                    ...repo,
-                    ref,
-                    sha,
-                });
-            }
-            catch (e) {
-                if (e instanceof Error && e.message.includes('Reference already exists')) {
-                    return;
-                }
-                throw e;
-            }
-        };
+        const createTag = () => createRef({
+            client,
+            repo,
+            sha,
+            ref,
+        });
         return (0, p_retry_1.default)(createTag, {
             retries: 5,
             onFailedAttempt: (error) => {
@@ -32624,11 +32647,20 @@ async function publish() {
             core.setFailed(`Publishing from "${publishBranch}" is only possible if it is protected by the following rulesets: ${missing.join(', ')}`);
             return;
         }
-        core.info(`Checking out ${pr.url} to avoid publishing more recent changes.`);
-        (0, git_1.checkout)(pr.head.sha);
+        core.info(`Checking out ${pr.html_url} to avoid publishing more recent changes.`);
+        await (0, git_1.checkoutPr)({ pr, client });
     }
     core.info('Publishing yet unpublished packages');
-    const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private'];
+    const lernaArgs = [
+        'lerna',
+        'publish',
+        'from-package',
+        '--yes',
+        '--no-private',
+        '--git-head',
+        (0, git_1.getCommitSha)(),
+        '--no-git-reset',
+    ];
     if (distTag) {
         lernaArgs.push('--dist-tag', distTag);
     }
@@ -32638,7 +32670,8 @@ async function publish() {
         core.error(stderr);
         core.error(stdout);
     }
-    core.debug(stdout);
+    core.info(stdout);
+    core.error(stderr);
     core.info('Identifying published packages');
     const tags = (0, extract_tags_1.extractTags)(stdout);
     if (tags.length === 0) {

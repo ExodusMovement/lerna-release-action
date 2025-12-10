@@ -4,7 +4,7 @@ import * as github from '@actions/github'
 import { createTags, getReleasePr } from './utils/github'
 import { extractTags } from './publish/extract-tags'
 import { spawnSync } from 'node:child_process'
-import { checkout } from './utils/git'
+import { checkoutPr, getCommitSha } from './utils/git'
 
 export async function publish() {
   const token = core.getInput(Input.GithubToken, { required: true })
@@ -42,13 +42,22 @@ export async function publish() {
       return
     }
 
-    core.info(`Checking out ${pr.url} to avoid publishing more recent changes.`)
-    checkout(pr.head.sha)
+    core.info(`Checking out ${pr.html_url} to avoid publishing more recent changes.`)
+    await checkoutPr({ pr, client })
   }
 
   core.info('Publishing yet unpublished packages')
 
-  const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private']
+  const lernaArgs = [
+    'lerna',
+    'publish',
+    'from-package',
+    '--yes',
+    '--no-private',
+    '--git-head',
+    getCommitSha(),
+    '--no-git-reset',
+  ]
 
   if (distTag) {
     lernaArgs.push('--dist-tag', distTag)
@@ -61,7 +70,8 @@ export async function publish() {
     core.error(stdout)
   }
 
-  core.debug(stdout)
+  core.info(stdout)
+  core.error(stderr)
 
   core.info('Identifying published packages')
   const tags = extractTags(stdout)

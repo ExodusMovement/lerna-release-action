@@ -1,6 +1,11 @@
 import { spawnSync } from './process'
 import { flagsAsArguments } from './objects'
 import * as assert from 'node:assert'
+import * as core from '@actions/core'
+import { GithubClient } from './github'
+import { getPackagePaths, parsePackageFiles } from '@exodus/lerna-utils'
+import * as fs from 'fs'
+import { dirname } from 'path'
 
 const PATH_CHARACTERS = /^[\w./-]+$/
 
@@ -47,11 +52,6 @@ export function pushHeadToOrigin() {
 
 export function switchToBranch(branch: string) {
   spawnSync('git', ['switch', '--create', branch])
-}
-
-export function getBranch(): string {
-  const stdout = spawnSync('git', ['branch', '--show-current'])
-  return stdout.toString().replaceAll('\n', '').trim()
 }
 
 export function getTags(commit: string): string[] {
@@ -105,4 +105,30 @@ type ConfigureUserParams = {
 export function configureUser({ name, email }: ConfigureUserParams) {
   spawnSync('git', ['config', 'user.name', name])
   spawnSync('git', ['config', 'user.email', email])
+}
+
+type CheckoutPrParams = {
+  client: GithubClient
+  pr: {
+    number: number
+    head: {
+      sha: string
+    }
+  }
+}
+
+export async function checkoutPr({ pr }: CheckoutPrParams) {
+  core.info(`Pulling +refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`)
+  // Fetch PR head ref which is available even if the branch was deleted
+  const stdout = spawnSync('git', [
+    'fetch',
+    'origin',
+    `+refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`,
+  ])
+
+  core.debug(stdout)
+
+  const branchName = `pr-${pr.number}`
+  spawnSync('git', ['checkout', '-B', branchName, pr.head.sha])
+  core.info(`HEAD is ${getCommitSha()}`)
 }

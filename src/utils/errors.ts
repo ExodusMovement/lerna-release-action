@@ -3,3 +3,11 @@ export const unwrapErrorMessage = (error: unknown, defaultMessage: string) => {
 
   return defaultMessage
 }
+
+type HttpError = {
+  response: Response
+}
+
+export function isHttpError(error: unknown): error is HttpError {
+  return error instanceof Error && 'response' in error
+}
