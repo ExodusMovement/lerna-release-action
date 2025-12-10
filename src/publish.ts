@@ -19,14 +19,14 @@ export async function publish() {
     return
   }
 
-  const pr = await getReleasePr({ client, repo, sha })
+  const pr = eventName === 'push' ? await getReleasePr({ client, repo, sha }) : undefined
   if (eventName === 'push' && !pr) {
     core.info('Skipping action as the pushed commit is not a release commit.')
     return
   }
 
-  if (pr && requiredRulesets.length > 0) {
-    const publishBranch = pr.base.ref
+  if (requiredRulesets.length > 0) {
+    const publishBranch = pr?.base.ref ?? github.context.ref.replace(/^refs\/heads\//, '')
     const { data: rules } = await client.rest.repos.getBranchRules({
       ...repo,
       branch: publishBranch,
@@ -41,7 +41,9 @@ export async function publish() {
       )
       return
     }
+  }
 
+  if (pr) {
     core.info(`Checking out ${pr.html_url} to avoid publishing more recent changes.`)
     await checkoutPr({ pr, client })
   }

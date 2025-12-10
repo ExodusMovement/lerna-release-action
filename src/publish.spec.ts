@@ -1,10 +1,11 @@
 import * as github from '@actions/github'
-import { createTags, GithubClient } from './utils/github'
+import { createTags, getReleasePr, GithubClient } from './utils/github'
 import { publish } from './publish'
 import { spawnSync } from 'node:child_process'
 import * as core from '@actions/core'
 import { when } from 'jest-when'
-import { PUBLISH_OUTPUT_WITH_FAILURE } from './__fixtures__/publish'
+import { checkoutPr } from './utils/git'
+import { extractTags } from './publish/extract-tags'
 
 jest.mock('node:child_process', () => ({
   spawnSync: jest.fn(() => ({ stdout: '', status: 0 })),
@@ -12,6 +13,15 @@ jest.mock('node:child_process', () => ({
 
 jest.mock('./utils/github', () => ({
   createTags: jest.fn(),
+  getReleasePr: jest.fn(),
+}))
+
+jest.mock('./utils/git', () => ({
+  checkoutPr: jest.fn(),
+}))
+
+jest.mock('./publish/extract-tags', () => ({
+  extractTags: jest.fn().mockReturnValue([]),
 }))
 
 jest.mock('@actions/core', () => ({
@@ -32,6 +42,8 @@ describe('publish', () => {
     repo: 'batcave',
   }
 
+  const commitSha = 'abc123'
+
   let client: GithubClient
 
   beforeAll(() => {
@@ -41,6 +53,18 @@ describe('publish', () => {
   })
 
   beforeEach(() => {
+    when(getReleasePr)
+      .calledWith(
+        expect.objectContaining({
+          sha: commitSha,
+        })
+      )
+      .mockResolvedValue({
+        base: {
+          ref: 'master',
+        },
+      } as never)
+
     client = {
       rest: {
         repos: {
@@ -52,18 +76,9 @@ describe('publish', () => {
     Object.defineProperty(github, 'context', {
       value: {
         repo,
-        eventName: 'pull_request',
-        payload: {
-          pull_request: {
-            merged: true,
-            merge_commit_sha: 'abc123',
-            labels: [{ name: 'publish-on-merge' }, { name: 'docs' }],
-            base: {
-              ref: 'master',
-            },
-          },
-        },
-        sha: 'abc123',
+        eventName: 'push',
+        payload: {},
+        sha: commitSha,
       },
     })
 
@@ -74,13 +89,21 @@ describe('publish', () => {
     } as never)
   })
 
+  test('aborts when no pull request found for push event', async () => {
+    jest.mocked(getReleasePr).mockResolvedValue(undefined)
+    await publish()
+
+    expect(spawnSync).not.toHaveBeenCalled()
+    expect(core.info).toHaveBeenCalledWith(expect.stringMatching(/skipping/i))
+  })
+
   test('aborts when no new packages', async () => {
     await publish()
 
     expect(spawnSync).toHaveBeenCalledWith(
       'npx',
-      ['lerna', 'publish', 'from-package', '--yes', '--no-private'],
-      { encoding: 'utf8' }
+      ['lerna', 'publish', 'from-package', '--yes', '--no-private', '--summary-file'],
+      expect.objectContaining({ encoding: 'utf8' })
     )
     expect(core.notice).toHaveBeenCalledWith(expect.stringMatching(/aborted/))
   })
@@ -120,10 +143,21 @@ describe('publish', () => {
 
     await publish()
 
+    expect(checkoutPr).toHaveBeenCalledWith(
+      expect.objectContaining({
+        client,
+        pr: {
+          base: expect.objectContaining({
+            ref: 'master',
+          }),
+        },
+      })
+    )
+
     expect(spawnSync).toHaveBeenCalledWith(
       'npx',
-      ['lerna', 'publish', 'from-package', '--yes', '--no-private'],
-      { encoding: 'utf8' }
+      ['lerna', 'publish', 'from-package', '--yes', '--no-private', '--summary-file'],
+      expect.objectContaining({ encoding: 'utf8' })
     )
   })
 
@@ -142,10 +176,12 @@ describe('publish', () => {
       .mockReturnValue(['42', '73'])
 
     jest.mocked(spawnSync).mockReturnValue({
-      stdout: PUBLISH_OUTPUT_WITH_FAILURE,
+      stdout: '',
       stderr: '',
       status: 4,
     } as never)
+
+    jest.mocked(extractTags).mockReturnValue(['@exodus/pay-schemas@2.8.0'])
 
     await publish()
 
@@ -185,8 +221,8 @@ describe('publish', () => {
 
     expect(spawnSync).toHaveBeenCalledWith(
       'npx',
-      ['lerna', 'publish', 'from-package', '--yes', '--no-private'],
-      { encoding: 'utf8' }
+      ['lerna', 'publish', 'from-package', '--yes', '--no-private', '--summary-file'],
+      expect.objectContaining({ encoding: 'utf8' })
     )
   })
 

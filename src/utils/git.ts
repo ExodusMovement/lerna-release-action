@@ -3,9 +3,6 @@ import { flagsAsArguments } from './objects'
 import * as assert from 'node:assert'
 import * as core from '@actions/core'
 import { GithubClient } from './github'
-import { getPackagePaths, parsePackageFiles } from '@exodus/lerna-utils'
-import * as fs from 'fs'
-import { dirname } from 'path'
 
 const PATH_CHARACTERS = /^[\w./-]+$/
 
