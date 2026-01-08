@@ -80,7 +80,7 @@ jobs:
 
 ### Version dispatch workflow
 
-Automatically start versioning of packages when a PR is merged. Requires using `ExodusMovment/lerna-package-name-action` to label PRs, as these package labels will be used to determine the packages to be versioned.
+Automatically start versioning of packages when a PR is merged. Requires using `ExodusMovement/lerna-package-name-action` to label PRs, as these package labels will be used to determine the packages to be versioned.
 
 ```yaml
 name: Version dispatch
