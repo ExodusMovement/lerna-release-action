@@ -85135,7 +85135,7 @@ async function updateJson(relativePath, update, { filesystem = fs } = {}) {
     if (!json)
         return;
     const updated = await update(json);
-    await filesystem.promises.writeFile(relativePath, JSON.stringify(updated));
+    await filesystem.promises.writeFile(relativePath, JSON.stringify(updated, null, 2));
 }
 async function revertUnwantedDependencyChanges({ packages: selected, previousPackageContents, filesystem = fs, }) {
     const all = await (0, lerna_utils_1.getPackagePaths)({ filesystem });
