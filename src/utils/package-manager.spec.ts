@@ -10,7 +10,10 @@ jest.mock('child_process', () => ({
 describe('updateLockfile', () => {
   let fs: Volume
 
-  function setup(packageManager?: 'npm' | 'yarn' | 'pnpm', extraFiles: Record<string, string> = {}) {
+  function setup(
+    packageManager?: 'npm' | 'yarn' | 'pnpm',
+    extraFiles: Record<string, string> = {}
+  ) {
     const filenames = {
       npm: 'package-lock.json',
       yarn: 'yarn.lock',

@@ -5,7 +5,11 @@ import { spawnSync } from './process'
 
 const packageManagers = {
   yarn: { lockfile: 'yarn.lock', command: 'yarn', args: ['--no-immutable'] },
-  pnpm: { lockfile: 'pnpm-lock.yaml', command: 'pnpm', args: ['install', '--frozen-lockfile', 'false'] },
+  pnpm: {
+    lockfile: 'pnpm-lock.yaml',
+    command: 'pnpm',
+    args: ['install', '--frozen-lockfile', 'false'],
+  },
   npm: { lockfile: 'package-lock.json', command: 'npm', args: ['install'] },
 } as const
 
@@ -21,14 +25,16 @@ function readJson<T>(relativePath: string, filesystem: Filesystem): T | undefine
   try {
     return JSON.parse(filesystem.readFileSync(relativePath, 'utf8')) as T
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
-
-    return
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      // Ignore malformed JSON and non-ENOENT read failures to preserve prior behavior.
+    }
   }
 }
 
 function parsePackageManager(packageManager?: string) {
-  return packageManager?.match(/^(pnpm|yarn|npm)(?:@|$)/)?.[1] as keyof typeof packageManagers | undefined
+  return packageManager?.match(/^(pnpm|yarn|npm)(?:@|$)/)?.[1] as
+    | keyof typeof packageManagers
+    | undefined
 }
 
 function detectPackageManager(filesystem: Filesystem) {
@@ -58,8 +64,6 @@ export function updateLockfile({ filesystem = fs }: UpdateLockfileParams = {}) {
     )
   }
 
-  core.info(
-    `Refreshing lockfile with ${packageManager.command} ${packageManager.args.join(' ')}`
-  )
+  core.info(`Refreshing lockfile with ${packageManager.command} ${packageManager.args.join(' ')}`)
   spawnSync(packageManager.command, [...packageManager.args])
 }

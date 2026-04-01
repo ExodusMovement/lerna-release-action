@@ -84833,7 +84833,11 @@ const core = __nccwpck_require__(2186);
 const process_1 = __nccwpck_require__(9239);
 const packageManagers = {
     yarn: { lockfile: 'yarn.lock', command: 'yarn', args: ['--no-immutable'] },
-    pnpm: { lockfile: 'pnpm-lock.yaml', command: 'pnpm', args: ['install', '--frozen-lockfile', 'false'] },
+    pnpm: {
+        lockfile: 'pnpm-lock.yaml',
+        command: 'pnpm',
+        args: ['install', '--frozen-lockfile', 'false'],
+    },
     npm: { lockfile: 'package-lock.json', command: 'npm', args: ['install'] },
 };
 const lockfileCommands = {
@@ -84846,9 +84850,9 @@ function readJson(relativePath, filesystem) {
         return JSON.parse(filesystem.readFileSync(relativePath, 'utf8'));
     }
     catch (error) {
-        if (error.code === 'ENOENT')
-            return;
-        return;
+        if (error.code !== 'ENOENT') {
+            // Ignore malformed JSON and non-ENOENT read failures to preserve prior behavior.
+        }
     }
 }
 function parsePackageManager(packageManager) {
