@@ -17,11 +17,11 @@ const lockfileCommands = {
 type UpdateLockfileParams = { filesystem?: Filesystem }
 
 function readJson<T>(relativePath: string, filesystem: Filesystem): T | undefined {
-  if (!filesystem.existsSync(relativePath)) return
-
   try {
     return JSON.parse(filesystem.readFileSync(relativePath, 'utf8')) as T
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+
     return
   }
 }
