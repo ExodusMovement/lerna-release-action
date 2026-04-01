@@ -1,4 +1,5 @@
 import * as fs from 'fs'
+import * as core from '@actions/core'
 import { Filesystem } from './types'
 import { spawnSync } from './process'
 
@@ -57,5 +58,8 @@ export function updateLockfile({ filesystem = fs }: UpdateLockfileParams = {}) {
     )
   }
 
+  core.info(
+    `Refreshing lockfile with ${packageManager.command} ${packageManager.args.join(' ')}`
+  )
   spawnSync(packageManager.command, [...packageManager.args])
 }

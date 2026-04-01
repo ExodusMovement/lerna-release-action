@@ -10,6 +10,7 @@ import {
   deleteTags,
   getCommitMessage,
   getCommitSha,
+  getStatusShort,
   pushHeadToOrigin,
   resetLastCommit,
   switchToBranch,
@@ -125,8 +126,23 @@ export default async function version({
 
   core.info('Reverting changes to dependencies bumped but not included in release')
   await revertUnwantedDependencyChanges({ packages, previousPackageContents })
-  updateLockfile()
-  commit({ flags: { all: true, amend: true, noEdit: true } })
+  core.info(`Git status before lockfile refresh:\n${getStatusShort() || '(clean)'}`)
+
+  try {
+    updateLockfile()
+  } catch (error) {
+    core.error(`Lockfile refresh failed. Git status:\n${getStatusShort() || '(clean)'}`)
+    throw error
+  }
+
+  core.info(`Git status before amend:\n${getStatusShort() || '(clean)'}`)
+
+  try {
+    commit({ flags: { all: true, amend: true, noEdit: true } })
+  } catch (error) {
+    core.error(`Amend commit failed. Git status:\n${getStatusShort() || '(clean)'}`)
+    throw error
+  }
 
   core.info(`Pushing changes to ${branch}`)
   pushHeadToOrigin()
