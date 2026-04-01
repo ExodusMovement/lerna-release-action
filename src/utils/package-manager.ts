@@ -38,11 +38,7 @@ function detectPackageManager(filesystem: Filesystem) {
     parsePackageManager(rootPackageJson?.packageManager) ?? lernaJson?.npmClient
 
   if (configuredPackageManager) {
-    const packageManager = packageManagers[configuredPackageManager]
-
-    if (filesystem.existsSync(packageManager.lockfile)) {
-      return packageManager
-    }
+    return packageManagers[configuredPackageManager]
   }
 
   for (const [lockfile, { command, args }] of Object.entries(lockfileCommands)) {
@@ -55,7 +51,11 @@ function detectPackageManager(filesystem: Filesystem) {
 export function updateLockfile({ filesystem = fs }: UpdateLockfileParams = {}) {
   const packageManager = detectPackageManager(filesystem)
 
-  if (packageManager) {
-    spawnSync(packageManager.command, [...packageManager.args])
+  if (!packageManager) {
+    throw new Error(
+      'Unable to determine package manager: expected packageManager/npmClient or a supported lockfile.'
+    )
   }
+
+  spawnSync(packageManager.command, [...packageManager.args])
 }

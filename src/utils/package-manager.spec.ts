@@ -87,11 +87,25 @@ describe('updateLockfile', () => {
     )
   })
 
-  it('should do nothing if no lockfile', () => {
+  it('should throw if package manager cannot be detected', () => {
     setup()
+
+    expect(() => updateLockfile({ filesystem: fs as never })).toThrow(
+      'Unable to determine package manager: expected packageManager/npmClient or a supported lockfile.'
+    )
+  })
+
+  it('should use configured package manager even if no lockfile exists', () => {
+    setup(undefined, {
+      'package.json': JSON.stringify({ packageManager: 'pnpm@10.32.1' }),
+    })
 
     updateLockfile({ filesystem: fs as never })
 
-    expect(spawnSync).not.toHaveBeenCalled()
+    expect(spawnSync).toHaveBeenCalledWith(
+      'pnpm',
+      ['install', '--frozen-lockfile', 'false'],
+      expect.anything()
+    )
   })
 })
