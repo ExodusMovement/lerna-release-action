@@ -84540,7 +84540,7 @@ exports.readJson = readJson;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.checkoutPr = exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
+exports.checkoutPr = exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getStatusShort = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
 const process_1 = __nccwpck_require__(9239);
 const objects_1 = __nccwpck_require__(8151);
 const assert = __nccwpck_require__(8061);
@@ -84590,6 +84590,10 @@ function getCommitMessage(commit) {
     return stdout.trim();
 }
 exports.getCommitMessage = getCommitMessage;
+function getStatusShort() {
+    return (0, process_1.spawnSync)('git', ['status', '--short']).trim();
+}
+exports.getStatusShort = getStatusShort;
 function checkout(ref) {
     (0, process_1.spawnSync)('git', ['checkout', ref]);
 }
@@ -84825,19 +84829,55 @@ exports.flagsAsArguments = flagsAsArguments;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.updateLockfile = void 0;
 const fs = __nccwpck_require__(7147);
+const core = __nccwpck_require__(2186);
 const process_1 = __nccwpck_require__(9239);
+const packageManagers = {
+    yarn: { lockfile: 'yarn.lock', command: 'yarn', args: ['--no-immutable'] },
+    pnpm: {
+        lockfile: 'pnpm-lock.yaml',
+        command: 'pnpm',
+        args: ['install', '--frozen-lockfile', 'false'],
+    },
+    npm: { lockfile: 'package-lock.json', command: 'npm', args: ['install'] },
+};
 const lockfileCommands = {
     'yarn.lock': { command: 'yarn', args: ['--no-immutable'] },
     'pnpm-lock.yaml': { command: 'pnpm', args: ['install', '--frozen-lockfile', 'false'] },
     'package-lock.json': { command: 'npm', args: ['install'] },
 };
-function updateLockfile({ filesystem = fs } = {}) {
-    for (const [lockfile, { command, args }] of Object.entries(lockfileCommands)) {
-        if (filesystem.existsSync(lockfile)) {
-            (0, process_1.spawnSync)(command, args);
-            return;
+function readJson(relativePath, filesystem) {
+    try {
+        return JSON.parse(filesystem.readFileSync(relativePath, 'utf8'));
+    }
+    catch (error) {
+        if (error.code !== 'ENOENT') {
+            // Ignore malformed JSON and non-ENOENT read failures to preserve prior behavior.
         }
     }
+}
+function parsePackageManager(packageManager) {
+    return packageManager?.match(/^(pnpm|yarn|npm)(?:@|$)/)?.[1];
+}
+function detectPackageManager(filesystem) {
+    const rootPackageJson = readJson('package.json', filesystem);
+    const lernaJson = readJson('lerna.json', filesystem);
+    const configuredPackageManager = parsePackageManager(rootPackageJson?.packageManager) ?? lernaJson?.npmClient;
+    if (configuredPackageManager) {
+        return packageManagers[configuredPackageManager];
+    }
+    for (const [lockfile, { command, args }] of Object.entries(lockfileCommands)) {
+        if (filesystem.existsSync(lockfile)) {
+            return { command, args };
+        }
+    }
+}
+function updateLockfile({ filesystem = fs } = {}) {
+    const packageManager = detectPackageManager(filesystem);
+    if (!packageManager) {
+        throw new Error('Unable to determine package manager: expected packageManager/npmClient or a supported lockfile.');
+    }
+    core.info(`Refreshing lockfile with ${packageManager.command} ${packageManager.args.join(' ')}`);
+    (0, process_1.spawnSync)(packageManager.command, [...packageManager.args]);
 }
 exports.updateLockfile = updateLockfile;
 
@@ -96183,8 +96223,22 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     }
     core.info('Reverting changes to dependencies bumped but not included in release');
     await (0, revert_unwanted_dependency_changes_1.default)({ packages, previousPackageContents });
-    (0, package_manager_1.updateLockfile)();
-    (0, git_1.commit)({ flags: { all: true, amend: true, noEdit: true } });
+    core.info(`Git status before lockfile refresh:\n${(0, git_1.getStatusShort)() || '(clean)'}`);
+    try {
+        (0, package_manager_1.updateLockfile)();
+    }
+    catch (error) {
+        core.error(`Lockfile refresh failed. Git status:\n${(0, git_1.getStatusShort)() || '(clean)'}`);
+        throw error;
+    }
+    core.info(`Git status before amend:\n${(0, git_1.getStatusShort)() || '(clean)'}`);
+    try {
+        (0, git_1.commit)({ flags: { all: true, amend: true, noEdit: true } });
+    }
+    catch (error) {
+        core.error(`Amend commit failed. Git status:\n${(0, git_1.getStatusShort)() || '(clean)'}`);
+        throw error;
+    }
     core.info(`Pushing changes to ${branch}`);
     (0, git_1.pushHeadToOrigin)();
     core.info('Creating PR');

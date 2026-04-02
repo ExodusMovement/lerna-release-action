@@ -27,8 +27,10 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version-file: '.nvmrc'
+      - name: Enable package manager
+        run: corepack enable
       - name: Install dependencies
-        run: yarn install
+        run: corepack pnpm install --frozen-lockfile
       - uses: ExodusMovement/lerna-release-action/version@master
         name: Version
         with:
@@ -70,13 +72,17 @@ jobs:
     - uses: actions/setup-node@v3
       with:
         node-version-file: '.nvmrc'
+    - name: Enable package manager
+      run: corepack enable
     - name: Install dependencies
-      run: yarn install
+      run: corepack pnpm install --frozen-lockfile
     - name: Build
-      run: yarn build
+      run: corepack pnpm run build
     - name: Publish
       uses: ExodusMovement/lerna-release-action/publish@master
 ```
+
+When refreshing the lockfile after selective versioning, the action prefers the repository's declared package manager from the root `package.json#packageManager` or `lerna.json#npmClient`. If neither is present, it falls back to lockfile detection.
 
 ### Version dispatch workflow
 

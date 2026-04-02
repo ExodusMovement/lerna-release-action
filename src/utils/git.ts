@@ -70,6 +70,10 @@ export function getCommitMessage(commit: string): string {
   return stdout.trim()
 }
 
+export function getStatusShort(): string {
+  return spawnSync('git', ['status', '--short']).trim()
+}
+
 export function checkout(ref: string): void {
   spawnSync('git', ['checkout', ref])
 }
