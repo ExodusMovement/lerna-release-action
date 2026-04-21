@@ -62,7 +62,7 @@ async function updateJson<T>(
   if (!json) return
 
   const updated = await update(json)
-  await filesystem.promises.writeFile(relativePath, JSON.stringify(updated, null, 2))
+  await filesystem.promises.writeFile(relativePath, JSON.stringify(updated, null, 2) + '\n')
 }
 
 export default async function revertUnwantedDependencyChanges({
