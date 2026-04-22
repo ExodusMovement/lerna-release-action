@@ -29,6 +29,9 @@ inputs:
   base-branch:
     description: 'Branch to create the PR against. Defaults to the repository default branch.'
     required: false
+  format-command:
+    description: 'Optional command to format the generated CHANGELOG.md and package.json files before commit (e.g. "yarn prettier --write"). The touched files are appended as positional arguments. When unset, files are committed as produced by lerna/conventional-changelog, which may violate the repo formatter.'
+    required: false
 
 runs:
   using: 'node20'

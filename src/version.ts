@@ -30,6 +30,7 @@ import {
 } from './version/strategy'
 import updateChangelog from './version/update-changelog'
 import closePreviousPrs from './version/close-previous-prs'
+import { formatPackageFiles } from './utils/format'
 import { unwrapErrorMessage } from './utils/errors'
 import * as assert from 'assert'
 import { getDefaultBranch } from './utils/github'
@@ -55,6 +56,7 @@ export default async function version({
   assignee = core.getInput(Input.Assignee),
   committer = core.getInput(Input.Committer),
   baseBranch = core.getInput(Input.BaseBranch),
+  formatCommand = core.getInput(Input.FormatCommand),
 } = {}) {
   assertStrategy(versionStrategy)
   assert(
@@ -110,6 +112,7 @@ export default async function version({
 
   core.info('Resetting commit created by lerna to stage only selected packages')
   resetLastCommit({ flags: { mixed: true } })
+  formatPackageFiles({ formatCommand, packages })
   add(packages)
   commit({ message, body: tags.join('\n') })
 
@@ -120,6 +123,7 @@ export default async function version({
   if (versionStrategy !== VersionStrategy.ConventionalCommits) {
     core.info(`Static version strategy used. Trying to generate changelogs manually.`)
     await Promise.all(packages.map((packageDir) => updateChangelog(packageDir)))
+    formatPackageFiles({ formatCommand, packages })
     add(packages)
     commit({ message: 'chore: update changelogs' })
   }
@@ -134,6 +138,8 @@ export default async function version({
     core.error(`Lockfile refresh failed. Git status:\n${getStatusShort() || '(clean)'}`)
     throw error
   }
+
+  formatPackageFiles({ formatCommand, packages })
 
   core.info(`Git status before amend:\n${getStatusShort() || '(clean)'}`)
 
