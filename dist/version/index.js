@@ -84475,6 +84475,7 @@ var Input;
     Input["RequestReviewers"] = "request-reviewers";
     Input["Committer"] = "committer";
     Input["BaseBranch"] = "base-branch";
+    Input["FormatCommand"] = "format-command";
 })(Input = exports.Input || (exports.Input = {}));
 var PublishInput;
 (function (PublishInput) {
@@ -84508,6 +84509,33 @@ const unwrapErrorMessage = (error, defaultMessage) => {
     return defaultMessage;
 };
 exports.unwrapErrorMessage = unwrapErrorMessage;
+
+
+/***/ }),
+
+/***/ 6570:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.formatPackageFiles = void 0;
+const fs = __nccwpck_require__(7147);
+const path = __nccwpck_require__(1017);
+const core = __nccwpck_require__(2186);
+const process_1 = __nccwpck_require__(9239);
+const FORMATTED_FILES = ['CHANGELOG.md', 'package.json'];
+function formatPackageFiles({ formatCommand, packages, filesystem = fs }) {
+    if (!formatCommand?.trim())
+        return;
+    const files = packages.flatMap((packageDir) => FORMATTED_FILES.map((name) => path.join(packageDir, name)).filter((file) => filesystem.existsSync(file)));
+    if (files.length === 0)
+        return;
+    const [command, ...args] = formatCommand.trim().split(/\s+/);
+    core.info(`Formatting ${files.length} file(s) with \`${formatCommand}\``);
+    (0, process_1.spawnSync)(command, [...args, ...files]);
+}
+exports.formatPackageFiles = formatPackageFiles;
 
 
 /***/ }),
@@ -96162,6 +96190,7 @@ const create_pull_request_1 = __nccwpck_require__(6672);
 const strategy_1 = __nccwpck_require__(4741);
 const update_changelog_1 = __nccwpck_require__(8178);
 const close_previous_prs_1 = __nccwpck_require__(4171);
+const format_1 = __nccwpck_require__(6570);
 const errors_1 = __nccwpck_require__(2579);
 const assert = __nccwpck_require__(9491);
 const github_1 = __nccwpck_require__(1225);
@@ -96173,7 +96202,7 @@ if (require.main === require.cache[eval('__filename')]) {
         core.setFailed(String(error.message));
     });
 }
-async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), committer = core.getInput(constants_1.Input.Committer), baseBranch = core.getInput(constants_1.Input.BaseBranch), } = {}) {
+async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), committer = core.getInput(constants_1.Input.Committer), baseBranch = core.getInput(constants_1.Input.BaseBranch), formatCommand = core.getInput(constants_1.Input.FormatCommand), } = {}) {
     (0, strategy_1.assertStrategy)(versionStrategy);
     assert(!(draft && autoMerge), 'A pull-request can either be created as draft, or with auto-merge enabled, but not both at the same time.');
     const { actor, repo } = github.context;
@@ -96210,6 +96239,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     (0, git_1.switchToBranch)(branch);
     core.info('Resetting commit created by lerna to stage only selected packages');
     (0, git_1.resetLastCommit)({ flags: { mixed: true } });
+    (0, format_1.formatPackageFiles)({ formatCommand, packages });
     (0, git_1.add)(packages);
     (0, git_1.commit)({ message, body: tags.join('\n') });
     core.info('Deleting previous tags and cleaning up working directory');
@@ -96218,6 +96248,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     if (versionStrategy !== strategy_1.VersionStrategy.ConventionalCommits) {
         core.info(`Static version strategy used. Trying to generate changelogs manually.`);
         await Promise.all(packages.map((packageDir) => (0, update_changelog_1.default)(packageDir)));
+        (0, format_1.formatPackageFiles)({ formatCommand, packages });
         (0, git_1.add)(packages);
         (0, git_1.commit)({ message: 'chore: update changelogs' });
     }
@@ -96231,6 +96262,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
         core.error(`Lockfile refresh failed. Git status:\n${(0, git_1.getStatusShort)() || '(clean)'}`);
         throw error;
     }
+    (0, format_1.formatPackageFiles)({ formatCommand, packages });
     core.info(`Git status before amend:\n${(0, git_1.getStatusShort)() || '(clean)'}`);
     try {
         (0, git_1.commit)({ flags: { all: true, amend: true, noEdit: true } });

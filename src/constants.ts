@@ -10,6 +10,7 @@ export enum Input {
   RequestReviewers = 'request-reviewers',
   Committer = 'committer',
   BaseBranch = 'base-branch',
+  FormatCommand = 'format-command',
 }
 
 export enum PublishInput {
