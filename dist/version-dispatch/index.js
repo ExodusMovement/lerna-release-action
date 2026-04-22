@@ -30355,6 +30355,7 @@ var Input;
     Input["RequestReviewers"] = "request-reviewers";
     Input["Committer"] = "committer";
     Input["BaseBranch"] = "base-branch";
+    Input["FormatCommand"] = "format-command";
 })(Input = exports.Input || (exports.Input = {}));
 var PublishInput;
 (function (PublishInput) {
