@@ -30481,10 +30481,14 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
         }));
     }
     if (reviewers) {
-        promises.push(client.rest.pulls.requestReviewers({
+        promises.push(client.rest.pulls
+            .requestReviewers({
             ...repo,
             pull_number: response.data.number,
-            reviewers: assignees,
+            reviewers,
+        })
+            .catch((error) => {
+            core.warning(`Failed to request reviewers: ${(0, errors_1.unwrapErrorMessage)(error, 'for unknown reasons')}`);
         }));
     }
     if (autoMerge) {
