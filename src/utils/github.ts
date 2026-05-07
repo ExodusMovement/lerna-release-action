@@ -79,11 +79,17 @@ export async function createPullRequest({
 
   if (reviewers) {
     promises.push(
-      client.rest.pulls.requestReviewers({
-        ...repo,
-        pull_number: response.data.number,
-        reviewers: assignees,
-      })
+      client.rest.pulls
+        .requestReviewers({
+          ...repo,
+          pull_number: response.data.number,
+          reviewers,
+        })
+        .catch((error) => {
+          core.warning(
+            `Failed to request reviewers: ${unwrapErrorMessage(error, 'for unknown reasons')}`
+          )
+        })
     )
   }
 
