@@ -1,0 +1,46 @@
+name: 'Lerna release action: Commit-driven version dispatch'
+description: >
+  Inspect a merged PR's pre-squash commits, attribute each commit to workspace
+  packages by touched files, and dispatch the version workflow with a
+  per-package bump map. Use this in place of `version-dispatch` when a single
+  squash-merged PR may carry per-commit bumps of different levels for
+  different packages.
+
+inputs:
+  github-token:
+    description: 'Token used to read the PR, list its commits and trigger the version workflow.'
+    required: true
+  version-workflow-id:
+    description: 'Workflow file name to dispatch with the computed bumps.'
+    required: false
+    default: 'version.yml'
+  ref:
+    description: 'Ref the dispatched version workflow checks out.'
+    required: false
+    default: 'master'
+  exclude-labels:
+    description: 'Comma-separated list of PR labels that skip the dispatch entirely.'
+    required: false
+    default: 'skip-release'
+  dry-run:
+    description: "When 'true' the action only logs the computed bumps and does not dispatch."
+    required: false
+    default: 'false'
+  pr-number:
+    description: 'Optional PR number to inspect ad-hoc. Required for non-pull_request triggers (e.g. workflow_dispatch). When set, this PR is fetched from the REST API.'
+    required: false
+    default: ''
+
+outputs:
+  bumps:
+    description: 'JSON-encoded map from package name to bump level, computed from the PR commits.'
+  packages:
+    description: 'Comma-separated list of workspace package names with a non-empty bump.'
+
+runs:
+  using: 'node20'
+  main: '../dist/commit-driven-version-dispatch/index.js'
+author: 'ExodusMovement'
+branding:
+  icon: 'git-merge'
+  color: 'blue'
