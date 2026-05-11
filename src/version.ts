@@ -129,7 +129,7 @@ export default async function version({
       )
     }
 
-    commitsToReset = versionPackagesExplicit({ bumps, extraArgs: versionExtraArgs })
+    commitsToReset = versionPackagesExplicit({ bumps, packages })
   } else if (narrowedStrategy) {
     versionPackages({ extraArgs: versionExtraArgs, versionStrategy: narrowedStrategy })
   }
