@@ -24,8 +24,9 @@ export enum VersionDispatchInput {
   GithubToken = 'github-token',
   Ref = 'ref',
   VersionWorkflowId = 'version-workflow-id',
-  ExcludeCommitTypes = 'exclude-commit-types',
   ExcludeLabels = 'exclude-labels',
+  DryRun = 'dry-run',
+  PrNumber = 'pr-number',
 }
 
 export const RELEASE_PR_LABEL = 'publish-on-merge'

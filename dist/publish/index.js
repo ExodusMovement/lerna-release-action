@@ -30291,8 +30291,9 @@ var VersionDispatchInput;
     VersionDispatchInput["GithubToken"] = "github-token";
     VersionDispatchInput["Ref"] = "ref";
     VersionDispatchInput["VersionWorkflowId"] = "version-workflow-id";
-    VersionDispatchInput["ExcludeCommitTypes"] = "exclude-commit-types";
     VersionDispatchInput["ExcludeLabels"] = "exclude-labels";
+    VersionDispatchInput["DryRun"] = "dry-run";
+    VersionDispatchInput["PrNumber"] = "pr-number";
 })(VersionDispatchInput = exports.VersionDispatchInput || (exports.VersionDispatchInput = {}));
 exports.RELEASE_PR_LABEL = 'publish-on-merge';
 

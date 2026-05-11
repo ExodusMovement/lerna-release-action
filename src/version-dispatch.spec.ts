@@ -4,27 +4,31 @@ import { GithubClient } from './utils/github'
 import { Volume } from 'memfs/lib/volume'
 import { createFsFromJSON } from './utils/testing'
 
+const ref = 'main'
+
 jest.mock('@actions/core', () => ({
   getInput: (name: string) => {
     const inputs: Record<string, unknown> = {
-      ref: 'main',
+      ref,
       'version-workflow-id': 'a tiny little workflow',
       'github-token': 'abc',
-      'exclude-commit-types': 'docs,chore',
       'exclude-labels': 'publish-on-merge,skip-release',
+      'dry-run': 'false',
+      'pr-number': '',
     }
     return inputs[name]
   },
   debug: jest.fn(),
+  info: jest.fn(),
   warning: jest.fn(),
   error: jest.fn(),
   notice: jest.fn(),
   setFailed: jest.fn(),
+  setOutput: jest.fn(),
 }))
 
 describe('versionDispatch', () => {
   type CreateWorkflowDispatch = GithubClient['rest']['actions']['createWorkflowDispatch']
-  type CreateComment = GithubClient['rest']['issues']['createComment']
 
   const repo = {
     owner: 'WayneFoundation',
@@ -32,7 +36,6 @@ describe('versionDispatch', () => {
   }
 
   const workflowId = 'a tiny little workflow'
-  const ref = 'main'
 
   const lernaConfig = JSON.stringify({
     packages: ['libraries/*', 'modules/{blockchain-metadata,balances}'],
@@ -49,6 +52,7 @@ describe('versionDispatch', () => {
 
   beforeEach(() => {
     client = {
+      paginate: jest.fn() as unknown,
       rest: {
         repos: {
           get: jest.fn(async () => ({
@@ -56,9 +60,14 @@ describe('versionDispatch', () => {
               default_branch: ref,
             },
           })) as unknown,
+          getCommit: jest.fn() as unknown,
+        },
+        pulls: {
+          listCommits: jest.fn() as unknown,
+          get: jest.fn() as unknown,
         },
         issues: {
-          createComment: jest.fn() as unknown as CreateComment,
+          createComment: jest.fn() as unknown,
         },
         actions: {
           createWorkflowDispatch: jest.fn() as unknown as CreateWorkflowDispatch,
@@ -83,26 +92,43 @@ describe('versionDispatch', () => {
     })
   })
 
-  it('should invoke version workflow with packages affected by PR', async () => {
+  function setupPaginate(
+    commits: { sha: string; commit: { message: string } }[],
+    filesBySha: Record<string, { filename: string }[]>
+  ) {
+    const paginateMock = client.paginate as unknown as jest.Mock
+    paginateMock.mockResolvedValue(commits)
+    ;(client.rest.repos.getCommit as unknown as jest.Mock).mockImplementation(
+      async ({ ref: sha }: { ref: string }) => ({
+        data: { files: filesBySha[sha] ?? [] },
+      })
+    )
+  }
+
+  it('dispatches with the per-package bump map computed from PR commits', async () => {
     github.context.payload = {
       pull_request: {
-        title: 'feat: added a lot of new features',
+        title: 'feat: cool stuff',
         number: 123,
         merged: true,
-        user: {
-          login: 'brucewayne',
-        },
-        base: {
-          ref,
-        },
-        labels: [
-          { name: 'blockchain-metadata' },
-          { name: 'balances' },
-          { name: 'atoms' },
-          { name: 'refactor' },
-        ],
+        user: { login: 'brucewayne' },
+        base: { ref },
+        labels: [],
       },
     }
+
+    setupPaginate(
+      [
+        { sha: 'aaa1111', commit: { message: 'feat(atoms)!: drop legacy' } },
+        { sha: 'bbb2222', commit: { message: 'fix(balances): tidy' } },
+        { sha: 'ccc3333', commit: { message: 'refactor(atoms): rename' } },
+      ],
+      {
+        aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
+        bbb2222: [{ filename: 'modules/balances/x.ts' }],
+        ccc3333: [{ filename: 'libraries/atoms/y.ts' }],
+      }
+    )
 
     await versionDispatch({ filesystem: fs as never })
 
@@ -112,32 +138,34 @@ describe('versionDispatch', () => {
       workflow_id: workflowId,
       inputs: {
         assignee: 'brucewayne',
-        'version-strategy': 'conventional-commits',
-        packages: '@exodus/atoms,@exodus/blockchain-metadata,@exodus/balances',
+        packages: '@exodus/atoms,@exodus/balances',
+        bumps: JSON.stringify({ '@exodus/atoms': 'major', '@exodus/balances': 'patch' }),
       },
     })
   })
 
-  it('should invoke version workflow with packages affected by PR when using scoped labels', async () => {
+  it('falls back to the PR title when no commit carries a bump', async () => {
     github.context.payload = {
       pull_request: {
-        title: 'feat: added a lot of new features',
+        title: 'feat(atoms)!: title-fallback test',
         number: 123,
         merged: true,
-        user: {
-          login: 'brucewayne',
-        },
-        base: {
-          ref,
-        },
-        labels: [
-          { name: '@exodus/blockchain-metadata' },
-          { name: '@exodus/balances' },
-          { name: '@exodus/atoms' },
-          { name: 'refactor' },
-        ],
+        user: { login: 'brucewayne' },
+        base: { ref },
+        labels: [],
       },
     }
+
+    setupPaginate(
+      [
+        { sha: 'aaa1111', commit: { message: 'refactor(atoms): migrate' } },
+        { sha: 'bbb2222', commit: { message: 'chore: lockfile' } },
+      ],
+      {
+        aaa1111: [{ filename: 'libraries/atoms/x.ts' }],
+        bbb2222: [{ filename: 'libraries/atoms/yarn.lock' }],
+      }
+    )
 
     await versionDispatch({ filesystem: fs as never })
 
@@ -147,151 +175,74 @@ describe('versionDispatch', () => {
       workflow_id: workflowId,
       inputs: {
         assignee: 'brucewayne',
-        'version-strategy': 'conventional-commits',
-        packages: '@exodus/atoms,@exodus/blockchain-metadata,@exodus/balances',
+        packages: '@exodus/atoms',
+        bumps: JSON.stringify({ '@exodus/atoms': 'major' }),
       },
     })
-  })
-
-  it('should comment on PR to let user know that versioning was started on their behalf', async () => {
-    github.context.payload = {
-      pull_request: {
-        title: 'feat: added a lot of new features',
-        number: 123,
-        merged: true,
-        user: {
-          login: 'brucewayne',
-        },
-        base: {
-          ref,
-        },
-        labels: [
-          { name: 'blockchain-metadata' },
-          { name: 'balances' },
-          { name: 'atoms' },
-          { name: 'wallet' },
-          { name: 'refactor' },
-        ],
-      },
-    }
-
-    await versionDispatch({ filesystem: fs as never })
   })
 
   describe('abort conditions', () => {
     const defaults = {
-      title: 'feat: added a lot of new features',
+      title: 'feat: a real release',
       number: 123,
       merged: true,
-      labels: [{ name: 'blockchain-metadata' }, { name: 'atoms' }, { name: 'refactor' }],
-      user: {
-        login: 'brucewayne',
-      },
-      base: {
-        ref,
-      },
+      labels: [],
+      user: { login: 'brucewayne' },
+      base: { ref },
     }
 
-    it.each<[string, any]>([
-      [
-        'for non-PR event',
-        {
-          comment: {
-            id: 1,
-          },
-        },
-      ],
+    it.each<[string, unknown]>([
+      ['for non-PR event', { comment: { id: 1 } }],
       [
         'for not targeting the default branch',
         {
-          pull_request: {
-            ...defaults,
-            base: {
-              ref: 'wayne-foundation/batmobile-v2',
-            },
-          },
+          pull_request: { ...defaults, base: { ref: 'wayne-foundation/batmobile-v2' } },
         },
       ],
-      [
-        'if PR was not merged',
-        {
-          pull_request: {
-            ...defaults,
-            merged: false,
-          },
-        },
-      ],
-      [
-        'if none of the lerna managed packages were affected',
-        {
-          pull_request: {
-            ...defaults,
-            labels: [{ name: 'ci' }, { name: 'docs' }],
-          },
-        },
-      ],
-      ...['docs', 'chore'].flatMap<[string, any]>((type) => [
-        [
-          `if PR has type '${type}'`,
-          {
-            pull_request: {
-              ...defaults,
-              title: `${type}: some commit of type ${type}`,
-            },
-          },
-        ],
-        [
-          `if PR has type '${type}' with scope`,
-          {
-            pull_request: {
-              ...defaults,
-              title: `${type}(arkham-asylum): some craziness of type ${type}`,
-            },
-          },
-        ],
-        [
-          `if PR has type '${type}' with breaking modifier`,
-          {
-            pull_request: {
-              ...defaults,
-              title: `${type}!: some breaking commit`,
-            },
-          },
-        ],
-        [
-          `if PR has type '${type}' with scope and breaking modifier`,
-          {
-            pull_request: {
-              ...defaults,
-              title: `${type}(arkham-asylum)!: some breaking craziness of type ${type}`,
-            },
-          },
-        ],
-      ]),
+      ['if PR was not merged', { pull_request: { ...defaults, merged: false } }],
       [
         'if PR has label skip-release',
         {
-          pull_request: {
-            ...defaults,
-            labels: [...defaults.labels, { name: 'skip-release' }],
-          },
+          pull_request: { ...defaults, labels: [{ name: 'skip-release' }] },
         },
       ],
       [
         'if PR has label publish-on-merge',
         {
-          pull_request: {
-            ...defaults,
-            labels: [...defaults.labels, { name: 'publish-on-merge' }],
-          },
+          pull_request: { ...defaults, labels: [{ name: 'publish-on-merge' }] },
         },
       ],
     ])('should abort %s', async (_, payload) => {
-      github.context.payload = payload
+      github.context.payload = payload as never
+      setupPaginate([], {})
 
       await versionDispatch({ filesystem: fs as never })
+
       expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
-      expect(client.rest.issues.createComment).not.toHaveBeenCalled()
+    })
+
+    it('should abort when every commit is non-bumping and PR title is also non-bumping', async () => {
+      github.context.payload = {
+        pull_request: { ...defaults, title: 'chore: misc cleanup' },
+      }
+      setupPaginate([{ sha: 'aaa1111', commit: { message: 'chore: lockfile' } }], {
+        aaa1111: [{ filename: 'libraries/atoms/x.ts' }],
+      })
+
+      await versionDispatch({ filesystem: fs as never })
+
+      expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+    })
+
+    it('should abort when no workspace package files were touched', async () => {
+      github.context.payload = { pull_request: { ...defaults } }
+      setupPaginate([{ sha: 'aaa1111', commit: { message: 'feat!: docs only' } }], {
+        aaa1111: [{ filename: 'README.md' }],
+      })
+
+      await versionDispatch({ filesystem: fs as never })
+
+      expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
     })
   })
 })

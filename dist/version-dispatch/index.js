@@ -30369,110 +30369,108 @@ var VersionDispatchInput;
     VersionDispatchInput["GithubToken"] = "github-token";
     VersionDispatchInput["Ref"] = "ref";
     VersionDispatchInput["VersionWorkflowId"] = "version-workflow-id";
-    VersionDispatchInput["ExcludeCommitTypes"] = "exclude-commit-types";
     VersionDispatchInput["ExcludeLabels"] = "exclude-labels";
+    VersionDispatchInput["DryRun"] = "dry-run";
+    VersionDispatchInput["PrNumber"] = "pr-number";
 })(VersionDispatchInput = exports.VersionDispatchInput || (exports.VersionDispatchInput = {}));
 exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
 
 /***/ }),
 
-/***/ 9879:
+/***/ 9317:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.parseMessage = void 0;
-function parseMessage(message) {
-    const type = message.match(/^([^!(:])+/)?.[0];
-    if (!type) {
-        throw new Error(`Failed to parse message as conventional commit: ${message}`);
-    }
-    return { type };
+exports.maxBump = exports.bumpFromMessage = exports.BUMP_MAJOR = exports.BUMP_MINOR = exports.BUMP_PATCH = exports.BUMP_NONE = void 0;
+exports.BUMP_NONE = 'none';
+exports.BUMP_PATCH = 'patch';
+exports.BUMP_MINOR = 'minor';
+exports.BUMP_MAJOR = 'major';
+const RANK = {
+    [exports.BUMP_NONE]: 0,
+    [exports.BUMP_PATCH]: 1,
+    [exports.BUMP_MINOR]: 2,
+    [exports.BUMP_MAJOR]: 3,
+};
+const HEADER_REGEX = /^(?<type>[A-Za-z]+)(?:\((?<scope>[^)]+)\))?(?<breaking>!)?:/;
+/**
+ * Map a single conventional-commit message to a bump level.
+ *
+ *   - `<type>(<scope>)!: ...` / `<type>!: ...`           → major
+ *   - body line `BREAKING CHANGE:` / `BREAKING-CHANGE:`  → major
+ *   - type === 'feat'                                    → minor
+ *   - type === 'fix' or 'perf'                           → patch
+ *   - anything else                                      → none
+ */
+function bumpFromMessage(message) {
+    if (typeof message !== 'string' || message.length === 0)
+        return exports.BUMP_NONE;
+    const [subject = '', ...rest] = message.split(/\r?\n/);
+    const body = rest.join('\n');
+    const match = HEADER_REGEX.exec(subject.trim());
+    if (!match || !match.groups)
+        return exports.BUMP_NONE;
+    const { type, breaking } = match.groups;
+    if (breaking === '!' || /^BREAKING[ -]CHANGE:/m.test(body))
+        return exports.BUMP_MAJOR;
+    if (type === 'feat')
+        return exports.BUMP_MINOR;
+    if (type === 'fix' || type === 'perf')
+        return exports.BUMP_PATCH;
+    return exports.BUMP_NONE;
 }
-exports.parseMessage = parseMessage;
+exports.bumpFromMessage = bumpFromMessage;
+/**
+ * Pick the higher of two bump levels.
+ */
+function maxBump(a, b) {
+    return RANK[a] >= RANK[b] ? a : b;
+}
+exports.maxBump = maxBump;
 
 
 /***/ }),
 
-/***/ 1716:
+/***/ 6516:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.readJson = void 0;
-async function readJson(path, { filesystem }) {
-    let buffer;
-    try {
-        buffer = await filesystem.promises.readFile(path);
-    }
-    catch {
-        return undefined;
-    }
-    return JSON.parse(buffer.toString());
-}
-exports.readJson = readJson;
-
-
-/***/ }),
-
-/***/ 4741:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.strategyAsArgument = exports.validateAllowedStrategies = exports.assertStrategy = exports.canUseFromNonDefaultBranch = exports.VersionStrategy = void 0;
-const fs = __nccwpck_require__(7147);
-const fs_1 = __nccwpck_require__(1716);
-const lerna_utils_1 = __nccwpck_require__(4801);
-var VersionStrategy;
-(function (VersionStrategy) {
-    VersionStrategy["ConventionalCommits"] = "conventional-commits";
-    VersionStrategy["Patch"] = "patch";
-    VersionStrategy["Minor"] = "minor";
-    VersionStrategy["Major"] = "major";
-    VersionStrategy["Premajor"] = "premajor";
-    VersionStrategy["Preminor"] = "preminor";
-    VersionStrategy["Prepatch"] = "prepatch";
-    VersionStrategy["Prerelease"] = "prerelease";
-})(VersionStrategy = exports.VersionStrategy || (exports.VersionStrategy = {}));
-function canUseFromNonDefaultBranch(strategy) {
-    return [
-        VersionStrategy.Minor,
-        VersionStrategy.Patch,
-        VersionStrategy.Preminor,
-        VersionStrategy.Prepatch,
-        VersionStrategy.Prerelease,
-    ].includes(strategy);
-}
-exports.canUseFromNonDefaultBranch = canUseFromNonDefaultBranch;
-function assertStrategy(input) {
-    const strategies = Object.values(VersionStrategy);
-    if (!strategies.includes(input)) {
-        throw new Error(`Invalid version strategy ${input} provided. Permitted values are ${strategies}`);
-    }
-}
-exports.assertStrategy = assertStrategy;
-async function validateAllowedStrategies({ packages, versionStrategy, filesystem = fs, }) {
-    const packageJson = await (0, fs_1.readJson)('package.json', { filesystem });
-    if (!packageJson?.release?.versionStrategy) {
-        return;
-    }
-    const packageNames = new Set(await Promise.all(packages.map((packagePath) => (0, lerna_utils_1.getPackageNameByPath)(packagePath, { filesystem }))));
-    for (const [packageName, allowedStrategies] of Object.entries(packageJson.release.versionStrategy)) {
-        if (packageNames.has(packageName) && !allowedStrategies.includes(versionStrategy)) {
-            throw new Error(`Attempted to use version strategy "${versionStrategy}", which is not allowed for ${packageName}. Allowed strategies are: ${allowedStrategies.join(', ')}`);
+exports.filesToPackages = void 0;
+/**
+ * Attribute a set of touched file paths to workspace packages.
+ *
+ * A file maps to a package iff its repo-relative path equals the package's
+ * directory or starts with it followed by a slash. This deliberately rejects
+ * sibling directories with overlapping prefixes (`features/abc` vs.
+ * `features/abc-old`).
+ *
+ * @param files — repo-relative paths.
+ * @param packagePaths — { packageName: repoRelativeDir }.
+ */
+function filesToPackages(files, packagePaths) {
+    const touched = new Set();
+    const entries = Object.entries(packagePaths).map(([name, dir]) => [
+        name,
+        ensureTrailingSlash(dir),
+    ]);
+    for (const file of files) {
+        for (const [name, prefix] of entries) {
+            if (file === prefix.slice(0, -1) || file.startsWith(prefix)) {
+                touched.add(name);
+            }
         }
     }
+    return touched;
 }
-exports.validateAllowedStrategies = validateAllowedStrategies;
-function strategyAsArgument(strategy) {
-    return strategy === VersionStrategy.ConventionalCommits ? '--conventional-commits' : strategy;
+exports.filesToPackages = filesToPackages;
+function ensureTrailingSlash(value) {
+    return value.endsWith('/') ? value : `${value}/`;
 }
-exports.strategyAsArgument = strategyAsArgument;
 
 
 /***/ }),
@@ -41109,69 +41107,179 @@ var __webpack_exports__ = {};
 var exports = __webpack_exports__;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.versionDispatch = void 0;
+exports.computeBumpsForPr = exports.versionDispatch = void 0;
 const core = __nccwpck_require__(2186);
 const github = __nccwpck_require__(5438);
-const constants_1 = __nccwpck_require__(9042);
 const fs = __nccwpck_require__(7147);
 const lerna_utils_1 = __nccwpck_require__(4801);
-const strategy_1 = __nccwpck_require__(4741);
-const conventional_commits_1 = __nccwpck_require__(9879);
-async function versionDispatch({ filesystem = fs } = {}) {
-    const token = core.getInput(constants_1.VersionDispatchInput.GithubToken, { required: true });
-    const workflowId = core.getInput(constants_1.VersionDispatchInput.VersionWorkflowId);
-    const ref = core.getInput(constants_1.VersionDispatchInput.Ref);
-    const excludedCommitTypes = new Set(core.getInput(constants_1.VersionDispatchInput.ExcludeCommitTypes).split(','));
-    const excludedLabels = new Set(core.getInput(constants_1.VersionDispatchInput.ExcludeLabels).split(','));
-    const { repo, payload: { pull_request: pr }, } = github.context;
-    if (!pr) {
-        core.warning('Action triggered by non-PR related event.');
-        return;
-    }
-    if (!pr.merged) {
-        core.notice('PR was closed without merging.');
-        return;
-    }
-    const { type: commitType } = (0, conventional_commits_1.parseMessage)(pr.title);
-    if (excludedCommitTypes.has(commitType)) {
-        core.notice(`Skipped for excluded commit type "${commitType}"`);
-        return;
-    }
-    const excludedLabel = pr.labels.find((label) => excludedLabels.has(label.name));
-    if (excludedLabel) {
-        core.notice(`Skipped for excluded label "${excludedLabel}"`);
-        return;
-    }
-    const client = github.getOctokit(token);
-    const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
-    if (pr.base.ref !== defaultBranch) {
-        core.notice(`Skipped versioning for PR not targeting ${defaultBranch}`);
-        return;
-    }
-    const byPackageName = await (0, lerna_utils_1.getPathsByPackageNames)({ filesystem });
-    const affected = Object.keys(byPackageName).filter((name) => pr.labels.some((label) => label.name === name || label.name === name.split('/').pop()));
-    if (affected.length === 0) {
-        core.notice('No packages were affected.');
-        return;
-    }
-    await client.rest.actions.createWorkflowDispatch({
-        ref,
-        ...repo,
-        workflow_id: workflowId,
-        inputs: {
-            assignee: pr.user.login,
-            'version-strategy': strategy_1.VersionStrategy.ConventionalCommits,
-            packages: affected.join(','),
-        },
+const constants_1 = __nccwpck_require__(9042);
+const bumps_1 = __nccwpck_require__(9317);
+const files_to_packages_1 = __nccwpck_require__(6516);
+if (require.main === require.cache[eval('__filename')]) {
+    versionDispatch().catch((error) => {
+        if (error.stack)
+            core.debug(error.stack);
+        core.setFailed(String(error.message));
     });
 }
-exports.versionDispatch = versionDispatch;
-versionDispatch().catch((error) => {
-    if (error.stack) {
-        core.debug(error.stack);
+/**
+ * Inspect a merged PR's pre-squash commits, attribute each commit to
+ * workspace packages by the files it touched, derive a per-package bump
+ * level from each commit's conventional-commit subject (max bump wins
+ * per package), and dispatch the version workflow with a `{ pkg: bump }`
+ * JSON map plus the matching `packages` list.
+ *
+ * Title fallback — if no commit carries a release-worthy type, parse the
+ * PR title once and apply that bump to every workspace touched anywhere
+ * in the PR. Preserves the long-standing PR-title-is-the-release-level
+ * workflow for repos whose individual commits aren't conventional.
+ *
+ * The dispatched workflow is expected to forward `packages` and `bumps`
+ * to `lerna-release-action/version`. When `bumps` is unset that action
+ * falls back to the old `version-strategy` flow, so consumers that
+ * haven't updated their `version.yml` to forward `bumps` keep working.
+ */
+async function versionDispatch({ filesystem = fs } = {}) {
+    const token = core.getInput(constants_1.VersionDispatchInput.GithubToken, { required: true });
+    const workflowId = core.getInput(constants_1.VersionDispatchInput.VersionWorkflowId) || 'version.yml';
+    const ref = core.getInput(constants_1.VersionDispatchInput.Ref) || 'master';
+    const excludedLabels = new Set(core
+        .getInput(constants_1.VersionDispatchInput.ExcludeLabels)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean));
+    const dryRun = core.getInput(constants_1.VersionDispatchInput.DryRun) === 'true';
+    const prNumberInput = core.getInput(constants_1.VersionDispatchInput.PrNumber);
+    const { repo, payload } = github.context;
+    const client = github.getOctokit(token);
+    let pr = null;
+    if (prNumberInput) {
+        const { data } = await client.rest.pulls.get({ ...repo, pull_number: Number(prNumberInput) });
+        pr = data;
     }
-    core.setFailed(String(error.message));
-});
+    else if (payload.pull_request) {
+        pr = payload.pull_request;
+        if (!pr.merged) {
+            core.notice('PR was closed without merging.');
+            return null;
+        }
+    }
+    else {
+        core.warning('Action triggered by non-PR event and no `pr-number` was supplied.');
+        return null;
+    }
+    const excludedLabel = (pr.labels ?? []).find((label) => excludedLabels.has(label.name));
+    if (excludedLabel) {
+        core.notice(`Skipped for excluded label "${excludedLabel.name}"`);
+        return null;
+    }
+    const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
+    if (pr.base?.ref && pr.base.ref !== defaultBranch) {
+        core.notice(`Skipped versioning for PR not targeting ${defaultBranch}`);
+        return null;
+    }
+    const packagePaths = await (0, lerna_utils_1.getPathsByPackageNames)({ filesystem });
+    if (Object.keys(packagePaths).length === 0) {
+        core.warning('No workspace packages discovered. Aborting.');
+        return null;
+    }
+    const bumps = await computeBumpsForPr({
+        client,
+        repo,
+        prNumber: pr.number,
+        packagePaths,
+        prTitle: pr.title,
+    });
+    const packageNames = Object.keys(bumps);
+    if (packageNames.length === 0) {
+        core.notice('No releaseable commits across workspace packages.');
+        return null;
+    }
+    core.setOutput('packages', packageNames.join(','));
+    core.setOutput('bumps', JSON.stringify(bumps));
+    if (dryRun) {
+        core.info(`dry-run: bumps = ${JSON.stringify(bumps, null, 2)}`);
+        return bumps;
+    }
+    try {
+        await client.rest.actions.createWorkflowDispatch({
+            ref,
+            ...repo,
+            workflow_id: workflowId,
+            inputs: {
+                assignee: pr.user?.login ?? '',
+                packages: packageNames.join(','),
+                bumps: JSON.stringify(bumps),
+            },
+        });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        core.setFailed(`Failed to dispatch ${workflowId}: ${message}`);
+        return bumps;
+    }
+    core.info(`Dispatched ${workflowId} with bumps ${JSON.stringify(bumps)}`);
+    return bumps;
+}
+exports.versionDispatch = versionDispatch;
+/**
+ * Walk a PR's individual commits and build a `{ pkg: bump }` map.
+ *
+ * @returns map keyed by workspace package name, with values from the
+ *   `Bump` type *minus* `none` — packages that received no bump are omitted.
+ */
+async function computeBumpsForPr({ client, repo, prNumber, packagePaths, prTitle, }) {
+    const commits = await client.paginate(client.rest.pulls.listCommits, {
+        ...repo,
+        pull_number: prNumber,
+        per_page: 100,
+    });
+    if (commits.length >= 250) {
+        core.warning(`PR #${prNumber} returned ${commits.length} commits, which is at or above GitHub's REST cap; some commits may have been truncated and missed by per-package attribution.`);
+    }
+    const bumps = {};
+    const touchedAcrossPr = new Set();
+    for (const entry of commits) {
+        const sha = entry.sha;
+        const message = entry.commit.message;
+        const bump = (0, bumps_1.bumpFromMessage)(message);
+        const { data: detail } = await client.rest.repos.getCommit({ ...repo, ref: sha });
+        const files = (detail.files ?? []).map((f) => f.filename);
+        const packages = (0, files_to_packages_1.filesToPackages)(files, packagePaths);
+        for (const name of packages)
+            touchedAcrossPr.add(name);
+        if (bump === bumps_1.BUMP_NONE) {
+            core.info(`skip ${sha.slice(0, 7)}: ${firstLine(message)} (no bump)`);
+            continue;
+        }
+        if (packages.size === 0) {
+            core.info(`skip ${sha.slice(0, 7)}: ${firstLine(message)} (${bump}, no workspace files)`);
+            continue;
+        }
+        for (const name of packages) {
+            bumps[name] = (0, bumps_1.maxBump)(bumps[name] ?? bumps_1.BUMP_NONE, bump);
+        }
+        core.info(`commit ${sha.slice(0, 7)} (${bump}): ${[...packages].join(', ')} — ${firstLine(message)}`);
+    }
+    for (const name of Object.keys(bumps)) {
+        if (bumps[name] === bumps_1.BUMP_NONE)
+            delete bumps[name];
+    }
+    if (Object.keys(bumps).length > 0)
+        return bumps;
+    const titleBump = (0, bumps_1.bumpFromMessage)(prTitle);
+    if (titleBump !== bumps_1.BUMP_NONE && touchedAcrossPr.size > 0) {
+        core.info(`no per-commit bump found; falling back to PR title "${prTitle}" → ${titleBump} for [${[...touchedAcrossPr].join(', ')}]`);
+        for (const name of touchedAcrossPr)
+            bumps[name] = titleBump;
+        return bumps;
+    }
+    return bumps;
+}
+exports.computeBumpsForPr = computeBumpsForPr;
+function firstLine(message) {
+    return message.split(/\r?\n/, 1)[0] ?? '';
+}
 
 })();
 
