@@ -112,6 +112,11 @@ export default async function version({
   core.info('Creating object of previous package.json contents')
   const previousPackageContents = await readPackageJsons()
 
+  // Anchor for tag discovery — captured *before* lerna runs so that the
+  // explicit-bumps path (which produces N commits between this sha and
+  // HEAD) recovers per-package tags from every iteration, not just the last.
+  const preLernaSha = getCommitSha()
+
   core.info('Versioning packages')
   let commitsToReset = 1
   if (bumps) {
@@ -129,12 +134,18 @@ export default async function version({
     versionPackages({ extraArgs: versionExtraArgs, versionStrategy: narrowedStrategy })
   }
 
-  const tags = getTags(packages)
+  const tags = getTags(packages, preLernaSha)
   core.debug(`Tags found: ${tags}`)
 
   const branch = `ci/release/${crypto.randomUUID()}`
   const sha = getCommitSha()
-  const message = getCommitMessage(sha)
+  // For explicit bumps, the last lerna call's commit message describes only
+  // the last package — borrowing it as the squashed combined-commit subject
+  // would be misleading for a multi-package release. Synthesize a subject
+  // that names every released package instead.
+  const message = bumps
+    ? `chore(release): publish ${Object.keys(bumps).join(', ')}`
+    : getCommitMessage(sha)
 
   core.debug(`Switching to branch ${branch}`)
   switchToBranch(branch)

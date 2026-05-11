@@ -85066,8 +85066,25 @@ function matches(tag, packageName) {
     return new RegExp(`@[^/]+/${packageName}@`).test(tag);
 }
 exports.matches = matches;
-function getTags(packages) {
-    const commit = git.getCommitSha();
+/**
+ * Collects the tags that lerna created during the version step.
+ *
+ * `fromSha` anchors the scan: `git tag --contains <fromSha>` returns every
+ * tag whose commit is `fromSha` itself or a descendant. The version flow
+ * captures `fromSha` *before* the lerna call(s) so the explicit-bumps path,
+ * which produces N commits between `fromSha` and HEAD, recovers per-package
+ * tags from every iteration. The single-call path (one commit at HEAD) is a
+ * special case of the same logic.
+ *
+ * Falls back to HEAD when `fromSha` is omitted to preserve the previous
+ * signature for callers that haven't been updated yet — only correct when
+ * lerna created exactly one commit.
+ *
+ * @param packages — repo-relative package paths to filter tags down to.
+ * @param fromSha — commit sha taken just before lerna ran. Defaults to HEAD.
+ */
+function getTags(packages, fromSha) {
+    const commit = fromSha ?? git.getCommitSha();
     const names = packages.map((it) => path.basename(it));
     const tags = git.getTags(commit);
     return tags
@@ -96335,6 +96352,10 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     });
     core.info('Creating object of previous package.json contents');
     const previousPackageContents = await (0, read_package_jsons_1.default)();
+    // Anchor for tag discovery — captured *before* lerna runs so that the
+    // explicit-bumps path (which produces N commits between this sha and
+    // HEAD) recovers per-package tags from every iteration, not just the last.
+    const preLernaSha = (0, git_1.getCommitSha)();
     core.info('Versioning packages');
     let commitsToReset = 1;
     if (bumps) {
@@ -96347,11 +96368,17 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     else if (narrowedStrategy) {
         (0, version_packages_1.default)({ extraArgs: versionExtraArgs, versionStrategy: narrowedStrategy });
     }
-    const tags = (0, get_tags_1.default)(packages);
+    const tags = (0, get_tags_1.default)(packages, preLernaSha);
     core.debug(`Tags found: ${tags}`);
     const branch = `ci/release/${crypto.randomUUID()}`;
     const sha = (0, git_1.getCommitSha)();
-    const message = (0, git_1.getCommitMessage)(sha);
+    // For explicit bumps, the last lerna call's commit message describes only
+    // the last package — borrowing it as the squashed combined-commit subject
+    // would be misleading for a multi-package release. Synthesize a subject
+    // that names every released package instead.
+    const message = bumps
+        ? `chore(release): publish ${Object.keys(bumps).join(', ')}`
+        : (0, git_1.getCommitMessage)(sha);
     core.debug(`Switching to branch ${branch}`);
     (0, git_1.switchToBranch)(branch);
     core.info(`Resetting ${commitsToReset} commit${commitsToReset === 1 ? '' : 's'} created by lerna to stage only selected packages`);
