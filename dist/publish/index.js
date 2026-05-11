@@ -30272,6 +30272,7 @@ var Input;
     Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
+    Input["Bumps"] = "bumps";
     Input["AutoMerge"] = "auto-merge";
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
@@ -30417,8 +30418,8 @@ function cleanup() {
 }
 exports.cleanup = cleanup;
 const resetFlags = ['mixed'];
-function resetLastCommit({ flags }) {
-    (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags, resetFlags), 'HEAD~1']);
+function resetLastCommit({ flags, count = 1 }) {
+    (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags, resetFlags), `HEAD~${count}`]);
 }
 exports.resetLastCommit = resetLastCommit;
 function configureUser({ name, email }) {

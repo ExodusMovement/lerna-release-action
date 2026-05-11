@@ -84470,6 +84470,7 @@ var Input;
     Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
+    Input["Bumps"] = "bumps";
     Input["AutoMerge"] = "auto-merge";
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
@@ -84635,8 +84636,8 @@ function cleanup() {
 }
 exports.cleanup = cleanup;
 const resetFlags = ['mixed'];
-function resetLastCommit({ flags }) {
-    (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags, resetFlags), 'HEAD~1']);
+function resetLastCommit({ flags, count = 1 }) {
+    (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags, resetFlags), `HEAD~${count}`]);
 }
 exports.resetLastCommit = resetLastCommit;
 function configureUser({ name, email }) {
@@ -85132,6 +85133,60 @@ exports["default"] = normalizePackages;
 
 /***/ }),
 
+/***/ 2939:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+/**
+ * Parse the optional `bumps` action input. Returns `undefined` when the input
+ * is empty (so the caller falls back to the existing `version-strategy` flow);
+ * otherwise returns a `{ pkg: bump }` map with every entry validated.
+ *
+ * Throws on malformed JSON or unknown bump levels so the action surfaces the
+ * problem at the very top of the run rather than letting lerna fail with a
+ * confusing error 10 steps later.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseBumps = void 0;
+const VALID_BUMPS = new Set([
+    'major',
+    'minor',
+    'patch',
+    'premajor',
+    'preminor',
+    'prepatch',
+    'prerelease',
+]);
+function parseBumps(raw) {
+    if (!raw || raw.trim() === '')
+        return undefined;
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    }
+    catch (err) {
+        throw new Error(`Failed to parse \`bumps\` input as JSON: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('`bumps` must be a JSON object of `{ "<package>": "<bump>" }`');
+    }
+    const out = {};
+    for (const [pkg, bump] of Object.entries(parsed)) {
+        if (typeof bump !== 'string' || !VALID_BUMPS.has(bump)) {
+            throw new Error(`Invalid bump "${String(bump)}" for "${pkg}" in \`bumps\`. Valid values: ${[...VALID_BUMPS].join(', ')}`);
+        }
+        out[pkg] = bump;
+    }
+    if (Object.keys(out).length === 0)
+        return undefined;
+    return out;
+}
+exports.parseBumps = parseBumps;
+
+
+/***/ }),
+
 /***/ 7361:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -85374,6 +85429,7 @@ exports["default"] = updateChangelog;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.versionPackagesExplicit = void 0;
 const core = __nccwpck_require__(2186);
 const strategy_1 = __nccwpck_require__(4741);
 const process_1 = __nccwpck_require__(9239);
@@ -85394,6 +85450,42 @@ function versionPackages({ extraArgs, versionStrategy }) {
     const stdout = (0, process_1.spawnSync)('npx', args, { encoding: 'utf8' });
     core.debug(stdout);
 }
+/**
+ * Drives `lerna version` once per entry in the `bumps` map, each invocation
+ * scoped to a single package with an explicit bump (patch | minor | major |
+ * prerelease | etc.).
+ *
+ * Each call produces its own commit + tag. The caller is responsible for
+ * collapsing the N commits into one (via `git reset --mixed HEAD~N`) before
+ * pushing — the return value carries the count.
+ *
+ * @returns the number of commits created (= number of entries in `bumps`).
+ */
+function versionPackagesExplicit({ bumps, extraArgs }) {
+    const entries = Object.entries(bumps);
+    for (const [pkg, bump] of entries) {
+        const args = [
+            'lerna',
+            'version',
+            bump,
+            '--scope',
+            pkg,
+            '--no-push',
+            '--force-git-tag',
+            '--yes',
+            '--no-private',
+            '--force-publish',
+        ];
+        if (extraArgs) {
+            args.push(...extraArgs.split(' '));
+        }
+        core.info(`Running: npx ${args.join(' ')}`);
+        const stdout = (0, process_1.spawnSync)('npx', args, { encoding: 'utf8' });
+        core.debug(stdout);
+    }
+    return entries.length;
+}
+exports.versionPackagesExplicit = versionPackagesExplicit;
 exports["default"] = versionPackages;
 
 
@@ -96189,6 +96281,7 @@ const get_tags_1 = __nccwpck_require__(1959);
 const crypto = __nccwpck_require__(6113);
 const revert_unwanted_dependency_changes_1 = __nccwpck_require__(5781);
 const version_packages_1 = __nccwpck_require__(3380);
+const parse_bumps_1 = __nccwpck_require__(2939);
 const package_manager_1 = __nccwpck_require__(2435);
 const create_pull_request_1 = __nccwpck_require__(6672);
 const strategy_1 = __nccwpck_require__(4741);
@@ -96206,8 +96299,13 @@ if (require.main === require.cache[eval('__filename')]) {
         core.setFailed(String(error.message));
     });
 }
-async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), committer = core.getInput(constants_1.Input.Committer), baseBranch = core.getInput(constants_1.Input.BaseBranch), formatCommand = core.getInput(constants_1.Input.FormatCommand), } = {}) {
-    (0, strategy_1.assertStrategy)(versionStrategy);
+async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), bumpsRaw = core.getInput(constants_1.Input.Bumps), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), committer = core.getInput(constants_1.Input.Committer), baseBranch = core.getInput(constants_1.Input.BaseBranch), formatCommand = core.getInput(constants_1.Input.FormatCommand), } = {}) {
+    const bumps = (0, parse_bumps_1.parseBumps)(bumpsRaw);
+    let narrowedStrategy = null;
+    if (!bumps) {
+        (0, strategy_1.assertStrategy)(versionStrategy);
+        narrowedStrategy = versionStrategy;
+    }
     assert(!(draft && autoMerge), 'A pull-request can either be created as draft, or with auto-merge enabled, but not both at the same time.');
     const { actor, repo } = github.context;
     assignee = assignee || actor;
@@ -96216,11 +96314,16 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
         core.warning('Nothing to version. Note that private versions are filtered');
         return;
     }
-    await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy });
+    if (narrowedStrategy) {
+        await (0, strategy_1.validateAllowedStrategies)({ packages, versionStrategy: narrowedStrategy });
+    }
     const client = github.getOctokit(token);
     const defaultBranch = await (0, github_1.getDefaultBranch)({ client, repo });
-    if (baseBranch && baseBranch !== defaultBranch && !(0, strategy_1.canUseFromNonDefaultBranch)(versionStrategy)) {
-        core.setFailed(`Version strategy ${versionStrategy} cannot be used from a non-default branch`);
+    if (narrowedStrategy &&
+        baseBranch &&
+        baseBranch !== defaultBranch &&
+        !(0, strategy_1.canUseFromNonDefaultBranch)(narrowedStrategy)) {
+        core.setFailed(`Version strategy ${narrowedStrategy} cannot be used from a non-default branch`);
         return;
     }
     const base = baseBranch || defaultBranch;
@@ -96233,7 +96336,17 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     core.info('Creating object of previous package.json contents');
     const previousPackageContents = await (0, read_package_jsons_1.default)();
     core.info('Versioning packages');
-    (0, version_packages_1.default)({ extraArgs: versionExtraArgs, versionStrategy });
+    let commitsToReset = 1;
+    if (bumps) {
+        const unknownPackages = Object.keys(bumps).filter((name) => !packages.some((p) => p.endsWith(`/${name.split('/').pop()}`) || p === name));
+        if (unknownPackages.length > 0) {
+            core.warning(`Explicit bumps for ${unknownPackages.join(', ')} are not in the packages list and will still be versioned.`);
+        }
+        commitsToReset = (0, version_packages_1.versionPackagesExplicit)({ bumps, extraArgs: versionExtraArgs });
+    }
+    else if (narrowedStrategy) {
+        (0, version_packages_1.default)({ extraArgs: versionExtraArgs, versionStrategy: narrowedStrategy });
+    }
     const tags = (0, get_tags_1.default)(packages);
     core.debug(`Tags found: ${tags}`);
     const branch = `ci/release/${crypto.randomUUID()}`;
@@ -96241,16 +96354,19 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     const message = (0, git_1.getCommitMessage)(sha);
     core.debug(`Switching to branch ${branch}`);
     (0, git_1.switchToBranch)(branch);
-    core.info('Resetting commit created by lerna to stage only selected packages');
-    (0, git_1.resetLastCommit)({ flags: { mixed: true } });
+    core.info(`Resetting ${commitsToReset} commit${commitsToReset === 1 ? '' : 's'} created by lerna to stage only selected packages`);
+    (0, git_1.resetLastCommit)({ flags: { mixed: true }, count: commitsToReset });
     (0, format_1.formatPackageFiles)({ formatCommand, packages });
     (0, git_1.add)(packages);
     (0, git_1.commit)({ message, body: tags.join('\n') });
     core.info('Deleting previous tags and cleaning up working directory');
     (0, git_1.deleteTags)(tags);
     (0, git_1.cleanup)();
-    if (versionStrategy !== strategy_1.VersionStrategy.ConventionalCommits) {
-        core.info(`Static version strategy used. Trying to generate changelogs manually.`);
+    const usedStaticOrExplicit = bumps
+        ? true
+        : narrowedStrategy !== strategy_1.VersionStrategy.ConventionalCommits;
+    if (usedStaticOrExplicit) {
+        core.info(`Explicit / static bump used. Trying to generate changelogs manually.`);
         await Promise.all(packages.map((packageDir) => (0, update_changelog_1.default)(packageDir)));
         (0, format_1.formatPackageFiles)({ formatCommand, packages });
         (0, git_1.add)(packages);

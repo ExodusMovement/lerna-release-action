@@ -5,6 +5,7 @@ export enum Input {
   Ref = 'ref',
   VersionExtraArgs = 'version-extra-args',
   VersionStrategy = 'version-strategy',
+  Bumps = 'bumps',
   AutoMerge = 'auto-merge',
   Draft = 'draft',
   RequestReviewers = 'request-reviewers',

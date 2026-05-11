@@ -1,3 +1,4 @@
+import * as process from './process'
 import { add, commit, resetLastCommit } from './git'
 
 describe('add', () => {
@@ -47,4 +48,24 @@ describe('resetLastCommit', () => {
       )
     }
   )
+
+  it('resets HEAD~1 by default', () => {
+    const spy = jest.spyOn(process, 'spawnSync').mockReturnValue('')
+    try {
+      resetLastCommit({ flags: { mixed: true } })
+      expect(spy).toHaveBeenCalledWith('git', ['reset', '--mixed', 'HEAD~1'])
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('resets HEAD~<count> when count is supplied', () => {
+    const spy = jest.spyOn(process, 'spawnSync').mockReturnValue('')
+    try {
+      resetLastCommit({ flags: { mixed: true }, count: 3 })
+      expect(spy).toHaveBeenCalledWith('git', ['reset', '--mixed', 'HEAD~3'])
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })

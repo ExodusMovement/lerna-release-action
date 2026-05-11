@@ -19,7 +19,8 @@ import readPackageJsons from './version/read-package-jsons'
 import getTags from './version/get-tags'
 import * as crypto from 'crypto'
 import revertUnwantedDependencyChanges from './version/revert-unwanted-dependency-changes'
-import versionPackages from './version/version-packages'
+import versionPackages, { versionPackagesExplicit } from './version/version-packages'
+import { parseBumps } from './version/parse-bumps'
 import { updateLockfile } from './utils/package-manager'
 import createPullRequest from './version/create-pull-request'
 import {
@@ -50,6 +51,7 @@ export default async function version({
   token = core.getInput(Input.GithubToken, { required: true }),
   versionExtraArgs = core.getInput(Input.VersionExtraArgs),
   versionStrategy = core.getInput(Input.VersionStrategy),
+  bumpsRaw = core.getInput(Input.Bumps),
   autoMerge = core.getBooleanInput(Input.AutoMerge),
   draft = core.getBooleanInput(Input.Draft),
   requestReviewers = core.getBooleanInput(Input.RequestReviewers),
@@ -58,7 +60,13 @@ export default async function version({
   baseBranch = core.getInput(Input.BaseBranch),
   formatCommand = core.getInput(Input.FormatCommand),
 } = {}) {
-  assertStrategy(versionStrategy)
+  const bumps = parseBumps(bumpsRaw)
+  let narrowedStrategy: VersionStrategy | null = null
+  if (!bumps) {
+    assertStrategy(versionStrategy)
+    narrowedStrategy = versionStrategy
+  }
+
   assert(
     !(draft && autoMerge),
     'A pull-request can either be created as draft, or with auto-merge enabled, but not both at the same time.'
@@ -74,13 +82,20 @@ export default async function version({
     return
   }
 
-  await validateAllowedStrategies({ packages, versionStrategy })
+  if (narrowedStrategy) {
+    await validateAllowedStrategies({ packages, versionStrategy: narrowedStrategy })
+  }
 
   const client = github.getOctokit(token)
   const defaultBranch = await getDefaultBranch({ client, repo })
 
-  if (baseBranch && baseBranch !== defaultBranch && !canUseFromNonDefaultBranch(versionStrategy)) {
-    core.setFailed(`Version strategy ${versionStrategy} cannot be used from a non-default branch`)
+  if (
+    narrowedStrategy &&
+    baseBranch &&
+    baseBranch !== defaultBranch &&
+    !canUseFromNonDefaultBranch(narrowedStrategy)
+  ) {
+    core.setFailed(`Version strategy ${narrowedStrategy} cannot be used from a non-default branch`)
     return
   }
 
@@ -98,7 +113,21 @@ export default async function version({
   const previousPackageContents = await readPackageJsons()
 
   core.info('Versioning packages')
-  versionPackages({ extraArgs: versionExtraArgs, versionStrategy })
+  let commitsToReset = 1
+  if (bumps) {
+    const unknownPackages = Object.keys(bumps).filter(
+      (name) => !packages.some((p) => p.endsWith(`/${name.split('/').pop()}`) || p === name)
+    )
+    if (unknownPackages.length > 0) {
+      core.warning(
+        `Explicit bumps for ${unknownPackages.join(', ')} are not in the packages list and will still be versioned.`
+      )
+    }
+
+    commitsToReset = versionPackagesExplicit({ bumps, extraArgs: versionExtraArgs })
+  } else if (narrowedStrategy) {
+    versionPackages({ extraArgs: versionExtraArgs, versionStrategy: narrowedStrategy })
+  }
 
   const tags = getTags(packages)
   core.debug(`Tags found: ${tags}`)
@@ -110,8 +139,10 @@ export default async function version({
   core.debug(`Switching to branch ${branch}`)
   switchToBranch(branch)
 
-  core.info('Resetting commit created by lerna to stage only selected packages')
-  resetLastCommit({ flags: { mixed: true } })
+  core.info(
+    `Resetting ${commitsToReset} commit${commitsToReset === 1 ? '' : 's'} created by lerna to stage only selected packages`
+  )
+  resetLastCommit({ flags: { mixed: true }, count: commitsToReset })
   formatPackageFiles({ formatCommand, packages })
   add(packages)
   commit({ message, body: tags.join('\n') })
@@ -120,8 +151,11 @@ export default async function version({
   deleteTags(tags)
   cleanup()
 
-  if (versionStrategy !== VersionStrategy.ConventionalCommits) {
-    core.info(`Static version strategy used. Trying to generate changelogs manually.`)
+  const usedStaticOrExplicit = bumps
+    ? true
+    : narrowedStrategy !== VersionStrategy.ConventionalCommits
+  if (usedStaticOrExplicit) {
+    core.info(`Explicit / static bump used. Trying to generate changelogs manually.`)
     await Promise.all(packages.map((packageDir) => updateChangelog(packageDir)))
     formatPackageFiles({ formatCommand, packages })
     add(packages)

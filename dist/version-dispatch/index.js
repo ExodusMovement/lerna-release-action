@@ -30350,6 +30350,7 @@ var Input;
     Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
+    Input["Bumps"] = "bumps";
     Input["AutoMerge"] = "auto-merge";
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";

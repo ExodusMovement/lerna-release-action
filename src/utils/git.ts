@@ -91,12 +91,13 @@ type ResetFlags = {
 
 type ResetLastCommitParams = {
   flags: ResetFlags
+  count?: number
 }
 
 const resetFlags = ['mixed']
 
-export function resetLastCommit({ flags }: ResetLastCommitParams) {
-  spawnSync('git', ['reset', ...flagsAsArguments(flags, resetFlags), 'HEAD~1'])
+export function resetLastCommit({ flags, count = 1 }: ResetLastCommitParams) {
+  spawnSync('git', ['reset', ...flagsAsArguments(flags, resetFlags), `HEAD~${count}`])
 }
 
 type ConfigureUserParams = {

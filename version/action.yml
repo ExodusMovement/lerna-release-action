@@ -8,8 +8,11 @@ inputs:
     description: 'Selected packages as comma separated string, e.g. modules/storage-spec,libraries/formatting'
     required: true
   version-strategy:
-    description: 'Versioning strategy, supports conventional-commits and static versioning through: patch, minor, major, premajor, preminor, prepatch, prerelease'
+    description: 'Versioning strategy, supports conventional-commits and static versioning through: patch, minor, major, premajor, preminor, prepatch, prerelease. Ignored when `bumps` is provided.'
     default: 'conventional-commits'
+  bumps:
+    description: 'Optional JSON map of `{ "<package>": "<bump>" }` for explicit per-package versioning, e.g. `{"@exodus/multi-account-redux":"major","@exodus/balances":"patch"}`. When supplied, `version-strategy` is ignored and lerna runs once per entry with the named bump and `--scope <package>`. Every package in this map must also appear in `packages`.'
+    required: false
   version-extra-args:
     description: 'Additional args appended to the lerna version call'
   assignee:
