@@ -84692,10 +84692,14 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
         }));
     }
     if (assignees) {
-        promises.push(client.rest.issues.addAssignees({
+        promises.push(client.rest.issues
+            .addAssignees({
             ...repo,
             issue_number: response.data.number,
             assignees,
+        })
+            .catch((error) => {
+            core.warning(`Failed to assign users: ${(0, errors_1.unwrapErrorMessage)(error, 'for unknown reasons')}`);
         }));
     }
     if (reviewers) {

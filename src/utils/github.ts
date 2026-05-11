@@ -69,11 +69,17 @@ export async function createPullRequest({
 
   if (assignees) {
     promises.push(
-      client.rest.issues.addAssignees({
-        ...repo,
-        issue_number: response.data.number,
-        assignees,
-      })
+      client.rest.issues
+        .addAssignees({
+          ...repo,
+          issue_number: response.data.number,
+          assignees,
+        })
+        .catch((error) => {
+          core.warning(
+            `Failed to assign users: ${unwrapErrorMessage(error, 'for unknown reasons')}`
+          )
+        })
     )
   }
 
