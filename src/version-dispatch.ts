@@ -6,7 +6,7 @@ import { VersionDispatchInput as Input } from './constants'
 import { Filesystem } from './utils/types'
 import { Bump, BUMP_NONE, bumpFromMessage, maxBump } from './version-dispatch/bumps'
 import { filesToPackages } from './version-dispatch/files-to-packages'
-import { updateVersionPreview } from './version-dispatch/preview'
+import { postVersionPreview } from './version-dispatch/preview'
 
 type Params = {
   filesystem?: Filesystem
@@ -38,11 +38,11 @@ if (require.main === module) {
  *
  * Preview mode — when invoked against a PR that has *not* been merged
  * (e.g. `pull_request: synchronize` runs), the action skips the
- * dispatch entirely and instead rewrites a sentinel block at the bottom
- * of the PR description with the computed bumps and the resulting
- * `current → next` versions. The block is delimited by paired HTML
- * markers so it can be replaced in-place on every run without
- * cluttering the PR conversation with comments.
+ * dispatch entirely and instead posts a sticky comment to the PR with
+ * the computed bumps and the resulting `current → next` versions. On
+ * every run the prior preview comment is deleted and a fresh one
+ * created, so reviewers always see exactly one preview comment,
+ * anchored at the end of the conversation timeline.
  */
 export async function versionDispatch({ filesystem = fs }: Params = {}) {
   const token = core.getInput(Input.GithubToken, { required: true })
@@ -114,11 +114,10 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
   core.setOutput('bumps', JSON.stringify(bumps))
 
   if (isPreview) {
-    await updateVersionPreview({
+    await postVersionPreview({
       client,
       repo,
       prNumber: pr.number,
-      prBody: pr.body,
       bumps,
       packagePaths,
       filesystem,
@@ -160,7 +159,6 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
 type PullRequest = {
   number: number
   title: string
-  body?: string | null
   merged?: boolean
   state?: string
   labels?: { name: string }[]

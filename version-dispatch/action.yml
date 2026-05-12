@@ -2,9 +2,11 @@ name: 'Lerna release action: Version Dispatch'
 description: >
   Inspect a PR's pre-squash commits, attribute each commit to workspace
   packages by touched files, and either (a) dispatch the version workflow
-  with a per-package bump map when the PR is merged, or (b) rewrite a
-  sentinel block at the bottom of the PR description showing the
-  resulting versions when the PR is still open.
+  with a per-package bump map when the PR is merged, or (b) post a sticky
+  preview comment showing the resulting versions when the PR is still
+  open. The prior preview comment is deleted on every run so reviewers
+  always see exactly one preview comment, anchored at the end of the
+  conversation timeline.
 
 inputs:
   github-token:

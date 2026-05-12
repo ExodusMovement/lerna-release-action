@@ -2,13 +2,11 @@ import { Volume } from 'memfs/lib/volume'
 import { createFsFromJSON } from '../utils/testing'
 import { GithubClient } from '../utils/github'
 import {
-  applyPreviewBlock,
   buildPreviewRows,
   nextVersion,
-  PREVIEW_MARKER_END,
-  PREVIEW_MARKER_START,
-  renderPreviewBlock,
-  updateVersionPreview,
+  postVersionPreview,
+  PREVIEW_MARKER,
+  renderPreviewComment,
 } from './preview'
 import { BUMP_MAJOR, BUMP_MINOR, BUMP_PATCH } from './bumps'
 
@@ -86,162 +84,111 @@ describe('buildPreviewRows', () => {
   })
 })
 
-describe('renderPreviewBlock', () => {
-  it('wraps the table in the paired markers', () => {
-    const block = renderPreviewBlock([
+describe('renderPreviewComment', () => {
+  it('starts with the marker and includes the table', () => {
+    const body = renderPreviewComment([
       { pkg: '@exodus/atoms', bump: BUMP_MAJOR, current: '1.0.0', next: '2.0.0' },
     ])
-    expect(block.startsWith(PREVIEW_MARKER_START)).toBe(true)
-    expect(block.endsWith(PREVIEW_MARKER_END)).toBe(true)
-    expect(block).toContain('| `@exodus/atoms` | major | 1.0.0 | 2.0.0 |')
+    expect(body.startsWith(PREVIEW_MARKER)).toBe(true)
+    expect(body).toContain('| `@exodus/atoms` | major | 1.0.0 | 2.0.0 |')
   })
 })
 
-describe('applyPreviewBlock', () => {
-  const block = renderPreviewBlock([
-    { pkg: '@exodus/atoms', bump: BUMP_MAJOR, current: '1.0.0', next: '2.0.0' },
-  ])
+describe('postVersionPreview', () => {
+  type ListComments = GithubClient['rest']['issues']['listComments']
+  type Comment = { id: number; body: string }
 
-  it('appends the block to an empty body', () => {
-    expect(applyPreviewBlock('', block)).toBe(block)
-  })
-
-  it('appends the block to a body with no prior preview', () => {
-    const body = '## Summary\n\nDoes a thing.'
-    const result = applyPreviewBlock(body, block)
-    expect(result).toBe(`${body}\n\n${block}`)
-  })
-
-  it('replaces an existing block in place', () => {
-    const stale = renderPreviewBlock([
-      { pkg: '@exodus/atoms', bump: BUMP_PATCH, current: '0.9.0', next: '0.9.1' },
-    ])
-    const body = `## Summary\n\nDoes a thing.\n\n${stale}`
-    const result = applyPreviewBlock(body, block)
-    expect(result).toBe(`## Summary\n\nDoes a thing.\n\n${block}`)
-    expect(result).not.toContain('0.9.0')
-  })
-
-  it('strips a stale block and leaves the body untouched when there is nothing to render', () => {
-    const stale = renderPreviewBlock([
-      { pkg: '@exodus/atoms', bump: BUMP_PATCH, current: '0.9.0', next: '0.9.1' },
-    ])
-    const body = `## Summary\n\nDoes a thing.\n\n${stale}`
-    const result = applyPreviewBlock(body, '')
-    expect(result).toBe('## Summary\n\nDoes a thing.')
-    expect(result).not.toContain('preview')
-  })
-})
-
-describe('updateVersionPreview', () => {
-  type PullsUpdate = GithubClient['rest']['pulls']['update']
-
-  function makeClient() {
-    const update = jest.fn().mockResolvedValue(undefined) as unknown as PullsUpdate
+  function makeClient(existing: Comment[] = []) {
+    const paginate = jest.fn().mockResolvedValue(existing)
+    const createComment = jest.fn().mockResolvedValue(undefined)
+    const deleteComment = jest.fn().mockResolvedValue(undefined)
+    const listComments = jest.fn() as unknown as ListComments
     const client = {
-      rest: { pulls: { update } },
+      paginate,
+      rest: {
+        issues: { listComments, createComment, deleteComment },
+      },
     } as unknown as GithubClient
-    return { client, update: update as unknown as jest.Mock }
+    return { client, paginate, createComment, deleteComment }
   }
 
-  it('appends a preview block when none exists yet', async () => {
-    const { client, update } = makeClient()
+  it('posts a fresh comment when there are bumps and no prior comment', async () => {
+    const { client, createComment, deleteComment } = makeClient()
     const filesystem = makeFs({ '@exodus/atoms': '1.0.0' })
 
-    await updateVersionPreview({
+    await postVersionPreview({
       client,
       repo,
       prNumber: 42,
-      prBody: '## Summary\n\nDoes a thing.',
       bumps: { '@exodus/atoms': BUMP_MAJOR },
       packagePaths,
       filesystem: filesystem as never,
     })
 
-    expect(update).toHaveBeenCalledTimes(1)
-    const [args] = update.mock.calls[0]
-    expect(args.pull_number).toBe(42)
-    expect(args.body).toContain('## Summary')
-    expect(args.body).toContain(PREVIEW_MARKER_START)
+    expect(deleteComment).not.toHaveBeenCalled()
+    expect(createComment).toHaveBeenCalledTimes(1)
+    const [args] = createComment.mock.calls[0]
+    expect(args.issue_number).toBe(42)
+    expect(args.body).toContain(PREVIEW_MARKER)
+    expect(args.body).toContain('@exodus/atoms')
     expect(args.body).toContain('2.0.0')
   })
 
-  it('replaces a stale preview block in place', async () => {
-    const { client, update } = makeClient()
-    const filesystem = makeFs({ '@exodus/atoms': '1.0.0' })
-    const staleBlock = renderPreviewBlock([
-      { pkg: '@exodus/atoms', bump: BUMP_PATCH, current: '0.5.0', next: '0.5.1' },
+  it('deletes every stale preview comment before posting the new one', async () => {
+    const { client, createComment, deleteComment } = makeClient([
+      { id: 111, body: `${PREVIEW_MARKER}\nstale one` },
+      { id: 222, body: 'unrelated reviewer comment' },
+      { id: 333, body: `${PREVIEW_MARKER}\nstale two` },
     ])
-    const body = `## Summary\n\nDoes a thing.\n\n${staleBlock}`
+    const filesystem = makeFs({ '@exodus/atoms': '1.0.0' })
 
-    await updateVersionPreview({
+    await postVersionPreview({
       client,
       repo,
       prNumber: 42,
-      prBody: body,
       bumps: { '@exodus/atoms': BUMP_MAJOR },
       packagePaths,
       filesystem: filesystem as never,
     })
 
-    const [args] = update.mock.calls[0]
-    expect(args.body).toContain('2.0.0')
-    expect(args.body).not.toContain('0.5.0')
-    expect(args.body.match(new RegExp(PREVIEW_MARKER_START, 'g'))!.length).toBe(1)
+    expect(deleteComment).toHaveBeenCalledTimes(2)
+    expect(deleteComment).toHaveBeenCalledWith({ ...repo, comment_id: 111 })
+    expect(deleteComment).toHaveBeenCalledWith({ ...repo, comment_id: 333 })
+    expect(deleteComment).not.toHaveBeenCalledWith({ ...repo, comment_id: 222 })
+    expect(createComment).toHaveBeenCalledTimes(1)
   })
 
-  it('strips a stale block when the bumps map becomes empty', async () => {
-    const { client, update } = makeClient()
-    const staleBlock = renderPreviewBlock([
-      { pkg: '@exodus/atoms', bump: BUMP_PATCH, current: '0.5.0', next: '0.5.1' },
+  it('clears stale comments and posts nothing when the bumps map is empty', async () => {
+    const { client, createComment, deleteComment } = makeClient([
+      { id: 333, body: `${PREVIEW_MARKER}\nstale preview` },
     ])
-    const body = `## Summary\n\nDoes a thing.\n\n${staleBlock}`
 
-    await updateVersionPreview({
+    await postVersionPreview({
       client,
       repo,
       prNumber: 42,
-      prBody: body,
       bumps: {},
       packagePaths,
       filesystem: makeFs({}) as never,
     })
 
-    const [args] = update.mock.calls[0]
-    expect(args.body).toBe('## Summary\n\nDoes a thing.')
+    expect(deleteComment).toHaveBeenCalledWith({ ...repo, comment_id: 333 })
+    expect(createComment).not.toHaveBeenCalled()
   })
 
-  it('is a no-op when there is no block to write and none to clean up', async () => {
-    const { client, update } = makeClient()
+  it('is a no-op when there are no bumps and no stale comment', async () => {
+    const { client, createComment, deleteComment } = makeClient([])
 
-    await updateVersionPreview({
+    await postVersionPreview({
       client,
       repo,
       prNumber: 42,
-      prBody: '## Summary\n\nDoes a thing.',
       bumps: {},
       packagePaths,
       filesystem: makeFs({}) as never,
     })
 
-    expect(update).not.toHaveBeenCalled()
-  })
-
-  it('handles a null body by writing only the preview block', async () => {
-    const { client, update } = makeClient()
-    const filesystem = makeFs({ '@exodus/atoms': '1.0.0' })
-
-    await updateVersionPreview({
-      client,
-      repo,
-      prNumber: 42,
-      prBody: null,
-      bumps: { '@exodus/atoms': BUMP_MAJOR },
-      packagePaths,
-      filesystem: filesystem as never,
-    })
-
-    const [args] = update.mock.calls[0]
-    expect(args.body.startsWith(PREVIEW_MARKER_START)).toBe(true)
+    expect(deleteComment).not.toHaveBeenCalled()
+    expect(createComment).not.toHaveBeenCalled()
   })
 })

@@ -30481,38 +30481,36 @@ function ensureTrailingSlash(value) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.PREVIEW_MARKER_END = exports.PREVIEW_MARKER_START = exports.applyPreviewBlock = exports.renderPreviewBlock = exports.nextVersion = exports.buildPreviewRows = exports.updateVersionPreview = void 0;
+exports.PREVIEW_MARKER = exports.renderPreviewComment = exports.nextVersion = exports.buildPreviewRows = exports.postVersionPreview = void 0;
 const path = __nccwpck_require__(1017);
 const core = __nccwpck_require__(2186);
 const bumps_1 = __nccwpck_require__(9317);
-const MARKER_START = '<!-- lerna-release-action:version-preview:start -->';
-const MARKER_END = '<!-- lerna-release-action:version-preview:end -->';
-const BLOCK_REGEX = new RegExp(`\\n*${escapeRegex(MARKER_START)}[\\s\\S]*?${escapeRegex(MARKER_END)}\\n*`, 'g');
+const MARKER = '<!-- lerna-release-action:version-preview -->';
 /**
- * Render the version preview as a sentinel block at the bottom of the PR
- * body. On every run we strip any prior block (matched by paired HTML
- * markers) and re-append a fresh one — so reviewers always see the latest
- * computed bumps without a comment-spam.
+ * Post the version preview as a sticky comment on the PR. On every run we
+ * delete every prior preview comment (matched by a hidden HTML marker)
+ * and post a fresh one at the end of the conversation — so reviewers
+ * always see exactly one preview comment, anchored to the latest push.
  */
-async function updateVersionPreview({ client, repo, prNumber, prBody, bumps, packagePaths, filesystem, }) {
+async function postVersionPreview({ client, repo, prNumber, bumps, packagePaths, filesystem, }) {
     const rows = buildPreviewRows({ bumps, packagePaths, filesystem });
-    const block = rows.length === 0 ? '' : renderPreviewBlock(rows);
-    const nextBody = applyPreviewBlock(prBody ?? '', block);
-    if (nextBody === (prBody ?? '')) {
-        core.info('preview: PR body already matches the computed preview; no update needed');
+    const body = rows.length === 0 ? '' : renderPreviewComment(rows);
+    const deleted = await deleteExistingPreviewComments({ client, repo, prNumber });
+    if (!body) {
+        if (deleted > 0)
+            core.info(`preview: cleared ${deleted} stale preview comment(s)`);
+        else
+            core.info('preview: no bumps from this PR; nothing to post');
         return;
     }
-    await client.rest.pulls.update({
+    await client.rest.issues.createComment({
         ...repo,
-        pull_number: prNumber,
-        body: nextBody,
+        issue_number: prNumber,
+        body,
     });
-    if (block)
-        core.info(`preview: refreshed version preview in PR #${prNumber} description`);
-    else
-        core.info(`preview: cleared stale version preview from PR #${prNumber} description`);
+    core.info(`preview: posted version preview to PR #${prNumber}`);
 }
-exports.updateVersionPreview = updateVersionPreview;
+exports.postVersionPreview = postVersionPreview;
 function buildPreviewRows({ bumps, packagePaths, filesystem, }) {
     const rows = [];
     for (const [pkg, bump] of Object.entries(bumps)) {
@@ -30560,9 +30558,9 @@ function nextVersion(current, bump) {
     return current;
 }
 exports.nextVersion = nextVersion;
-function renderPreviewBlock(rows) {
+function renderPreviewComment(rows) {
     const lines = [
-        MARKER_START,
+        MARKER,
         '## Version preview',
         '',
         'If merged as-is, this PR will release:',
@@ -30571,31 +30569,30 @@ function renderPreviewBlock(rows) {
         '| --- | --- | --- | --- |',
         ...rows.map((r) => `| \`${r.pkg}\` | ${r.bump} | ${r.current} | ${r.next} |`),
         '',
-        '_Computed by [`lerna-release-action/version-dispatch`](https://github.com/ExodusMovement/lerna-release-action) from per-commit file attribution. Refreshed on every push._',
-        MARKER_END,
+        '_Computed by [`lerna-release-action/version-dispatch`](https://github.com/ExodusMovement/lerna-release-action) from per-commit file attribution. Re-posted on every push so the latest preview is always at the end of this thread._',
     ];
     return lines.join('\n');
 }
-exports.renderPreviewBlock = renderPreviewBlock;
-/**
- * Strip any existing preview block from the body and append the new one at
- * the end (separated by a blank line). If `block` is empty, only the strip
- * happens — leaving the author's body untouched aside from the cleanup.
- */
-function applyPreviewBlock(body, block) {
-    const stripped = body.replace(BLOCK_REGEX, '\n').replace(/\s+$/u, '');
-    if (!block)
-        return stripped;
-    if (!stripped)
-        return block;
-    return `${stripped}\n\n${block}`;
+exports.renderPreviewComment = renderPreviewComment;
+async function deleteExistingPreviewComments({ client, repo, prNumber, }) {
+    const comments = await client.paginate(client.rest.issues.listComments, {
+        ...repo,
+        issue_number: prNumber,
+        per_page: 100,
+    });
+    const stale = comments.filter((c) => typeof c.body === 'string' && c.body.includes(MARKER));
+    for (const c of stale) {
+        try {
+            await client.rest.issues.deleteComment({ ...repo, comment_id: c.id });
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            core.warning(`preview: failed to delete stale comment ${c.id}: ${message}`);
+        }
+    }
+    return stale.length;
 }
-exports.applyPreviewBlock = applyPreviewBlock;
-function escapeRegex(value) {
-    return value.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&');
-}
-exports.PREVIEW_MARKER_START = MARKER_START;
-exports.PREVIEW_MARKER_END = MARKER_END;
+exports.PREVIEW_MARKER = MARKER;
 
 
 /***/ }),
@@ -41267,11 +41264,11 @@ if (require.main === require.cache[eval('__filename')]) {
  *
  * Preview mode — when invoked against a PR that has *not* been merged
  * (e.g. `pull_request: synchronize` runs), the action skips the
- * dispatch entirely and instead rewrites a sentinel block at the bottom
- * of the PR description with the computed bumps and the resulting
- * `current → next` versions. The block is delimited by paired HTML
- * markers so it can be replaced in-place on every run without
- * cluttering the PR conversation with comments.
+ * dispatch entirely and instead posts a sticky comment to the PR with
+ * the computed bumps and the resulting `current → next` versions. On
+ * every run the prior preview comment is deleted and a fresh one
+ * created, so reviewers always see exactly one preview comment,
+ * anchored at the end of the conversation timeline.
  */
 async function versionDispatch({ filesystem = fs } = {}) {
     const token = core.getInput(constants_1.VersionDispatchInput.GithubToken, { required: true });
@@ -41330,11 +41327,10 @@ async function versionDispatch({ filesystem = fs } = {}) {
     core.setOutput('packages', packageNames.join(','));
     core.setOutput('bumps', JSON.stringify(bumps));
     if (isPreview) {
-        await (0, preview_1.updateVersionPreview)({
+        await (0, preview_1.postVersionPreview)({
             client,
             repo,
             prNumber: pr.number,
-            prBody: pr.body,
             bumps,
             packagePaths,
             filesystem,
