@@ -19,13 +19,16 @@
     "conventional-changelog-core": "^5.0.2",
     "enquirer": "^2.3.6",
     "get-stream": "^6.0.1",
+    "p-limit": "^3.1.0",
     "p-retry": "^4.6.2",
     "pino": "^8.14.2",
     "pino-pretty": "^10.2.0",
+    "semver": "^7.3.8",
     "yaml": "^2.3.1"
   },
   "devDependencies": {
     "@types/node": "^18.6.3",
+    "@types/semver": "^7.5.0",
     "typescript": "^4.7.4"
   },
   "bin": {
