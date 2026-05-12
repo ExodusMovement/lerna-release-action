@@ -30475,6 +30475,131 @@ function ensureTrailingSlash(value) {
 
 /***/ }),
 
+/***/ 7993:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PREVIEW_MARKER_END = exports.PREVIEW_MARKER_START = exports.applyPreviewBlock = exports.renderPreviewBlock = exports.nextVersion = exports.buildPreviewRows = exports.updateVersionPreview = void 0;
+const path = __nccwpck_require__(1017);
+const core = __nccwpck_require__(2186);
+const bumps_1 = __nccwpck_require__(9317);
+const MARKER_START = '<!-- lerna-release-action:version-preview:start -->';
+const MARKER_END = '<!-- lerna-release-action:version-preview:end -->';
+const BLOCK_REGEX = new RegExp(`\\n*${escapeRegex(MARKER_START)}[\\s\\S]*?${escapeRegex(MARKER_END)}\\n*`, 'g');
+/**
+ * Render the version preview as a sentinel block at the bottom of the PR
+ * body. On every run we strip any prior block (matched by paired HTML
+ * markers) and re-append a fresh one — so reviewers always see the latest
+ * computed bumps without a comment-spam.
+ */
+async function updateVersionPreview({ client, repo, prNumber, prBody, bumps, packagePaths, filesystem, }) {
+    const rows = buildPreviewRows({ bumps, packagePaths, filesystem });
+    const block = rows.length === 0 ? '' : renderPreviewBlock(rows);
+    const nextBody = applyPreviewBlock(prBody ?? '', block);
+    if (nextBody === (prBody ?? '')) {
+        core.info('preview: PR body already matches the computed preview; no update needed');
+        return;
+    }
+    await client.rest.pulls.update({
+        ...repo,
+        pull_number: prNumber,
+        body: nextBody,
+    });
+    if (block)
+        core.info(`preview: refreshed version preview in PR #${prNumber} description`);
+    else
+        core.info(`preview: cleared stale version preview from PR #${prNumber} description`);
+}
+exports.updateVersionPreview = updateVersionPreview;
+function buildPreviewRows({ bumps, packagePaths, filesystem, }) {
+    const rows = [];
+    for (const [pkg, bump] of Object.entries(bumps)) {
+        const pkgPath = packagePaths[pkg];
+        if (!pkgPath) {
+            core.warning(`preview: no workspace path for "${pkg}"; skipping`);
+            continue;
+        }
+        const current = readVersion({ filesystem, pkgPath });
+        if (!current) {
+            core.warning(`preview: could not read version for "${pkg}" at ${pkgPath}; skipping`);
+            continue;
+        }
+        rows.push({ pkg, bump, current, next: nextVersion(current, bump) });
+    }
+    rows.sort((a, b) => a.pkg.localeCompare(b.pkg));
+    return rows;
+}
+exports.buildPreviewRows = buildPreviewRows;
+function readVersion({ filesystem, pkgPath, }) {
+    const jsonPath = path.join(pkgPath, 'package.json');
+    try {
+        const raw = filesystem.readFileSync(jsonPath, 'utf8');
+        const parsed = JSON.parse(raw);
+        return typeof parsed.version === 'string' ? parsed.version : null;
+    }
+    catch {
+        return null;
+    }
+}
+function nextVersion(current, bump) {
+    const stripped = current.split(/[+-]/)[0] ?? current;
+    const [majorStr, minorStr, patchStr] = stripped.split('.');
+    const major = Number(majorStr);
+    const minor = Number(minorStr);
+    const patch = Number(patchStr);
+    if (![major, minor, patch].every(Number.isFinite))
+        return current;
+    if (bump === bumps_1.BUMP_MAJOR)
+        return `${major + 1}.0.0`;
+    if (bump === bumps_1.BUMP_MINOR)
+        return `${major}.${minor + 1}.0`;
+    if (bump === bumps_1.BUMP_PATCH)
+        return `${major}.${minor}.${patch + 1}`;
+    return current;
+}
+exports.nextVersion = nextVersion;
+function renderPreviewBlock(rows) {
+    const lines = [
+        MARKER_START,
+        '## Version preview',
+        '',
+        'If merged as-is, this PR will release:',
+        '',
+        '| Package | Bump | Current | Next |',
+        '| --- | --- | --- | --- |',
+        ...rows.map((r) => `| \`${r.pkg}\` | ${r.bump} | ${r.current} | ${r.next} |`),
+        '',
+        '_Computed by [`lerna-release-action/version-dispatch`](https://github.com/ExodusMovement/lerna-release-action) from per-commit file attribution. Refreshed on every push._',
+        MARKER_END,
+    ];
+    return lines.join('\n');
+}
+exports.renderPreviewBlock = renderPreviewBlock;
+/**
+ * Strip any existing preview block from the body and append the new one at
+ * the end (separated by a blank line). If `block` is empty, only the strip
+ * happens — leaving the author's body untouched aside from the cleanup.
+ */
+function applyPreviewBlock(body, block) {
+    const stripped = body.replace(BLOCK_REGEX, '\n').replace(/\s+$/u, '');
+    if (!block)
+        return stripped;
+    if (!stripped)
+        return block;
+    return `${stripped}\n\n${block}`;
+}
+exports.applyPreviewBlock = applyPreviewBlock;
+function escapeRegex(value) {
+    return value.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&');
+}
+exports.PREVIEW_MARKER_START = MARKER_START;
+exports.PREVIEW_MARKER_END = MARKER_END;
+
+
+/***/ }),
+
 /***/ 9491:
 /***/ ((module) => {
 
@@ -41115,6 +41240,7 @@ const lerna_utils_1 = __nccwpck_require__(4801);
 const constants_1 = __nccwpck_require__(9042);
 const bumps_1 = __nccwpck_require__(9317);
 const files_to_packages_1 = __nccwpck_require__(6516);
+const preview_1 = __nccwpck_require__(7993);
 if (require.main === require.cache[eval('__filename')]) {
     versionDispatch().catch((error) => {
         if (error.stack)
@@ -41138,6 +41264,14 @@ if (require.main === require.cache[eval('__filename')]) {
  * to `lerna-release-action/version`. When `bumps` is unset that action
  * falls back to the old `version-strategy` flow, so consumers that
  * haven't updated their `version.yml` to forward `bumps` keep working.
+ *
+ * Preview mode — when invoked against a PR that has *not* been merged
+ * (e.g. `pull_request: synchronize` runs), the action skips the
+ * dispatch entirely and instead rewrites a sentinel block at the bottom
+ * of the PR description with the computed bumps and the resulting
+ * `current → next` versions. The block is delimited by paired HTML
+ * markers so it can be replaced in-place on every run without
+ * cluttering the PR conversation with comments.
  */
 async function versionDispatch({ filesystem = fs } = {}) {
     const token = core.getInput(constants_1.VersionDispatchInput.GithubToken, { required: true });
@@ -41159,13 +41293,15 @@ async function versionDispatch({ filesystem = fs } = {}) {
     }
     else if (payload.pull_request) {
         pr = payload.pull_request;
-        if (!pr.merged) {
-            core.notice('PR was closed without merging.');
-            return null;
-        }
     }
     else {
         core.warning('Action triggered by non-PR event and no `pr-number` was supplied.');
+        return null;
+    }
+    const isMerged = pr.merged === true;
+    const isPreview = !isMerged && pr.state !== 'closed';
+    if (!isMerged && !isPreview) {
+        core.notice('PR was closed without merging.');
         return null;
     }
     const excludedLabel = (pr.labels ?? []).find((label) => excludedLabels.has(label.name));
@@ -41191,12 +41327,24 @@ async function versionDispatch({ filesystem = fs } = {}) {
         prTitle: pr.title,
     });
     const packageNames = Object.keys(bumps);
+    core.setOutput('packages', packageNames.join(','));
+    core.setOutput('bumps', JSON.stringify(bumps));
+    if (isPreview) {
+        await (0, preview_1.updateVersionPreview)({
+            client,
+            repo,
+            prNumber: pr.number,
+            prBody: pr.body,
+            bumps,
+            packagePaths,
+            filesystem,
+        });
+        return bumps;
+    }
     if (packageNames.length === 0) {
         core.notice('No releaseable commits across workspace packages.');
         return null;
     }
-    core.setOutput('packages', packageNames.join(','));
-    core.setOutput('bumps', JSON.stringify(bumps));
     if (dryRun) {
         core.info(`dry-run: bumps = ${JSON.stringify(bumps, null, 2)}`);
         return bumps;

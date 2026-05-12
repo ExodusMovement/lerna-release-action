@@ -6,6 +6,7 @@ import { VersionDispatchInput as Input } from './constants'
 import { Filesystem } from './utils/types'
 import { Bump, BUMP_NONE, bumpFromMessage, maxBump } from './version-dispatch/bumps'
 import { filesToPackages } from './version-dispatch/files-to-packages'
+import { updateVersionPreview } from './version-dispatch/preview'
 
 type Params = {
   filesystem?: Filesystem
@@ -34,6 +35,14 @@ if (require.main === module) {
  * to `lerna-release-action/version`. When `bumps` is unset that action
  * falls back to the old `version-strategy` flow, so consumers that
  * haven't updated their `version.yml` to forward `bumps` keep working.
+ *
+ * Preview mode — when invoked against a PR that has *not* been merged
+ * (e.g. `pull_request: synchronize` runs), the action skips the
+ * dispatch entirely and instead rewrites a sentinel block at the bottom
+ * of the PR description with the computed bumps and the resulting
+ * `current → next` versions. The block is delimited by paired HTML
+ * markers so it can be replaced in-place on every run without
+ * cluttering the PR conversation with comments.
  */
 export async function versionDispatch({ filesystem = fs }: Params = {}) {
   const token = core.getInput(Input.GithubToken, { required: true })
@@ -58,12 +67,16 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
     pr = data as PullRequest
   } else if (payload.pull_request) {
     pr = payload.pull_request as PullRequest
-    if (!pr.merged) {
-      core.notice('PR was closed without merging.')
-      return null
-    }
   } else {
     core.warning('Action triggered by non-PR event and no `pr-number` was supplied.')
+    return null
+  }
+
+  const isMerged = pr.merged === true
+  const isPreview = !isMerged && pr.state !== 'closed'
+
+  if (!isMerged && !isPreview) {
+    core.notice('PR was closed without merging.')
     return null
   }
 
@@ -97,13 +110,26 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
   })
 
   const packageNames = Object.keys(bumps)
+  core.setOutput('packages', packageNames.join(','))
+  core.setOutput('bumps', JSON.stringify(bumps))
+
+  if (isPreview) {
+    await updateVersionPreview({
+      client,
+      repo,
+      prNumber: pr.number,
+      prBody: pr.body,
+      bumps,
+      packagePaths,
+      filesystem,
+    })
+    return bumps
+  }
+
   if (packageNames.length === 0) {
     core.notice('No releaseable commits across workspace packages.')
     return null
   }
-
-  core.setOutput('packages', packageNames.join(','))
-  core.setOutput('bumps', JSON.stringify(bumps))
 
   if (dryRun) {
     core.info(`dry-run: bumps = ${JSON.stringify(bumps, null, 2)}`)
@@ -134,7 +160,9 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
 type PullRequest = {
   number: number
   title: string
+  body?: string | null
   merged?: boolean
+  state?: string
   labels?: { name: string }[]
   user?: { login: string }
   base?: { ref: string }

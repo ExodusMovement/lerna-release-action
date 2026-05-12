@@ -65,6 +65,7 @@ describe('versionDispatch', () => {
         pulls: {
           listCommits: jest.fn() as unknown,
           get: jest.fn() as unknown,
+          update: jest.fn() as unknown,
         },
         issues: {
           createComment: jest.fn() as unknown,
@@ -199,7 +200,6 @@ describe('versionDispatch', () => {
           pull_request: { ...defaults, base: { ref: 'wayne-foundation/batmobile-v2' } },
         },
       ],
-      ['if PR was not merged', { pull_request: { ...defaults, merged: false } }],
       [
         'if PR has label skip-release',
         {
@@ -242,6 +242,129 @@ describe('versionDispatch', () => {
 
       await versionDispatch({ filesystem: fs as never })
 
+      expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('preview mode (unmerged PR)', () => {
+    const lernaConfigWithVersions = JSON.stringify({
+      packages: ['libraries/*', 'modules/{blockchain-metadata,balances}'],
+    })
+
+    beforeEach(() => {
+      fs = createFsFromJSON({
+        'lerna.json': lernaConfigWithVersions,
+        'libraries/atoms/package.json': JSON.stringify({ name: '@exodus/atoms', version: '1.0.0' }),
+        'libraries/wallet/package.json': JSON.stringify({
+          name: '@exodus/wallet',
+          version: '3.4.5',
+        }),
+        'modules/blockchain-metadata/package.json': JSON.stringify({
+          name: '@exodus/blockchain-metadata',
+          version: '0.1.0',
+        }),
+        'modules/balances/package.json': JSON.stringify({
+          name: '@exodus/balances',
+          version: '2.7.9',
+        }),
+      })
+    })
+
+    const PREVIEW_START = '<!-- lerna-release-action:version-preview:start -->'
+
+    it('updates the PR body with a preview block instead of dispatching when PR is open', async () => {
+      github.context.payload = {
+        pull_request: {
+          title: 'feat: pending',
+          number: 555,
+          body: '## Summary\n\nDoes a thing.',
+          merged: false,
+          state: 'open',
+          user: { login: 'brucewayne' },
+          base: { ref },
+          labels: [],
+        },
+      }
+
+      setupPaginate([{ sha: 'aaa1111', commit: { message: 'feat(atoms)!: drop legacy' } }], {
+        aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
+      })
+
+      await versionDispatch({ filesystem: fs as never })
+
+      expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+      expect(client.rest.pulls.update).toHaveBeenCalledTimes(1)
+      const [args] = (client.rest.pulls.update as unknown as jest.Mock).mock.calls[0]
+      expect(args.pull_number).toBe(555)
+      expect(args.body).toContain('## Summary')
+      expect(args.body).toContain(PREVIEW_START)
+      expect(args.body).toContain('@exodus/atoms')
+      expect(args.body).toContain('1.0.0')
+      expect(args.body).toContain('2.0.0')
+    })
+
+    it('replaces a stale preview block in the PR body on subsequent runs', async () => {
+      const staleBlock = [
+        PREVIEW_START,
+        '## Version preview',
+        '| `@exodus/balances` | patch | 2.7.9 | 2.7.0-stale |',
+        '<!-- lerna-release-action:version-preview:end -->',
+      ].join('\n')
+
+      github.context.payload = {
+        pull_request: {
+          title: 'feat: pending',
+          number: 555,
+          body: `## Summary\n\nDoes a thing.\n\n${staleBlock}`,
+          merged: false,
+          state: 'open',
+          user: { login: 'brucewayne' },
+          base: { ref },
+          labels: [],
+        },
+      }
+
+      setupPaginate([{ sha: 'bbb2222', commit: { message: 'fix(balances): tidy' } }], {
+        bbb2222: [{ filename: 'modules/balances/x.ts' }],
+      })
+
+      await versionDispatch({ filesystem: fs as never })
+
+      const [args] = (client.rest.pulls.update as unknown as jest.Mock).mock.calls[0]
+      expect(args.body).not.toContain('2.7.0-stale')
+      expect(args.body).toContain('2.7.10')
+      expect(args.body.match(/version-preview:start/g)).toHaveLength(1)
+    })
+
+    it('strips a stale preview block when no commits bump anything', async () => {
+      const staleBlock = [
+        PREVIEW_START,
+        '## Version preview',
+        '| `@exodus/atoms` | major | 1.0.0 | 2.0.0 |',
+        '<!-- lerna-release-action:version-preview:end -->',
+      ].join('\n')
+
+      github.context.payload = {
+        pull_request: {
+          title: 'chore: cleanup',
+          number: 555,
+          body: `## Summary\n\nDoes a thing.\n\n${staleBlock}`,
+          merged: false,
+          state: 'open',
+          user: { login: 'brucewayne' },
+          base: { ref },
+          labels: [],
+        },
+      }
+
+      setupPaginate([{ sha: 'ccc3333', commit: { message: 'chore: lockfile' } }], {
+        ccc3333: [{ filename: 'libraries/atoms/x.ts' }],
+      })
+
+      await versionDispatch({ filesystem: fs as never })
+
+      const [args] = (client.rest.pulls.update as unknown as jest.Mock).mock.calls[0]
+      expect(args.body).toBe('## Summary\n\nDoes a thing.')
       expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
     })
   })
