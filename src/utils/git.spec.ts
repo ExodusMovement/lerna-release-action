@@ -1,5 +1,5 @@
 import * as process from './process'
-import { add, commit, resetLastCommit } from './git'
+import { add, commit, resetCommits } from './git'
 
 describe('add', () => {
   it('should allow valid paths', () => {
@@ -39,11 +39,11 @@ describe('commit', () => {
   })
 })
 
-describe('resetLastCommit', () => {
+describe('resetCommits', () => {
   it.each([['pathspecFileNul'], ['hard'], ['merge'], ['keep'], ['soft']])(
     'should throw when using non-whitelisted %s flag',
     (flag) => {
-      expect(() => resetLastCommit({ flags: { [flag]: true } })).toThrow(
+      expect(() => resetCommits({ flags: { [flag]: true } })).toThrow(
         'Only the following flags are allowed: mixed'
       )
     }
@@ -52,7 +52,7 @@ describe('resetLastCommit', () => {
   it('resets HEAD~1 by default', () => {
     const spy = jest.spyOn(process, 'spawnSync').mockReturnValue('')
     try {
-      resetLastCommit({ flags: { mixed: true } })
+      resetCommits({ flags: { mixed: true } })
       expect(spy).toHaveBeenCalledWith('git', ['reset', '--mixed', 'HEAD~1'])
     } finally {
       spy.mockRestore()
@@ -62,7 +62,7 @@ describe('resetLastCommit', () => {
   it('resets HEAD~<count> when count is supplied', () => {
     const spy = jest.spyOn(process, 'spawnSync').mockReturnValue('')
     try {
-      resetLastCommit({ flags: { mixed: true }, count: 3 })
+      resetCommits({ flags: { mixed: true }, count: 3 })
       expect(spy).toHaveBeenCalledWith('git', ['reset', '--mixed', 'HEAD~3'])
     } finally {
       spy.mockRestore()

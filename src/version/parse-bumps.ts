@@ -1,3 +1,5 @@
+import { VersionStrategy } from './strategy'
+
 /**
  * Parse the optional `bumps` action input. Returns `undefined` when the input
  * is empty (so the caller falls back to the existing `version-strategy` flow);
@@ -8,15 +10,9 @@
  * confusing error 10 steps later.
  */
 
-const VALID_BUMPS = new Set([
-  'major',
-  'minor',
-  'patch',
-  'premajor',
-  'preminor',
-  'prepatch',
-  'prerelease',
-])
+const VALID_BUMPS = new Set<string>(
+  Object.values(VersionStrategy).filter((s) => s !== VersionStrategy.ConventionalCommits)
+)
 
 export function parseBumps(raw: string | undefined): Record<string, string> | undefined {
   if (!raw || raw.trim() === '') return undefined

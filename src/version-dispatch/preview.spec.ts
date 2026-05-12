@@ -48,8 +48,8 @@ describe('nextVersion', () => {
     expect(nextVersion('1.2.3', BUMP_PATCH)).toBe('1.2.4')
   })
 
-  it('strips pre-release metadata for the math', () => {
-    expect(nextVersion('1.2.3-rc.4', BUMP_PATCH)).toBe('1.2.4')
+  it('releases a pre-release to its base version on a patch bump', () => {
+    expect(nextVersion('1.2.3-rc.4', BUMP_PATCH)).toBe('1.2.3')
   })
 
   it('returns input when the version is unparseable', () => {

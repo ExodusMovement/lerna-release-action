@@ -12,7 +12,7 @@ import {
   getCommitSha,
   getStatusShort,
   pushHeadToOrigin,
-  resetLastCommit,
+  resetCommits,
   switchToBranch,
 } from './utils/git'
 import readPackageJsons from './version/read-package-jsons'
@@ -120,15 +120,6 @@ export default async function version({
   core.info('Versioning packages')
   let commitsToReset = 1
   if (bumps) {
-    const unknownPackages = Object.keys(bumps).filter(
-      (name) => !packages.some((p) => p.endsWith(`/${name.split('/').pop()}`) || p === name)
-    )
-    if (unknownPackages.length > 0) {
-      core.warning(
-        `Explicit bumps for ${unknownPackages.join(', ')} are not in the packages list and will still be versioned.`
-      )
-    }
-
     commitsToReset = versionPackagesExplicit({ bumps, packages })
   } else if (narrowedStrategy) {
     versionPackages({ extraArgs: versionExtraArgs, versionStrategy: narrowedStrategy })
@@ -153,7 +144,7 @@ export default async function version({
   core.info(
     `Resetting ${commitsToReset} commit${commitsToReset === 1 ? '' : 's'} created by lerna to stage only selected packages`
   )
-  resetLastCommit({ flags: { mixed: true }, count: commitsToReset })
+  resetCommits({ flags: { mixed: true }, count: commitsToReset })
   formatPackageFiles({ formatCommand, packages })
   add(packages)
   commit({ message, body: tags.join('\n') })

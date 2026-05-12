@@ -1,6 +1,7 @@
 import * as path from 'path'
 import * as core from '@actions/core'
-import { Bump, BUMP_MAJOR, BUMP_MINOR, BUMP_PATCH } from './bumps'
+import * as semver from 'semver'
+import { Bump } from './bumps'
 import { Filesystem, Repo } from '../utils/types'
 import { GithubClient } from '../utils/github'
 
@@ -103,16 +104,7 @@ function readVersion({
 }
 
 export function nextVersion(current: string, bump: Bump): string {
-  const stripped = current.split(/[+-]/)[0] ?? current
-  const [majorStr, minorStr, patchStr] = stripped.split('.')
-  const major = Number(majorStr)
-  const minor = Number(minorStr)
-  const patch = Number(patchStr)
-  if (![major, minor, patch].every(Number.isFinite)) return current
-  if (bump === BUMP_MAJOR) return `${major + 1}.0.0`
-  if (bump === BUMP_MINOR) return `${major}.${minor + 1}.0`
-  if (bump === BUMP_PATCH) return `${major}.${minor}.${patch + 1}`
-  return current
+  return semver.inc(current, bump as semver.ReleaseType) ?? current
 }
 
 export function renderPreviewComment(rows: PreviewRow[]): string {

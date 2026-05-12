@@ -174,8 +174,17 @@ type ComputeBumpsParams = {
   prTitle: string
 }
 
+type CommitWithFiles = {
+  sha: string
+  message: string
+  files: string[]
+}
+
 /**
  * Walk a PR's individual commits and build a `{ pkg: bump }` map.
+ *
+ * I/O — paginates the PR's commits and fetches each commit's file list
+ * in parallel. The pure aggregation logic lives in {@link aggregateBumps}.
  *
  * @returns map keyed by workspace package name, with values from the
  *   `Bump` type *minus* `none` — packages that received no bump are omitted.
@@ -199,25 +208,53 @@ export async function computeBumpsForPr({
     )
   }
 
+  const commitsWithFiles = await Promise.all(
+    commits.map(async (entry): Promise<CommitWithFiles> => {
+      const { data: detail } = await client.rest.repos.getCommit({ ...repo, ref: entry.sha })
+      return {
+        sha: entry.sha,
+        message: entry.commit.message,
+        files: (detail.files ?? []).map((f) => f.filename),
+      }
+    })
+  )
+
+  return aggregateBumps({ commits: commitsWithFiles, packagePaths, prTitle })
+}
+
+type AggregateBumpsParams = {
+  commits: CommitWithFiles[]
+  packagePaths: Record<string, string>
+  prTitle: string
+}
+
+/**
+ * Pure aggregation: turn `{ commits, packagePaths, prTitle }` into a
+ * `{ pkg: bump }` map. Extracted from {@link computeBumpsForPr} so it can
+ * be unit-tested without mocking GitHub.
+ */
+export function aggregateBumps({
+  commits,
+  packagePaths,
+  prTitle,
+}: AggregateBumpsParams): Record<string, Bump> {
   const bumps: Record<string, Bump> = {}
   const touchedAcrossPr = new Set<string>()
 
-  for (const entry of commits) {
-    const sha = entry.sha
-    const message = entry.commit.message
-    const bump = bumpFromMessage(message)
-    const { data: detail } = await client.rest.repos.getCommit({ ...repo, ref: sha })
-    const files = (detail.files ?? []).map((f) => f.filename)
-    const packages = filesToPackages(files, packagePaths)
+  for (const commit of commits) {
+    const bump = bumpFromMessage(commit.message)
+    const packages = filesToPackages(commit.files, packagePaths)
     for (const name of packages) touchedAcrossPr.add(name)
 
     if (bump === BUMP_NONE) {
-      core.info(`skip ${sha.slice(0, 7)}: ${firstLine(message)} (no bump)`)
+      core.info(`skip ${commit.sha.slice(0, 7)}: ${firstLine(commit.message)} (no bump)`)
       continue
     }
 
     if (packages.size === 0) {
-      core.info(`skip ${sha.slice(0, 7)}: ${firstLine(message)} (${bump}, no workspace files)`)
+      core.info(
+        `skip ${commit.sha.slice(0, 7)}: ${firstLine(commit.message)} (${bump}, no workspace files)`
+      )
       continue
     }
 
@@ -226,7 +263,7 @@ export async function computeBumpsForPr({
     }
 
     core.info(
-      `commit ${sha.slice(0, 7)} (${bump}): ${[...packages].join(', ')} — ${firstLine(message)}`
+      `commit ${commit.sha.slice(0, 7)} (${bump}): ${[...packages].join(', ')} — ${firstLine(commit.message)}`
     )
   }
 

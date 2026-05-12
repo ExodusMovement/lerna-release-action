@@ -1,3 +1,5 @@
+import { parseMessage } from '../utils/conventional-commits'
+
 export const BUMP_NONE = 'none'
 export const BUMP_PATCH = 'patch'
 export const BUMP_MINOR = 'minor'
@@ -12,8 +14,6 @@ const RANK: Record<Bump, number> = {
   [BUMP_MAJOR]: 3,
 }
 
-const HEADER_REGEX = /^(?<type>[A-Za-z]+)(?:\((?<scope>[^)]+)\))?(?<breaking>!)?:/
-
 /**
  * Map a single conventional-commit message to a bump level.
  *
@@ -24,17 +24,11 @@ const HEADER_REGEX = /^(?<type>[A-Za-z]+)(?:\((?<scope>[^)]+)\))?(?<breaking>!)?
  *   - anything else                                      → none
  */
 export function bumpFromMessage(message: unknown): Bump {
-  if (typeof message !== 'string' || message.length === 0) return BUMP_NONE
-  const [subject = '', ...rest] = message.split(/\r?\n/)
-  const body = rest.join('\n')
-
-  const match = HEADER_REGEX.exec(subject.trim())
-  if (!match || !match.groups) return BUMP_NONE
-  const { type, breaking } = match.groups
-
-  if (breaking === '!' || /^BREAKING[ -]CHANGE:/m.test(body)) return BUMP_MAJOR
-  if (type === 'feat') return BUMP_MINOR
-  if (type === 'fix' || type === 'perf') return BUMP_PATCH
+  const parsed = parseMessage(message)
+  if (!parsed) return BUMP_NONE
+  if (parsed.breaking) return BUMP_MAJOR
+  if (parsed.type === 'feat') return BUMP_MINOR
+  if (parsed.type === 'fix' || parsed.type === 'perf') return BUMP_PATCH
   return BUMP_NONE
 }
 

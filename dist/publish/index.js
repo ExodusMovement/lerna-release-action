@@ -30352,7 +30352,7 @@ exports.unwrapErrorMessage = unwrapErrorMessage;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.checkoutPr = exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getStatusShort = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
+exports.checkoutPr = exports.configureUser = exports.resetCommits = exports.cleanup = exports.checkout = exports.getStatusShort = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
 const process_1 = __nccwpck_require__(9239);
 const objects_1 = __nccwpck_require__(8151);
 const assert = __nccwpck_require__(8061);
@@ -30419,10 +30419,10 @@ function cleanup() {
 }
 exports.cleanup = cleanup;
 const resetFlags = ['mixed'];
-function resetLastCommit({ flags, count = 1 }) {
+function resetCommits({ flags, count = 1 }) {
     (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags, resetFlags), `HEAD~${count}`]);
 }
-exports.resetLastCommit = resetLastCommit;
+exports.resetCommits = resetCommits;
 function configureUser({ name, email }) {
     (0, process_1.spawnSync)('git', ['config', 'user.name', name]);
     (0, process_1.spawnSync)('git', ['config', 'user.email', email]);

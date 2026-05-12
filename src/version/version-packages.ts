@@ -49,7 +49,7 @@ type ExplicitParams = {
  * Each entry produces its own commit + tag, mirroring the per-package
  * structure of a normal `lerna version` run with all packages bumped
  * uniformly. The caller is responsible for collapsing the N commits into
- * one (via `resetLastCommit({ flags: { mixed: true }, count: N })`) before
+ * one (via `resetCommits({ flags: { mixed: true }, count: N })`) before
  * pushing — return value carries the count.
  *
  * @returns the number of commits (= number of bumps entries successfully versioned).
