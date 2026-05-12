@@ -1411,6 +1411,7 @@ __metadata:
     jest-extended: ^3.0.2
     jest-when: ^3.5.2
     memfs: ^3.4.7
+    p-limit: ^3.1.0
     p-retry: ^4.6.2
     prettier: ^3.2.4
     semver: ^7.3.8

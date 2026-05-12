@@ -1,6 +1,7 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 import * as fs from 'fs'
+import pLimit = require('p-limit')
 import { getPathsByPackageNames } from '@exodus/lerna-utils'
 import { VersionDispatchInput as Input } from './constants'
 import { Filesystem } from './utils/types'
@@ -11,6 +12,8 @@ import { postVersionPreview } from './version-dispatch/preview'
 type Params = {
   filesystem?: Filesystem
 }
+
+const GET_COMMIT_CONCURRENCY = 10
 
 if (require.main === module) {
   versionDispatch().catch((error: Error) => {
@@ -208,15 +211,21 @@ export async function computeBumpsForPr({
     )
   }
 
+  // Cap concurrency to avoid GitHub's secondary rate limit on PRs with
+  // many commits. 10 is well under the per-second ceiling while still
+  // ~10x faster than sequential awaits.
+  const limit = pLimit(GET_COMMIT_CONCURRENCY)
   const commitsWithFiles = await Promise.all(
-    commits.map(async (entry): Promise<CommitWithFiles> => {
-      const { data: detail } = await client.rest.repos.getCommit({ ...repo, ref: entry.sha })
-      return {
-        sha: entry.sha,
-        message: entry.commit.message,
-        files: (detail.files ?? []).map((f) => f.filename),
-      }
-    })
+    commits.map((entry) =>
+      limit(async (): Promise<CommitWithFiles> => {
+        const { data: detail } = await client.rest.repos.getCommit({ ...repo, ref: entry.sha })
+        return {
+          sha: entry.sha,
+          message: entry.commit.message,
+          files: (detail.files ?? []).map((f) => f.filename),
+        }
+      })
+    )
   )
 
   return aggregateBumps({ commits: commitsWithFiles, packagePaths, prTitle })
