@@ -33931,7 +33931,7 @@ function ensureTrailingSlash(value) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.PREVIEW_MARKER = exports.renderPreviewComment = exports.nextVersion = exports.buildPreviewRows = exports.postVersionPreview = void 0;
+exports.PREVIEW_MARKER = exports.clearVersionPreview = exports.renderPreviewComment = exports.nextVersion = exports.buildPreviewRows = exports.postVersionPreview = void 0;
 const path = __nccwpck_require__(1017);
 const core = __nccwpck_require__(2186);
 const semver = __nccwpck_require__(1383);
@@ -34011,6 +34011,18 @@ function renderPreviewComment(rows) {
     return lines.join('\n');
 }
 exports.renderPreviewComment = renderPreviewComment;
+/**
+ * Delete every prior preview comment on the PR. Used by the action's
+ * early-return paths (excluded label, wrong base branch, no workspace
+ * packages, etc.) to make sure a previously-posted preview comment
+ * does not linger after the PR transitions into a gated state.
+ */
+async function clearVersionPreview({ client, repo, prNumber, }) {
+    const deleted = await deleteExistingPreviewComments({ client, repo, prNumber });
+    if (deleted > 0)
+        core.info(`preview: cleared ${deleted} stale preview comment(s)`);
+}
+exports.clearVersionPreview = clearVersionPreview;
 async function deleteExistingPreviewComments({ client, repo, prNumber, }) {
     const comments = await client.paginate(client.rest.issues.listComments, {
         ...repo,
@@ -44743,16 +44755,22 @@ async function versionDispatch({ filesystem = fs } = {}) {
     const excludedLabel = (pr.labels ?? []).find((label) => excludedLabels.has(label.name));
     if (excludedLabel) {
         core.notice(`Skipped for excluded label "${excludedLabel.name}"`);
+        if (isPreview)
+            await (0, preview_1.clearVersionPreview)({ client, repo, prNumber: pr.number });
         return null;
     }
     const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
     if (pr.base?.ref && pr.base.ref !== defaultBranch) {
         core.notice(`Skipped versioning for PR not targeting ${defaultBranch}`);
+        if (isPreview)
+            await (0, preview_1.clearVersionPreview)({ client, repo, prNumber: pr.number });
         return null;
     }
     const packagePaths = await (0, lerna_utils_1.getPathsByPackageNames)({ filesystem });
     if (Object.keys(packagePaths).length === 0) {
         core.warning('No workspace packages discovered. Aborting.');
+        if (isPreview)
+            await (0, preview_1.clearVersionPreview)({ client, repo, prNumber: pr.number });
         return null;
     }
     const bumps = await computeBumpsForPr({

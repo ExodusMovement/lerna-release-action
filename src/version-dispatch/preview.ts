@@ -123,6 +123,25 @@ export function renderPreviewComment(rows: PreviewRow[]): string {
   return lines.join('\n')
 }
 
+/**
+ * Delete every prior preview comment on the PR. Used by the action's
+ * early-return paths (excluded label, wrong base branch, no workspace
+ * packages, etc.) to make sure a previously-posted preview comment
+ * does not linger after the PR transitions into a gated state.
+ */
+export async function clearVersionPreview({
+  client,
+  repo,
+  prNumber,
+}: {
+  client: GithubClient
+  repo: Repo
+  prNumber: number
+}): Promise<void> {
+  const deleted = await deleteExistingPreviewComments({ client, repo, prNumber })
+  if (deleted > 0) core.info(`preview: cleared ${deleted} stale preview comment(s)`)
+}
+
 async function deleteExistingPreviewComments({
   client,
   repo,
