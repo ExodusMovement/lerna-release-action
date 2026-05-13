@@ -86109,6 +86109,7 @@ const core = __nccwpck_require__(42186);
 const fs = __nccwpck_require__(57147);
 const path = __nccwpck_require__(71017);
 const semverInc = __nccwpck_require__(30900);
+const lerna_utils_1 = __nccwpck_require__(64801);
 const strategy_1 = __nccwpck_require__(74741);
 const process_1 = __nccwpck_require__(69239);
 function versionPackages({ extraArgs, versionStrategy }) {
@@ -86137,8 +86138,16 @@ function versionPackages({ extraArgs, versionStrategy }) {
  *   2. compute the next version via `semver.inc(current, bump)` and rewrite
  *      the `"version"` field in package.json in place (preserving every
  *      other byte — formatting, trailing newlines, key order),
- *   3. commit just that package.json,
- *   4. create the lerna-style `<pkg-name>@<new-version>` annotated tag at
+ *   3. on major bumps only, rewrite the bumped package's pin in every
+ *      workspace package.json that uses a semver range. Minor and patch
+ *      bumps don't need a rewrite — the existing caret/tilde range
+ *      already satisfies the new version, so yarn keeps resolving the
+ *      workspace symlink. `workspace:*` / `workspace:^` / `npm:` aliases /
+ *      `file:` / `link:` / URLs and dist-tags (`*`, `latest`) are
+ *      never rewritten regardless of bump level.
+ *   4. commit the bumped package.json + every consumer package.json that
+ *      changed,
+ *   5. create the lerna-style `<pkg-name>@<new-version>` annotated tag at
  *      that commit.
  *
  * Each entry produces its own commit + tag, mirroring the per-package
@@ -86153,15 +86162,25 @@ function versionPackages({ extraArgs, versionStrategy }) {
  * doesn't touch deps. Editing the `"version"` field directly sidesteps
  * the issue entirely.
  *
+ * Why update consumer pins? When the workspace version of `pkgX` moves
+ * from `2.1.1` to `3.0.0`, every consumer's `^2.0.1` pin no longer
+ * satisfies the workspace version. Yarn falls back to whatever 2.x is
+ * published on the registry, which still has the *old* source — breaking
+ * any consumer that needs the new API. lerna's `version` flow updates
+ * these refs automatically; we mimic that behavior on the explicit path.
+ *
  * @returns the number of commits (= number of bumps entries successfully versioned).
  */
-function versionPackagesExplicit({ bumps, packages }) {
+async function versionPackagesExplicit({ bumps, packages, }) {
     const dirByName = new Map();
     for (const pkgPath of packages) {
         const pkg = readPackageJson(pkgPath);
         if (pkg && typeof pkg.name === 'string')
             dirByName.set(pkg.name, pkgPath);
     }
+    // Discover ALL workspace packages so consumer-pin updates reach
+    // packages that weren't themselves bumped this run.
+    const workspacePaths = Object.values(await (0, lerna_utils_1.getPathsByPackageNames)({ filesystem: fs }));
     let count = 0;
     for (const [pkgName, bump] of Object.entries(bumps)) {
         const pkgDir = dirByName.get(pkgName);
@@ -86178,8 +86197,19 @@ function versionPackagesExplicit({ bumps, packages }) {
         }
         core.info(`Bumping ${pkgName}: ${before.version} → ${next} (${bump}) in ${pkgDir}`);
         writeVersionField({ pkgDir, next });
+        const updatedConsumers = isMajorBump(before.version, next)
+            ? updateConsumerPins({
+                pkgName,
+                newVersion: next,
+                workspaces: workspacePaths,
+                ownDir: pkgDir,
+            })
+            : [];
         const tag = `${pkgName}@${next}`;
         (0, process_1.spawnSync)('git', ['add', path.join(pkgDir, 'package.json')], { encoding: 'utf8' });
+        for (const file of updatedConsumers) {
+            (0, process_1.spawnSync)('git', ['add', file], { encoding: 'utf8' });
+        }
         (0, process_1.spawnSync)('git', ['commit', '-m', `chore(release): publish ${tag}`], { encoding: 'utf8' });
         (0, process_1.spawnSync)('git', ['tag', '-a', tag, '-m', tag], { encoding: 'utf8' });
         count++;
@@ -86212,6 +86242,64 @@ function writeVersionField({ pkgDir, next }) {
         throw new Error(`Failed to locate a "version" field in ${file}`);
     }
     fs.writeFileSync(file, updated);
+}
+/**
+ * Rewrite every workspace package.json that pins `pkgName` to a semver
+ * range, replacing the range's version with `newVersion`. Preserves the
+ * existing range prefix (`^`, `~`, `>=`, …) or defaults to `^` for exact
+ * pins. Skips `workspace:*` / `npm:` aliases / `file:` paths / URL refs
+ * / dist-tags (`latest`, `*`).
+ *
+ * @returns absolute paths of files that were modified.
+ */
+function updateConsumerPins({ pkgName, newVersion, workspaces, ownDir, }) {
+    const updated = [];
+    for (const wsPath of workspaces) {
+        if (wsPath === ownDir)
+            continue;
+        const file = path.join(wsPath, 'package.json');
+        let raw;
+        try {
+            raw = fs.readFileSync(file, 'utf8');
+        }
+        catch {
+            continue;
+        }
+        const next = rewriteConsumerPin({ raw, pkgName, newVersion });
+        if (next !== raw) {
+            fs.writeFileSync(file, next);
+            updated.push(file);
+            core.info(`  updated ${pkgName} pin in ${wsPath}/package.json`);
+        }
+    }
+    return updated;
+}
+function rewriteConsumerPin({ raw, pkgName, newVersion, }) {
+    const escaped = pkgName.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&');
+    // "<pkgName>": "<value>" — value captured separately so we can decide
+    // per-entry whether to rewrite it.
+    const pattern = new RegExp(`("${escaped}"\\s*:\\s*)"([^"]+)"`, 'g');
+    return raw.replace(pattern, (match, jsonPrefix, value) => {
+        if (!shouldRewriteRange(value))
+            return match;
+        const rangeMatch = /^(\^|~|>=|<=|>|<|=)?(.+)$/.exec(value);
+        if (!rangeMatch)
+            return match;
+        const rangePrefix = rangeMatch[1] ?? '^';
+        return `${jsonPrefix}"${rangePrefix}${newVersion}"`;
+    });
+}
+function isMajorBump(oldVersion, newVersion) {
+    return oldVersion.split('.')[0] !== newVersion.split('.')[0];
+}
+const NON_SEMVER_PREFIXES = ['workspace:', 'npm:', 'file:', 'link:', 'portal:'];
+function shouldRewriteRange(value) {
+    if (NON_SEMVER_PREFIXES.some((p) => value.startsWith(p)))
+        return false;
+    if (value.includes('://'))
+        return false;
+    // tags like '*' / 'latest' / 'next' carry no digits — leave them alone
+    return /\d/.test(value);
 }
 exports["default"] = versionPackages;
 
@@ -97069,7 +97157,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     core.info('Versioning packages');
     let commitsToReset = 1;
     if (bumps) {
-        commitsToReset = (0, version_packages_1.versionPackagesExplicit)({ bumps, packages });
+        commitsToReset = await (0, version_packages_1.versionPackagesExplicit)({ bumps, packages });
     }
     else if (narrowedStrategy) {
         (0, version_packages_1.default)({ extraArgs: versionExtraArgs, versionStrategy: narrowedStrategy });

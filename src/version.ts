@@ -120,7 +120,7 @@ export default async function version({
   core.info('Versioning packages')
   let commitsToReset = 1
   if (bumps) {
-    commitsToReset = versionPackagesExplicit({ bumps, packages })
+    commitsToReset = await versionPackagesExplicit({ bumps, packages })
   } else if (narrowedStrategy) {
     versionPackages({ extraArgs: versionExtraArgs, versionStrategy: narrowedStrategy })
   }

@@ -9,6 +9,11 @@ jest.mock('child_process', () => ({
   spawnSync: jest.fn(() => ({ stdout: '', status: 0 })),
 }))
 
+const mockGetPaths = jest.fn(async () => ({}) as Record<string, string>)
+jest.mock('@exodus/lerna-utils', () => ({
+  getPathsByPackageNames: (...args: unknown[]) => mockGetPaths(...(args as [])),
+}))
+
 describe('versionPackages', () => {
   it('should derive bumps using conventional commits', async () => {
     versionPackages({ versionStrategy: VersionStrategy.ConventionalCommits })
@@ -83,6 +88,7 @@ describe('versionPackagesExplicit', () => {
   beforeEach(() => {
     tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'version-packages-explicit-'))
     ;(spawnSync as unknown as jest.Mock).mockClear()
+    mockGetPaths.mockResolvedValue({})
   })
 
   afterEach(() => {
@@ -96,14 +102,14 @@ describe('versionPackagesExplicit', () => {
     return pkgPath
   }
 
-  it('bumps the version field in place via semver.inc, leaves the rest of package.json untouched', () => {
+  it('bumps the version field in place via semver.inc, leaves the rest of package.json untouched', async () => {
     const pkgDir = writePackageJson('mab', {
       name: '@exodus/multi-account-redux',
       version: '2.1.1',
       dependencies: { lodash: '^4.17.21' },
     })
 
-    const count = versionPackagesExplicit({
+    const count = await versionPackagesExplicit({
       bumps: { '@exodus/multi-account-redux': 'major' },
       packages: [pkgDir],
     })
@@ -114,7 +120,7 @@ describe('versionPackagesExplicit', () => {
     expect(after.dependencies).toEqual({ lodash: '^4.17.21' })
   })
 
-  it('tolerates `workspace:*` devDeps without invoking npm (regression: npm rejects workspace: protocol)', () => {
+  it('tolerates `workspace:*` devDeps without invoking npm (regression: npm rejects workspace: protocol)', async () => {
     const pkgDir = writePackageJson('mab', {
       name: '@exodus/multi-account-redux',
       version: '2.1.1',
@@ -125,12 +131,12 @@ describe('versionPackagesExplicit', () => {
       },
     })
 
-    expect(() =>
+    await expect(
       versionPackagesExplicit({
         bumps: { '@exodus/multi-account-redux': 'major' },
         packages: [pkgDir],
       })
-    ).not.toThrow()
+    ).resolves.not.toThrow()
 
     const after = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'))
     expect(after.version).toBe('3.0.0')
@@ -143,11 +149,11 @@ describe('versionPackagesExplicit', () => {
     expect(calls).not.toContain('npm')
   })
 
-  it('creates one git commit + annotated tag per bumps entry', () => {
+  it('creates one git commit + annotated tag per bumps entry', async () => {
     const mabDir = writePackageJson('mab', { name: '@exodus/mab', version: '1.0.0' })
     const balancesDir = writePackageJson('balances', { name: '@exodus/balances', version: '2.5.0' })
 
-    versionPackagesExplicit({
+    await versionPackagesExplicit({
       bumps: { '@exodus/mab': 'major', '@exodus/balances': 'patch' },
       packages: [mabDir, balancesDir],
     })
@@ -160,25 +166,191 @@ describe('versionPackagesExplicit', () => {
     expect(commitCalls).toHaveLength(2)
   })
 
-  it("throws when a bump's package name is not in `packages`", () => {
+  it("throws when a bump's package name is not in `packages`", async () => {
     const pkgDir = writePackageJson('mab', { name: '@exodus/mab', version: '1.0.0' })
 
-    expect(() =>
+    await expect(
       versionPackagesExplicit({
         bumps: { '@exodus/not-here': 'major' },
         packages: [pkgDir],
       })
-    ).toThrow(/not present in `packages`/)
+    ).rejects.toThrow(/not present in `packages`/)
   })
 
-  it('throws when semver.inc rejects the bump level', () => {
+  it('throws when semver.inc rejects the bump level', async () => {
     const pkgDir = writePackageJson('mab', { name: '@exodus/mab', version: '1.0.0' })
 
-    expect(() =>
+    await expect(
       versionPackagesExplicit({
         bumps: { '@exodus/mab': 'not-a-bump' },
         packages: [pkgDir],
       })
-    ).toThrow(/semver\.inc rejected bump/)
+    ).rejects.toThrow(/semver\.inc rejected bump/)
+  })
+
+  describe('consumer-pin updates', () => {
+    it("rewrites the bumped package's pin in every consumer's package.json, preserving the range prefix", async () => {
+      const mabDir = writePackageJson('libraries/mab', {
+        name: '@exodus/multi-account-redux',
+        version: '2.1.1',
+      })
+      const balancesDir = writePackageJson('features/balances', {
+        name: '@exodus/balances',
+        version: '13.0.0',
+        dependencies: { '@exodus/multi-account-redux': '^2.0.1' },
+      })
+      const optBalancesDir = writePackageJson('features/optimistic-balances', {
+        name: '@exodus/optimistic-balances',
+        version: '8.0.0',
+        dependencies: { '@exodus/multi-account-redux': '~2.0.1' },
+      })
+
+      mockGetPaths.mockResolvedValue({
+        '@exodus/multi-account-redux': mabDir,
+        '@exodus/balances': balancesDir,
+        '@exodus/optimistic-balances': optBalancesDir,
+      })
+
+      await versionPackagesExplicit({
+        bumps: { '@exodus/multi-account-redux': 'major' },
+        packages: [mabDir],
+      })
+
+      const balances = JSON.parse(fs.readFileSync(path.join(balancesDir, 'package.json'), 'utf8'))
+      expect(balances.dependencies['@exodus/multi-account-redux']).toBe('^3.0.0')
+
+      const opt = JSON.parse(fs.readFileSync(path.join(optBalancesDir, 'package.json'), 'utf8'))
+      expect(opt.dependencies['@exodus/multi-account-redux']).toBe('~3.0.0')
+    })
+
+    it('stages every consumer package.json it touched, alongside the bumped one, into the release commit', async () => {
+      const mabDir = writePackageJson('libraries/mab', {
+        name: '@exodus/multi-account-redux',
+        version: '2.1.1',
+      })
+      const balancesDir = writePackageJson('features/balances', {
+        name: '@exodus/balances',
+        version: '13.0.0',
+        dependencies: { '@exodus/multi-account-redux': '^2.0.1' },
+      })
+
+      mockGetPaths.mockResolvedValue({
+        '@exodus/multi-account-redux': mabDir,
+        '@exodus/balances': balancesDir,
+      })
+
+      await versionPackagesExplicit({
+        bumps: { '@exodus/multi-account-redux': 'major' },
+        packages: [mabDir],
+      })
+
+      const addCalls = (spawnSync as unknown as jest.Mock).mock.calls.filter(
+        (c) => c[0] === 'git' && c[1][0] === 'add'
+      )
+      const addedFiles = addCalls.map((c) => c[1][1])
+      expect(addedFiles).toEqual(
+        expect.arrayContaining([
+          path.join(mabDir, 'package.json'),
+          path.join(balancesDir, 'package.json'),
+        ])
+      )
+    })
+
+    it.each([
+      ['workspace:*', 'workspace:*'],
+      ['workspace:^', 'workspace:^'],
+      ['npm:@scope/alias@^2.0.1', 'npm:@scope/alias@^2.0.1'],
+      ['file:../local', 'file:../local'],
+      ['link:../local', 'link:../local'],
+      ['git+https://github.com/x/y.git', 'git+https://github.com/x/y.git'],
+      ['*', '*'],
+      ['latest', 'latest'],
+    ])('leaves %s pins alone (no semver rewrite)', async (existingPin, expectedPin) => {
+      const mabDir = writePackageJson('libraries/mab', {
+        name: '@exodus/multi-account-redux',
+        version: '2.1.1',
+      })
+      const consumerDir = writePackageJson('features/consumer', {
+        name: '@exodus/consumer',
+        version: '1.0.0',
+        dependencies: { '@exodus/multi-account-redux': existingPin },
+      })
+
+      mockGetPaths.mockResolvedValue({
+        '@exodus/multi-account-redux': mabDir,
+        '@exodus/consumer': consumerDir,
+      })
+
+      await versionPackagesExplicit({
+        bumps: { '@exodus/multi-account-redux': 'major' },
+        packages: [mabDir],
+      })
+
+      const consumer = JSON.parse(fs.readFileSync(path.join(consumerDir, 'package.json'), 'utf8'))
+      expect(consumer.dependencies['@exodus/multi-account-redux']).toBe(expectedPin)
+    })
+
+    it.each([['minor'], ['patch'], ['preminor'], ['prepatch'], ['prerelease']])(
+      'leaves consumer pins alone on non-major bumps (%s)',
+      async (bump) => {
+        const mabDir = writePackageJson('libraries/mab', {
+          name: '@exodus/multi-account-redux',
+          version: '2.1.1',
+        })
+        const consumerDir = writePackageJson('features/consumer', {
+          name: '@exodus/consumer',
+          version: '1.0.0',
+          dependencies: { '@exodus/multi-account-redux': '^2.0.1' },
+        })
+
+        mockGetPaths.mockResolvedValue({
+          '@exodus/multi-account-redux': mabDir,
+          '@exodus/consumer': consumerDir,
+        })
+
+        await versionPackagesExplicit({
+          bumps: { '@exodus/multi-account-redux': bump },
+          packages: [mabDir],
+        })
+
+        const consumer = JSON.parse(fs.readFileSync(path.join(consumerDir, 'package.json'), 'utf8'))
+        expect(consumer.dependencies['@exodus/multi-account-redux']).toBe('^2.0.1')
+
+        const addCalls = (spawnSync as unknown as jest.Mock).mock.calls.filter(
+          (c) => c[0] === 'git' && c[1][0] === 'add'
+        )
+        const addedFiles = addCalls.map((c) => c[1][1])
+        expect(addedFiles).not.toContain(path.join(consumerDir, 'package.json'))
+      }
+    )
+
+    it('updates pins across dependencies, devDependencies, and peerDependencies', async () => {
+      const mabDir = writePackageJson('libraries/mab', {
+        name: '@exodus/multi-account-redux',
+        version: '2.1.1',
+      })
+      const consumerDir = writePackageJson('features/consumer', {
+        name: '@exodus/consumer',
+        version: '1.0.0',
+        dependencies: { '@exodus/multi-account-redux': '^2.0.1' },
+        devDependencies: { '@exodus/multi-account-redux': '^2.0.1' },
+        peerDependencies: { '@exodus/multi-account-redux': '^2.0.1' },
+      })
+
+      mockGetPaths.mockResolvedValue({
+        '@exodus/multi-account-redux': mabDir,
+        '@exodus/consumer': consumerDir,
+      })
+
+      await versionPackagesExplicit({
+        bumps: { '@exodus/multi-account-redux': 'major' },
+        packages: [mabDir],
+      })
+
+      const after = JSON.parse(fs.readFileSync(path.join(consumerDir, 'package.json'), 'utf8'))
+      expect(after.dependencies['@exodus/multi-account-redux']).toBe('^3.0.0')
+      expect(after.devDependencies['@exodus/multi-account-redux']).toBe('^3.0.0')
+      expect(after.peerDependencies['@exodus/multi-account-redux']).toBe('^3.0.0')
+    })
   })
 })
