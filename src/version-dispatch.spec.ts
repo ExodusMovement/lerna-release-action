@@ -355,6 +355,63 @@ describe('versionDispatch', () => {
       expect(client.rest.issues.createComment).toHaveBeenCalledTimes(1)
     })
 
+    it('clears stale preview comments when skip-release is added mid-flight', async () => {
+      github.context.payload = {
+        pull_request: {
+          title: 'feat: pending',
+          number: 555,
+          merged: false,
+          state: 'open',
+          user: { login: 'brucewayne' },
+          base: { ref },
+          labels: [{ name: 'skip-release' }],
+        },
+      }
+
+      setupPreviewPaginate(
+        [{ sha: 'aaa1111', commit: { message: 'feat(atoms)!: drop legacy' } }],
+        { aaa1111: [{ filename: 'libraries/atoms/index.ts' }] },
+        [{ id: 9100, body: `${PREVIEW_MARKER}\nstale preview from before the label was added` }]
+      )
+
+      await versionDispatch({ filesystem: fs as never })
+
+      expect(client.rest.issues.deleteComment).toHaveBeenCalledWith({
+        ...repo,
+        comment_id: 9100,
+      })
+      expect(client.rest.issues.createComment).not.toHaveBeenCalled()
+      expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+    })
+
+    it('clears stale preview comments when the PR base is retargeted off the default branch', async () => {
+      github.context.payload = {
+        pull_request: {
+          title: 'feat: pending',
+          number: 555,
+          merged: false,
+          state: 'open',
+          user: { login: 'brucewayne' },
+          base: { ref: 'wayne-foundation/batmobile-v2' },
+          labels: [],
+        },
+      }
+
+      setupPreviewPaginate(
+        [{ sha: 'aaa1111', commit: { message: 'feat(atoms)!: drop legacy' } }],
+        { aaa1111: [{ filename: 'libraries/atoms/index.ts' }] },
+        [{ id: 9101, body: `${PREVIEW_MARKER}\nstale preview from when base was master` }]
+      )
+
+      await versionDispatch({ filesystem: fs as never })
+
+      expect(client.rest.issues.deleteComment).toHaveBeenCalledWith({
+        ...repo,
+        comment_id: 9101,
+      })
+      expect(client.rest.issues.createComment).not.toHaveBeenCalled()
+    })
+
     it('clears stale comments and posts nothing when no commits bump anything', async () => {
       github.context.payload = {
         pull_request: {

@@ -7,7 +7,7 @@ import { VersionDispatchInput as Input } from './constants'
 import { Filesystem } from './utils/types'
 import { Bump, BUMP_NONE, bumpFromMessage, maxBump } from './version-dispatch/bumps'
 import { filesToPackages } from './version-dispatch/files-to-packages'
-import { postVersionPreview } from './version-dispatch/preview'
+import { clearVersionPreview, postVersionPreview } from './version-dispatch/preview'
 
 type Params = {
   filesystem?: Filesystem
@@ -86,6 +86,7 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
   const excludedLabel = (pr.labels ?? []).find((label) => excludedLabels.has(label.name))
   if (excludedLabel) {
     core.notice(`Skipped for excluded label "${excludedLabel.name}"`)
+    if (isPreview) await clearVersionPreview({ client, repo, prNumber: pr.number })
     return null
   }
 
@@ -95,12 +96,14 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
 
   if (pr.base?.ref && pr.base.ref !== defaultBranch) {
     core.notice(`Skipped versioning for PR not targeting ${defaultBranch}`)
+    if (isPreview) await clearVersionPreview({ client, repo, prNumber: pr.number })
     return null
   }
 
   const packagePaths = await getPathsByPackageNames({ filesystem })
   if (Object.keys(packagePaths).length === 0) {
     core.warning('No workspace packages discovered. Aborting.')
+    if (isPreview) await clearVersionPreview({ client, repo, prNumber: pr.number })
     return null
   }
 
