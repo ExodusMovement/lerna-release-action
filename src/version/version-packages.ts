@@ -1,7 +1,8 @@
 import * as core from '@actions/core'
 import * as fs from 'fs'
 import * as path from 'path'
-import * as semver from 'semver'
+import semverInc = require('semver/functions/inc')
+import type { ReleaseType } from 'semver'
 import { strategyAsArgument, VersionStrategy } from './strategy'
 import { spawnSync } from '../utils/process'
 
@@ -83,7 +84,7 @@ export function versionPackagesExplicit({ bumps, packages }: ExplicitParams): nu
       throw new Error(`Cannot read version from package.json for ${pkgName}`)
     }
 
-    const next = semver.inc(before.version, bump as semver.ReleaseType)
+    const next = semverInc(before.version, bump as ReleaseType)
     if (!next) {
       throw new Error(
         `semver.inc rejected bump for ${pkgName}: ${before.version} + "${bump}". Valid bumps: major, minor, patch, premajor, preminor, prepatch, prerelease.`

@@ -1,6 +1,7 @@
 import * as path from 'path'
 import * as core from '@actions/core'
-import * as semver from 'semver'
+import semverInc = require('semver/functions/inc')
+import type { ReleaseType } from 'semver'
 import { Bump } from './bumps'
 import { Filesystem, Repo } from '../utils/types'
 import { GithubClient } from '../utils/github'
@@ -104,7 +105,7 @@ function readVersion({
 }
 
 export function nextVersion(current: string, bump: Bump): string {
-  return semver.inc(current, bump as semver.ReleaseType) ?? current
+  return semverInc(current, bump as ReleaseType) ?? current
 }
 
 export function renderPreviewComment(rows: PreviewRow[]): string {
