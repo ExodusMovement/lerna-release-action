@@ -105,7 +105,16 @@ function readVersion({
 }
 
 export function nextVersion(current: string, bump: Bump): string {
-  return semverInc(current, bump as ReleaseType) ?? current
+  // While a package is in a prerelease cycle (`5.0.0-rc.96`), bump the
+  // prerelease counter rather than dropping the rc — a `feat!:` commit
+  // shouldn't accidentally promote a long-lived rc to a stable release.
+  // The caller can promote to stable via a separate workflow when ready.
+  const effectiveBump = isPrerelease(current) ? 'prerelease' : (bump as ReleaseType)
+  return semverInc(current, effectiveBump) ?? current
+}
+
+function isPrerelease(version: string): boolean {
+  return version.includes('-')
 }
 
 export function renderPreviewComment(rows: PreviewRow[]): string {

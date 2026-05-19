@@ -86137,7 +86137,12 @@ function versionPackages({ extraArgs, versionStrategy }) {
  *      package.json from the supplied `packages` list,
  *   2. compute the next version via `semver.inc(current, bump)` and rewrite
  *      the `"version"` field in package.json in place (preserving every
- *      other byte — formatting, trailing newlines, key order),
+ *      other byte — formatting, trailing newlines, key order). When the
+ *      current version is itself a prerelease (`5.0.0-rc.96`), the bump
+ *      is downgraded to `prerelease` so the rc counter advances
+ *      (`5.0.0-rc.97`) — a commit-driven `major` bump shouldn't promote
+ *      a long-lived rc to a stable release; the team must do that via
+ *      a separate workflow.
  *   3. on major bumps only, rewrite the bumped package's pin in every
  *      workspace package.json that uses a semver range. Minor and patch
  *      bumps don't need a rewrite — the existing caret/tilde range
@@ -86191,11 +86196,24 @@ async function versionPackagesExplicit({ bumps, packages, }) {
         if (!before || typeof before.version !== 'string') {
             throw new Error(`Cannot read version from package.json for ${pkgName}`);
         }
-        const next = semverInc(before.version, bump);
+        // While a package is in a prerelease cycle (`5.0.0-rc.96`), any
+        // commit-driven bump (`major`/`minor`/`patch`) should bump the rc
+        // counter rather than drop the prerelease. A `feat!:` on a long-lived
+        // rc shouldn't accidentally promote it to a stable release — the team
+        // must promote via a separate workflow when they're ready.
+        const effectiveBump = isPrerelease(before.version)
+            ? 'prerelease'
+            : bump;
+        const next = semverInc(before.version, effectiveBump);
         if (!next) {
-            throw new Error(`semver.inc rejected bump for ${pkgName}: ${before.version} + "${bump}". Valid bumps: major, minor, patch, premajor, preminor, prepatch, prerelease.`);
+            throw new Error(`semver.inc rejected bump for ${pkgName}: ${before.version} + "${effectiveBump}". Valid bumps: major, minor, patch, premajor, preminor, prepatch, prerelease.`);
         }
-        core.info(`Bumping ${pkgName}: ${before.version} → ${next} (${bump}) in ${pkgDir}`);
+        if (effectiveBump === bump) {
+            core.info(`Bumping ${pkgName}: ${before.version} → ${next} (${bump}) in ${pkgDir}`);
+        }
+        else {
+            core.info(`Bumping ${pkgName}: ${before.version} → ${next} (requested ${bump}; downgraded to ${effectiveBump} because current is a prerelease) in ${pkgDir}`);
+        }
         writeVersionField({ pkgDir, next });
         const updatedConsumers = isMajorBump(before.version, next)
             ? updateConsumerPins({
@@ -86291,6 +86309,9 @@ function rewriteConsumerPin({ raw, pkgName, newVersion, }) {
 }
 function isMajorBump(oldVersion, newVersion) {
     return oldVersion.split('.')[0] !== newVersion.split('.')[0];
+}
+function isPrerelease(version) {
+    return version.includes('-');
 }
 const NON_SEMVER_PREFIXES = ['workspace:', 'npm:', 'file:', 'link:', 'portal:'];
 function shouldRewriteRange(value) {
