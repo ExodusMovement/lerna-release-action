@@ -31390,9 +31390,17 @@ function readVersion({ filesystem, pkgPath, }) {
     }
 }
 function nextVersion(current, bump) {
-    return semverInc(current, bump) ?? current;
+    // While a package is in a prerelease cycle (`5.0.0-rc.96`), bump the
+    // prerelease counter rather than dropping the rc — a `feat!:` commit
+    // shouldn't accidentally promote a long-lived rc to a stable release.
+    // The caller can promote to stable via a separate workflow when ready.
+    const effectiveBump = isPrerelease(current) ? 'prerelease' : bump;
+    return semverInc(current, effectiveBump) ?? current;
 }
 exports.nextVersion = nextVersion;
+function isPrerelease(version) {
+    return version.includes('-');
+}
 function renderPreviewComment(rows) {
     const lines = [
         MARKER,

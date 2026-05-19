@@ -8,7 +8,7 @@ import {
   PREVIEW_MARKER,
   renderPreviewComment,
 } from './preview'
-import { BUMP_MAJOR, BUMP_MINOR, BUMP_PATCH } from './bumps'
+import { BUMP_MAJOR, BUMP_MINOR, BUMP_PATCH, type Bump } from './bumps'
 
 jest.mock('@actions/core', () => ({
   info: jest.fn(),
@@ -48,8 +48,15 @@ describe('nextVersion', () => {
     expect(nextVersion('1.2.3', BUMP_PATCH)).toBe('1.2.4')
   })
 
-  it('releases a pre-release to its base version on a patch bump', () => {
-    expect(nextVersion('1.2.3-rc.4', BUMP_PATCH)).toBe('1.2.3')
+  it.each<[string, Bump, string]>([
+    ['1.2.3-rc.4', BUMP_MAJOR, '1.2.3-rc.5'],
+    ['1.2.3-rc.4', BUMP_MINOR, '1.2.3-rc.5'],
+    ['1.2.3-rc.4', BUMP_PATCH, '1.2.3-rc.5'],
+    ['5.0.0-rc.96', BUMP_MAJOR, '5.0.0-rc.97'],
+    ['5.0.0-rc.96', BUMP_PATCH, '5.0.0-rc.97'],
+    ['1.0.0-alpha.0', BUMP_MAJOR, '1.0.0-alpha.1'],
+  ])('keeps prerelease bumps in the rc cycle: %s + %s → %s', (current, bump, expected) => {
+    expect(nextVersion(current, bump)).toBe(expected)
   })
 
   it('returns input when the version is unparseable', () => {

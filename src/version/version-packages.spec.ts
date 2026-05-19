@@ -177,6 +177,66 @@ describe('versionPackagesExplicit', () => {
     ).rejects.toThrow(/not present in `packages`/)
   })
 
+  describe('prerelease handling', () => {
+    it.each([
+      ['5.0.0-rc.96', 'major', '5.0.0-rc.97'],
+      ['5.0.0-rc.96', 'minor', '5.0.0-rc.97'],
+      ['5.0.0-rc.96', 'patch', '5.0.0-rc.97'],
+      ['1.0.0-alpha.0', 'major', '1.0.0-alpha.1'],
+      ['2.0.0-beta.3', 'patch', '2.0.0-beta.4'],
+    ])(
+      'bumps the rc counter on %s + %s → %s instead of dropping the prerelease',
+      async (current, bump, expected) => {
+        const pkgDir = writePackageJson('headless', { name: '@exodus/headless', version: current })
+
+        await versionPackagesExplicit({
+          bumps: { '@exodus/headless': bump },
+          packages: [pkgDir],
+        })
+
+        const after = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'))
+        expect(after.version).toBe(expected)
+      }
+    )
+
+    it('does not walk consumer pins when bumping a prerelease (the rc counter bump is not a major change)', async () => {
+      const headlessDir = writePackageJson('sdks/headless', {
+        name: '@exodus/headless',
+        version: '5.0.0-rc.96',
+      })
+      const consumerDir = writePackageJson('apps/wallet', {
+        name: '@exodus/wallet-app',
+        version: '1.0.0',
+        dependencies: { '@exodus/headless': '^5.0.0-rc.0' },
+      })
+
+      mockGetPaths.mockResolvedValue({
+        '@exodus/headless': headlessDir,
+        '@exodus/wallet-app': consumerDir,
+      })
+
+      await versionPackagesExplicit({
+        bumps: { '@exodus/headless': 'major' },
+        packages: [headlessDir],
+      })
+
+      const consumer = JSON.parse(fs.readFileSync(path.join(consumerDir, 'package.json'), 'utf8'))
+      expect(consumer.dependencies['@exodus/headless']).toBe('^5.0.0-rc.0')
+    })
+
+    it('uses the regular semver.inc path for stable versions (5.0.0 + major → 6.0.0)', async () => {
+      const pkgDir = writePackageJson('headless', { name: '@exodus/headless', version: '5.0.0' })
+
+      await versionPackagesExplicit({
+        bumps: { '@exodus/headless': 'major' },
+        packages: [pkgDir],
+      })
+
+      const after = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8'))
+      expect(after.version).toBe('6.0.0')
+    })
+  })
+
   it('throws when semver.inc rejects the bump level', async () => {
     const pkgDir = writePackageJson('mab', { name: '@exodus/mab', version: '1.0.0' })
 
