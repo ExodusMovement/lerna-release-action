@@ -1,3 +1,4 @@
+import * as path from 'path'
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 import * as fs from 'fs'
@@ -114,6 +115,13 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
     packagePaths,
     prTitle: pr.title,
   })
+
+  for (const name of Object.keys(bumps)) {
+    if (isPrivatePackage({ filesystem, pkgPath: packagePaths[name] })) {
+      core.info(`skip ${name}: private package`)
+      delete bumps[name]
+    }
+  }
 
   const packageNames = Object.keys(bumps)
   core.setOutput('packages', packageNames.join(','))
@@ -299,4 +307,20 @@ export function aggregateBumps({
 
 function firstLine(message: string): string {
   return message.split(/\r?\n/, 1)[0] ?? ''
+}
+
+function isPrivatePackage({
+  filesystem,
+  pkgPath,
+}: {
+  filesystem: Filesystem
+  pkgPath: string | undefined
+}): boolean {
+  if (!pkgPath) return false
+  try {
+    const raw = filesystem.readFileSync(path.join(pkgPath, 'package.json'), 'utf8') as string
+    return (JSON.parse(raw) as { private?: unknown }).private === true
+  } catch {
+    return false
+  }
 }

@@ -163,6 +163,53 @@ describe('versionDispatch', () => {
     })
   })
 
+  it('skips private packages when computing the dispatch payload', async () => {
+    fs = createFsFromJSON({
+      'lerna.json': lernaConfig,
+      'libraries/atoms/package.json': JSON.stringify({ name: '@exodus/atoms', private: true }),
+      'libraries/wallet/package.json': JSON.stringify({ name: '@exodus/wallet' }),
+      'modules/blockchain-metadata/package.json': JSON.stringify({
+        name: '@exodus/blockchain-metadata',
+      }),
+      'modules/balances/package.json': JSON.stringify({ name: '@exodus/balances' }),
+    })
+
+    github.context.payload = {
+      pull_request: {
+        title: 'feat: cool stuff',
+        number: 123,
+        merged: true,
+        user: { login: 'brucewayne' },
+        base: { ref },
+        labels: [],
+      },
+    }
+
+    setupPaginate(
+      [
+        { sha: 'aaa1111', commit: { message: 'feat(atoms)!: drop legacy' } },
+        { sha: 'bbb2222', commit: { message: 'fix(balances): tidy' } },
+      ],
+      {
+        aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
+        bbb2222: [{ filename: 'modules/balances/x.ts' }],
+      }
+    )
+
+    await versionDispatch({ filesystem: fs as never })
+
+    expect(client.rest.actions.createWorkflowDispatch).toHaveBeenCalledWith({
+      ...repo,
+      ref,
+      workflow_id: workflowId,
+      inputs: {
+        assignee: 'brucewayne',
+        packages: '@exodus/balances',
+        bumps: JSON.stringify({ '@exodus/balances': 'patch' }),
+      },
+    })
+  })
+
   it('falls back to the PR title when no commit carries a bump', async () => {
     github.context.payload = {
       pull_request: {
@@ -408,6 +455,108 @@ describe('versionDispatch', () => {
       expect(client.rest.issues.deleteComment).toHaveBeenCalledWith({
         ...repo,
         comment_id: 9101,
+      })
+      expect(client.rest.issues.createComment).not.toHaveBeenCalled()
+    })
+
+    it('omits private packages from the preview comment', async () => {
+      fs = createFsFromJSON({
+        'lerna.json': lernaConfigWithVersions,
+        'libraries/atoms/package.json': JSON.stringify({
+          name: '@exodus/atoms',
+          version: '1.0.0',
+          private: true,
+        }),
+        'libraries/wallet/package.json': JSON.stringify({
+          name: '@exodus/wallet',
+          version: '3.4.5',
+        }),
+        'modules/blockchain-metadata/package.json': JSON.stringify({
+          name: '@exodus/blockchain-metadata',
+          version: '0.1.0',
+        }),
+        'modules/balances/package.json': JSON.stringify({
+          name: '@exodus/balances',
+          version: '2.7.9',
+        }),
+      })
+
+      github.context.payload = {
+        pull_request: {
+          title: 'feat: pending',
+          number: 555,
+          merged: false,
+          state: 'open',
+          user: { login: 'brucewayne' },
+          base: { ref },
+          labels: [],
+        },
+      }
+
+      setupPreviewPaginate(
+        [
+          { sha: 'aaa1111', commit: { message: 'feat(atoms)!: drop legacy' } },
+          { sha: 'bbb2222', commit: { message: 'fix(balances): tidy' } },
+        ],
+        {
+          aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
+          bbb2222: [{ filename: 'modules/balances/x.ts' }],
+        }
+      )
+
+      await versionDispatch({ filesystem: fs as never })
+
+      expect(client.rest.issues.createComment).toHaveBeenCalledTimes(1)
+      const [args] = (client.rest.issues.createComment as unknown as jest.Mock).mock.calls[0]
+      expect(args.body).toContain('@exodus/balances')
+      expect(args.body).not.toContain('@exodus/atoms')
+    })
+
+    it('clears stale preview comments when every touched package is private', async () => {
+      fs = createFsFromJSON({
+        'lerna.json': lernaConfigWithVersions,
+        'libraries/atoms/package.json': JSON.stringify({
+          name: '@exodus/atoms',
+          version: '1.0.0',
+          private: true,
+        }),
+        'libraries/wallet/package.json': JSON.stringify({
+          name: '@exodus/wallet',
+          version: '3.4.5',
+        }),
+        'modules/blockchain-metadata/package.json': JSON.stringify({
+          name: '@exodus/blockchain-metadata',
+          version: '0.1.0',
+        }),
+        'modules/balances/package.json': JSON.stringify({
+          name: '@exodus/balances',
+          version: '2.7.9',
+        }),
+      })
+
+      github.context.payload = {
+        pull_request: {
+          title: 'feat: pending',
+          number: 555,
+          merged: false,
+          state: 'open',
+          user: { login: 'brucewayne' },
+          base: { ref },
+          labels: [],
+        },
+      }
+
+      setupPreviewPaginate(
+        [{ sha: 'aaa1111', commit: { message: 'feat(atoms)!: drop legacy' } }],
+        { aaa1111: [{ filename: 'libraries/atoms/index.ts' }] },
+        [{ id: 9200, body: `${PREVIEW_MARKER}\nstale preview from before private flag was set` }]
+      )
+
+      await versionDispatch({ filesystem: fs as never })
+
+      expect(client.rest.issues.deleteComment).toHaveBeenCalledWith({
+        ...repo,
+        comment_id: 9200,
       })
       expect(client.rest.issues.createComment).not.toHaveBeenCalled()
     })

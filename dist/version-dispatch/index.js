@@ -42085,6 +42085,7 @@ var exports = __webpack_exports__;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.aggregateBumps = exports.computeBumpsForPr = exports.versionDispatch = void 0;
+const path = __nccwpck_require__(1017);
 const core = __nccwpck_require__(2186);
 const github = __nccwpck_require__(5438);
 const fs = __nccwpck_require__(7147);
@@ -42186,6 +42187,12 @@ async function versionDispatch({ filesystem = fs } = {}) {
         packagePaths,
         prTitle: pr.title,
     });
+    for (const name of Object.keys(bumps)) {
+        if (isPrivatePackage({ filesystem, pkgPath: packagePaths[name] })) {
+            core.info(`skip ${name}: private package`);
+            delete bumps[name];
+        }
+    }
     const packageNames = Object.keys(bumps);
     core.setOutput('packages', packageNames.join(','));
     core.setOutput('bumps', JSON.stringify(bumps));
@@ -42306,6 +42313,17 @@ function aggregateBumps({ commits, packagePaths, prTitle, }) {
 exports.aggregateBumps = aggregateBumps;
 function firstLine(message) {
     return message.split(/\r?\n/, 1)[0] ?? '';
+}
+function isPrivatePackage({ filesystem, pkgPath, }) {
+    if (!pkgPath)
+        return false;
+    try {
+        const raw = filesystem.readFileSync(path.join(pkgPath, 'package.json'), 'utf8');
+        return JSON.parse(raw).private === true;
+    }
+    catch {
+        return false;
+    }
 }
 
 })();
