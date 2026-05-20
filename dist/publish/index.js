@@ -30272,6 +30272,7 @@ var Input;
     Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
+    Input["Bumps"] = "bumps";
     Input["AutoMerge"] = "auto-merge";
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
@@ -30290,8 +30291,9 @@ var VersionDispatchInput;
     VersionDispatchInput["GithubToken"] = "github-token";
     VersionDispatchInput["Ref"] = "ref";
     VersionDispatchInput["VersionWorkflowId"] = "version-workflow-id";
-    VersionDispatchInput["ExcludeCommitTypes"] = "exclude-commit-types";
     VersionDispatchInput["ExcludeLabels"] = "exclude-labels";
+    VersionDispatchInput["DryRun"] = "dry-run";
+    VersionDispatchInput["PrNumber"] = "pr-number";
 })(VersionDispatchInput = exports.VersionDispatchInput || (exports.VersionDispatchInput = {}));
 exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
@@ -30350,7 +30352,7 @@ exports.unwrapErrorMessage = unwrapErrorMessage;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.checkoutPr = exports.configureUser = exports.resetLastCommit = exports.cleanup = exports.checkout = exports.getStatusShort = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
+exports.checkoutPr = exports.configureUser = exports.resetCommits = exports.cleanup = exports.checkout = exports.getStatusShort = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
 const process_1 = __nccwpck_require__(9239);
 const objects_1 = __nccwpck_require__(8151);
 const assert = __nccwpck_require__(8061);
@@ -30417,10 +30419,10 @@ function cleanup() {
 }
 exports.cleanup = cleanup;
 const resetFlags = ['mixed'];
-function resetLastCommit({ flags }) {
-    (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags, resetFlags), 'HEAD~1']);
+function resetCommits({ flags, count = 1 }) {
+    (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags, resetFlags), `HEAD~${count}`]);
 }
-exports.resetLastCommit = resetLastCommit;
+exports.resetCommits = resetCommits;
 function configureUser({ name, email }) {
     (0, process_1.spawnSync)('git', ['config', 'user.name', name]);
     (0, process_1.spawnSync)('git', ['config', 'user.email', email]);
@@ -30474,10 +30476,14 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
         }));
     }
     if (assignees) {
-        promises.push(client.rest.issues.addAssignees({
+        promises.push(client.rest.issues
+            .addAssignees({
             ...repo,
             issue_number: response.data.number,
             assignees,
+        })
+            .catch((error) => {
+            core.warning(`Failed to assign users: ${(0, errors_1.unwrapErrorMessage)(error, 'for unknown reasons')}`);
         }));
     }
     if (reviewers) {

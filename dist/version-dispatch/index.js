@@ -7183,6 +7183,749 @@ function onceStrict (fn) {
 
 /***/ }),
 
+/***/ 7684:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const Queue = __nccwpck_require__(5185);
+
+const pLimit = concurrency => {
+	if (!((Number.isInteger(concurrency) || concurrency === Infinity) && concurrency > 0)) {
+		throw new TypeError('Expected `concurrency` to be a number from 1 and up');
+	}
+
+	const queue = new Queue();
+	let activeCount = 0;
+
+	const next = () => {
+		activeCount--;
+
+		if (queue.size > 0) {
+			queue.dequeue()();
+		}
+	};
+
+	const run = async (fn, resolve, ...args) => {
+		activeCount++;
+
+		const result = (async () => fn(...args))();
+
+		resolve(result);
+
+		try {
+			await result;
+		} catch {}
+
+		next();
+	};
+
+	const enqueue = (fn, resolve, ...args) => {
+		queue.enqueue(run.bind(null, fn, resolve, ...args));
+
+		(async () => {
+			// This function needs to wait until the next microtask before comparing
+			// `activeCount` to `concurrency`, because `activeCount` is updated asynchronously
+			// when the run function is dequeued and called. The comparison in the if-statement
+			// needs to happen asynchronously as well to get an up-to-date value for `activeCount`.
+			await Promise.resolve();
+
+			if (activeCount < concurrency && queue.size > 0) {
+				queue.dequeue()();
+			}
+		})();
+	};
+
+	const generator = (fn, ...args) => new Promise(resolve => {
+		enqueue(fn, resolve, ...args);
+	});
+
+	Object.defineProperties(generator, {
+		activeCount: {
+			get: () => activeCount
+		},
+		pendingCount: {
+			get: () => queue.size
+		},
+		clearQueue: {
+			value: () => {
+				queue.clear();
+			}
+		}
+	});
+
+	return generator;
+};
+
+module.exports = pLimit;
+
+
+/***/ }),
+
+/***/ 8088:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const debug = __nccwpck_require__(427)
+const { MAX_LENGTH, MAX_SAFE_INTEGER } = __nccwpck_require__(2293)
+const { safeRe: re, t } = __nccwpck_require__(9523)
+
+const parseOptions = __nccwpck_require__(785)
+const { compareIdentifiers } = __nccwpck_require__(2463)
+class SemVer {
+  constructor (version, options) {
+    options = parseOptions(options)
+
+    if (version instanceof SemVer) {
+      if (version.loose === !!options.loose &&
+          version.includePrerelease === !!options.includePrerelease) {
+        return version
+      } else {
+        version = version.version
+      }
+    } else if (typeof version !== 'string') {
+      throw new TypeError(`Invalid version. Must be a string. Got type "${typeof version}".`)
+    }
+
+    if (version.length > MAX_LENGTH) {
+      throw new TypeError(
+        `version is longer than ${MAX_LENGTH} characters`
+      )
+    }
+
+    debug('SemVer', version, options)
+    this.options = options
+    this.loose = !!options.loose
+    // this isn't actually relevant for versions, but keep it so that we
+    // don't run into trouble passing this.options around.
+    this.includePrerelease = !!options.includePrerelease
+
+    const m = version.trim().match(options.loose ? re[t.LOOSE] : re[t.FULL])
+
+    if (!m) {
+      throw new TypeError(`Invalid Version: ${version}`)
+    }
+
+    this.raw = version
+
+    // these are actually numbers
+    this.major = +m[1]
+    this.minor = +m[2]
+    this.patch = +m[3]
+
+    if (this.major > MAX_SAFE_INTEGER || this.major < 0) {
+      throw new TypeError('Invalid major version')
+    }
+
+    if (this.minor > MAX_SAFE_INTEGER || this.minor < 0) {
+      throw new TypeError('Invalid minor version')
+    }
+
+    if (this.patch > MAX_SAFE_INTEGER || this.patch < 0) {
+      throw new TypeError('Invalid patch version')
+    }
+
+    // numberify any prerelease numeric ids
+    if (!m[4]) {
+      this.prerelease = []
+    } else {
+      this.prerelease = m[4].split('.').map((id) => {
+        if (/^[0-9]+$/.test(id)) {
+          const num = +id
+          if (num >= 0 && num < MAX_SAFE_INTEGER) {
+            return num
+          }
+        }
+        return id
+      })
+    }
+
+    this.build = m[5] ? m[5].split('.') : []
+    this.format()
+  }
+
+  format () {
+    this.version = `${this.major}.${this.minor}.${this.patch}`
+    if (this.prerelease.length) {
+      this.version += `-${this.prerelease.join('.')}`
+    }
+    return this.version
+  }
+
+  toString () {
+    return this.version
+  }
+
+  compare (other) {
+    debug('SemVer.compare', this.version, this.options, other)
+    if (!(other instanceof SemVer)) {
+      if (typeof other === 'string' && other === this.version) {
+        return 0
+      }
+      other = new SemVer(other, this.options)
+    }
+
+    if (other.version === this.version) {
+      return 0
+    }
+
+    return this.compareMain(other) || this.comparePre(other)
+  }
+
+  compareMain (other) {
+    if (!(other instanceof SemVer)) {
+      other = new SemVer(other, this.options)
+    }
+
+    return (
+      compareIdentifiers(this.major, other.major) ||
+      compareIdentifiers(this.minor, other.minor) ||
+      compareIdentifiers(this.patch, other.patch)
+    )
+  }
+
+  comparePre (other) {
+    if (!(other instanceof SemVer)) {
+      other = new SemVer(other, this.options)
+    }
+
+    // NOT having a prerelease is > having one
+    if (this.prerelease.length && !other.prerelease.length) {
+      return -1
+    } else if (!this.prerelease.length && other.prerelease.length) {
+      return 1
+    } else if (!this.prerelease.length && !other.prerelease.length) {
+      return 0
+    }
+
+    let i = 0
+    do {
+      const a = this.prerelease[i]
+      const b = other.prerelease[i]
+      debug('prerelease compare', i, a, b)
+      if (a === undefined && b === undefined) {
+        return 0
+      } else if (b === undefined) {
+        return 1
+      } else if (a === undefined) {
+        return -1
+      } else if (a === b) {
+        continue
+      } else {
+        return compareIdentifiers(a, b)
+      }
+    } while (++i)
+  }
+
+  compareBuild (other) {
+    if (!(other instanceof SemVer)) {
+      other = new SemVer(other, this.options)
+    }
+
+    let i = 0
+    do {
+      const a = this.build[i]
+      const b = other.build[i]
+      debug('prerelease compare', i, a, b)
+      if (a === undefined && b === undefined) {
+        return 0
+      } else if (b === undefined) {
+        return 1
+      } else if (a === undefined) {
+        return -1
+      } else if (a === b) {
+        continue
+      } else {
+        return compareIdentifiers(a, b)
+      }
+    } while (++i)
+  }
+
+  // preminor will bump the version up to the next minor release, and immediately
+  // down to pre-release. premajor and prepatch work the same way.
+  inc (release, identifier, identifierBase) {
+    switch (release) {
+      case 'premajor':
+        this.prerelease.length = 0
+        this.patch = 0
+        this.minor = 0
+        this.major++
+        this.inc('pre', identifier, identifierBase)
+        break
+      case 'preminor':
+        this.prerelease.length = 0
+        this.patch = 0
+        this.minor++
+        this.inc('pre', identifier, identifierBase)
+        break
+      case 'prepatch':
+        // If this is already a prerelease, it will bump to the next version
+        // drop any prereleases that might already exist, since they are not
+        // relevant at this point.
+        this.prerelease.length = 0
+        this.inc('patch', identifier, identifierBase)
+        this.inc('pre', identifier, identifierBase)
+        break
+      // If the input is a non-prerelease version, this acts the same as
+      // prepatch.
+      case 'prerelease':
+        if (this.prerelease.length === 0) {
+          this.inc('patch', identifier, identifierBase)
+        }
+        this.inc('pre', identifier, identifierBase)
+        break
+
+      case 'major':
+        // If this is a pre-major version, bump up to the same major version.
+        // Otherwise increment major.
+        // 1.0.0-5 bumps to 1.0.0
+        // 1.1.0 bumps to 2.0.0
+        if (
+          this.minor !== 0 ||
+          this.patch !== 0 ||
+          this.prerelease.length === 0
+        ) {
+          this.major++
+        }
+        this.minor = 0
+        this.patch = 0
+        this.prerelease = []
+        break
+      case 'minor':
+        // If this is a pre-minor version, bump up to the same minor version.
+        // Otherwise increment minor.
+        // 1.2.0-5 bumps to 1.2.0
+        // 1.2.1 bumps to 1.3.0
+        if (this.patch !== 0 || this.prerelease.length === 0) {
+          this.minor++
+        }
+        this.patch = 0
+        this.prerelease = []
+        break
+      case 'patch':
+        // If this is not a pre-release version, it will increment the patch.
+        // If it is a pre-release it will bump up to the same patch version.
+        // 1.2.0-5 patches to 1.2.0
+        // 1.2.0 patches to 1.2.1
+        if (this.prerelease.length === 0) {
+          this.patch++
+        }
+        this.prerelease = []
+        break
+      // This probably shouldn't be used publicly.
+      // 1.0.0 'pre' would become 1.0.0-0 which is the wrong direction.
+      case 'pre': {
+        const base = Number(identifierBase) ? 1 : 0
+
+        if (!identifier && identifierBase === false) {
+          throw new Error('invalid increment argument: identifier is empty')
+        }
+
+        if (this.prerelease.length === 0) {
+          this.prerelease = [base]
+        } else {
+          let i = this.prerelease.length
+          while (--i >= 0) {
+            if (typeof this.prerelease[i] === 'number') {
+              this.prerelease[i]++
+              i = -2
+            }
+          }
+          if (i === -1) {
+            // didn't increment anything
+            if (identifier === this.prerelease.join('.') && identifierBase === false) {
+              throw new Error('invalid increment argument: identifier already exists')
+            }
+            this.prerelease.push(base)
+          }
+        }
+        if (identifier) {
+          // 1.2.0-beta.1 bumps to 1.2.0-beta.2,
+          // 1.2.0-beta.fooblz or 1.2.0-beta bumps to 1.2.0-beta.0
+          let prerelease = [identifier, base]
+          if (identifierBase === false) {
+            prerelease = [identifier]
+          }
+          if (compareIdentifiers(this.prerelease[0], identifier) === 0) {
+            if (isNaN(this.prerelease[1])) {
+              this.prerelease = prerelease
+            }
+          } else {
+            this.prerelease = prerelease
+          }
+        }
+        break
+      }
+      default:
+        throw new Error(`invalid increment argument: ${release}`)
+    }
+    this.raw = this.format()
+    if (this.build.length) {
+      this.raw += `+${this.build.join('.')}`
+    }
+    return this
+  }
+}
+
+module.exports = SemVer
+
+
+/***/ }),
+
+/***/ 900:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const SemVer = __nccwpck_require__(8088)
+
+const inc = (version, release, options, identifier, identifierBase) => {
+  if (typeof (options) === 'string') {
+    identifierBase = identifier
+    identifier = options
+    options = undefined
+  }
+
+  try {
+    return new SemVer(
+      version instanceof SemVer ? version.version : version,
+      options
+    ).inc(release, identifier, identifierBase).version
+  } catch (er) {
+    return null
+  }
+}
+module.exports = inc
+
+
+/***/ }),
+
+/***/ 2293:
+/***/ ((module) => {
+
+// Note: this is the semver.org version of the spec that it implements
+// Not necessarily the package version of this code.
+const SEMVER_SPEC_VERSION = '2.0.0'
+
+const MAX_LENGTH = 256
+const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER ||
+/* istanbul ignore next */ 9007199254740991
+
+// Max safe segment length for coercion.
+const MAX_SAFE_COMPONENT_LENGTH = 16
+
+// Max safe length for a build identifier. The max length minus 6 characters for
+// the shortest version with a build 0.0.0+BUILD.
+const MAX_SAFE_BUILD_LENGTH = MAX_LENGTH - 6
+
+const RELEASE_TYPES = [
+  'major',
+  'premajor',
+  'minor',
+  'preminor',
+  'patch',
+  'prepatch',
+  'prerelease',
+]
+
+module.exports = {
+  MAX_LENGTH,
+  MAX_SAFE_COMPONENT_LENGTH,
+  MAX_SAFE_BUILD_LENGTH,
+  MAX_SAFE_INTEGER,
+  RELEASE_TYPES,
+  SEMVER_SPEC_VERSION,
+  FLAG_INCLUDE_PRERELEASE: 0b001,
+  FLAG_LOOSE: 0b010,
+}
+
+
+/***/ }),
+
+/***/ 427:
+/***/ ((module) => {
+
+const debug = (
+  typeof process === 'object' &&
+  process.env &&
+  process.env.NODE_DEBUG &&
+  /\bsemver\b/i.test(process.env.NODE_DEBUG)
+) ? (...args) => console.error('SEMVER', ...args)
+  : () => {}
+
+module.exports = debug
+
+
+/***/ }),
+
+/***/ 2463:
+/***/ ((module) => {
+
+const numeric = /^[0-9]+$/
+const compareIdentifiers = (a, b) => {
+  const anum = numeric.test(a)
+  const bnum = numeric.test(b)
+
+  if (anum && bnum) {
+    a = +a
+    b = +b
+  }
+
+  return a === b ? 0
+    : (anum && !bnum) ? -1
+    : (bnum && !anum) ? 1
+    : a < b ? -1
+    : 1
+}
+
+const rcompareIdentifiers = (a, b) => compareIdentifiers(b, a)
+
+module.exports = {
+  compareIdentifiers,
+  rcompareIdentifiers,
+}
+
+
+/***/ }),
+
+/***/ 785:
+/***/ ((module) => {
+
+// parse out just the options we care about
+const looseOption = Object.freeze({ loose: true })
+const emptyOpts = Object.freeze({ })
+const parseOptions = options => {
+  if (!options) {
+    return emptyOpts
+  }
+
+  if (typeof options !== 'object') {
+    return looseOption
+  }
+
+  return options
+}
+module.exports = parseOptions
+
+
+/***/ }),
+
+/***/ 9523:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+const {
+  MAX_SAFE_COMPONENT_LENGTH,
+  MAX_SAFE_BUILD_LENGTH,
+  MAX_LENGTH,
+} = __nccwpck_require__(2293)
+const debug = __nccwpck_require__(427)
+exports = module.exports = {}
+
+// The actual regexps go on exports.re
+const re = exports.re = []
+const safeRe = exports.safeRe = []
+const src = exports.src = []
+const t = exports.t = {}
+let R = 0
+
+const LETTERDASHNUMBER = '[a-zA-Z0-9-]'
+
+// Replace some greedy regex tokens to prevent regex dos issues. These regex are
+// used internally via the safeRe object since all inputs in this library get
+// normalized first to trim and collapse all extra whitespace. The original
+// regexes are exported for userland consumption and lower level usage. A
+// future breaking change could export the safer regex only with a note that
+// all input should have extra whitespace removed.
+const safeRegexReplacements = [
+  ['\\s', 1],
+  ['\\d', MAX_LENGTH],
+  [LETTERDASHNUMBER, MAX_SAFE_BUILD_LENGTH],
+]
+
+const makeSafeRegex = (value) => {
+  for (const [token, max] of safeRegexReplacements) {
+    value = value
+      .split(`${token}*`).join(`${token}{0,${max}}`)
+      .split(`${token}+`).join(`${token}{1,${max}}`)
+  }
+  return value
+}
+
+const createToken = (name, value, isGlobal) => {
+  const safe = makeSafeRegex(value)
+  const index = R++
+  debug(name, index, value)
+  t[name] = index
+  src[index] = value
+  re[index] = new RegExp(value, isGlobal ? 'g' : undefined)
+  safeRe[index] = new RegExp(safe, isGlobal ? 'g' : undefined)
+}
+
+// The following Regular Expressions can be used for tokenizing,
+// validating, and parsing SemVer version strings.
+
+// ## Numeric Identifier
+// A single `0`, or a non-zero digit followed by zero or more digits.
+
+createToken('NUMERICIDENTIFIER', '0|[1-9]\\d*')
+createToken('NUMERICIDENTIFIERLOOSE', '\\d+')
+
+// ## Non-numeric Identifier
+// Zero or more digits, followed by a letter or hyphen, and then zero or
+// more letters, digits, or hyphens.
+
+createToken('NONNUMERICIDENTIFIER', `\\d*[a-zA-Z-]${LETTERDASHNUMBER}*`)
+
+// ## Main Version
+// Three dot-separated numeric identifiers.
+
+createToken('MAINVERSION', `(${src[t.NUMERICIDENTIFIER]})\\.` +
+                   `(${src[t.NUMERICIDENTIFIER]})\\.` +
+                   `(${src[t.NUMERICIDENTIFIER]})`)
+
+createToken('MAINVERSIONLOOSE', `(${src[t.NUMERICIDENTIFIERLOOSE]})\\.` +
+                        `(${src[t.NUMERICIDENTIFIERLOOSE]})\\.` +
+                        `(${src[t.NUMERICIDENTIFIERLOOSE]})`)
+
+// ## Pre-release Version Identifier
+// A numeric identifier, or a non-numeric identifier.
+
+createToken('PRERELEASEIDENTIFIER', `(?:${src[t.NUMERICIDENTIFIER]
+}|${src[t.NONNUMERICIDENTIFIER]})`)
+
+createToken('PRERELEASEIDENTIFIERLOOSE', `(?:${src[t.NUMERICIDENTIFIERLOOSE]
+}|${src[t.NONNUMERICIDENTIFIER]})`)
+
+// ## Pre-release Version
+// Hyphen, followed by one or more dot-separated pre-release version
+// identifiers.
+
+createToken('PRERELEASE', `(?:-(${src[t.PRERELEASEIDENTIFIER]
+}(?:\\.${src[t.PRERELEASEIDENTIFIER]})*))`)
+
+createToken('PRERELEASELOOSE', `(?:-?(${src[t.PRERELEASEIDENTIFIERLOOSE]
+}(?:\\.${src[t.PRERELEASEIDENTIFIERLOOSE]})*))`)
+
+// ## Build Metadata Identifier
+// Any combination of digits, letters, or hyphens.
+
+createToken('BUILDIDENTIFIER', `${LETTERDASHNUMBER}+`)
+
+// ## Build Metadata
+// Plus sign, followed by one or more period-separated build metadata
+// identifiers.
+
+createToken('BUILD', `(?:\\+(${src[t.BUILDIDENTIFIER]
+}(?:\\.${src[t.BUILDIDENTIFIER]})*))`)
+
+// ## Full Version String
+// A main version, followed optionally by a pre-release version and
+// build metadata.
+
+// Note that the only major, minor, patch, and pre-release sections of
+// the version string are capturing groups.  The build metadata is not a
+// capturing group, because it should not ever be used in version
+// comparison.
+
+createToken('FULLPLAIN', `v?${src[t.MAINVERSION]
+}${src[t.PRERELEASE]}?${
+  src[t.BUILD]}?`)
+
+createToken('FULL', `^${src[t.FULLPLAIN]}$`)
+
+// like full, but allows v1.2.3 and =1.2.3, which people do sometimes.
+// also, 1.0.0alpha1 (prerelease without the hyphen) which is pretty
+// common in the npm registry.
+createToken('LOOSEPLAIN', `[v=\\s]*${src[t.MAINVERSIONLOOSE]
+}${src[t.PRERELEASELOOSE]}?${
+  src[t.BUILD]}?`)
+
+createToken('LOOSE', `^${src[t.LOOSEPLAIN]}$`)
+
+createToken('GTLT', '((?:<|>)?=?)')
+
+// Something like "2.*" or "1.2.x".
+// Note that "x.x" is a valid xRange identifer, meaning "any version"
+// Only the first item is strictly required.
+createToken('XRANGEIDENTIFIERLOOSE', `${src[t.NUMERICIDENTIFIERLOOSE]}|x|X|\\*`)
+createToken('XRANGEIDENTIFIER', `${src[t.NUMERICIDENTIFIER]}|x|X|\\*`)
+
+createToken('XRANGEPLAIN', `[v=\\s]*(${src[t.XRANGEIDENTIFIER]})` +
+                   `(?:\\.(${src[t.XRANGEIDENTIFIER]})` +
+                   `(?:\\.(${src[t.XRANGEIDENTIFIER]})` +
+                   `(?:${src[t.PRERELEASE]})?${
+                     src[t.BUILD]}?` +
+                   `)?)?`)
+
+createToken('XRANGEPLAINLOOSE', `[v=\\s]*(${src[t.XRANGEIDENTIFIERLOOSE]})` +
+                        `(?:\\.(${src[t.XRANGEIDENTIFIERLOOSE]})` +
+                        `(?:\\.(${src[t.XRANGEIDENTIFIERLOOSE]})` +
+                        `(?:${src[t.PRERELEASELOOSE]})?${
+                          src[t.BUILD]}?` +
+                        `)?)?`)
+
+createToken('XRANGE', `^${src[t.GTLT]}\\s*${src[t.XRANGEPLAIN]}$`)
+createToken('XRANGELOOSE', `^${src[t.GTLT]}\\s*${src[t.XRANGEPLAINLOOSE]}$`)
+
+// Coercion.
+// Extract anything that could conceivably be a part of a valid semver
+createToken('COERCE', `${'(^|[^\\d])' +
+              '(\\d{1,'}${MAX_SAFE_COMPONENT_LENGTH}})` +
+              `(?:\\.(\\d{1,${MAX_SAFE_COMPONENT_LENGTH}}))?` +
+              `(?:\\.(\\d{1,${MAX_SAFE_COMPONENT_LENGTH}}))?` +
+              `(?:$|[^\\d])`)
+createToken('COERCERTL', src[t.COERCE], true)
+
+// Tilde ranges.
+// Meaning is "reasonably at or greater than"
+createToken('LONETILDE', '(?:~>?)')
+
+createToken('TILDETRIM', `(\\s*)${src[t.LONETILDE]}\\s+`, true)
+exports.tildeTrimReplace = '$1~'
+
+createToken('TILDE', `^${src[t.LONETILDE]}${src[t.XRANGEPLAIN]}$`)
+createToken('TILDELOOSE', `^${src[t.LONETILDE]}${src[t.XRANGEPLAINLOOSE]}$`)
+
+// Caret ranges.
+// Meaning is "at least and backwards compatible with"
+createToken('LONECARET', '(?:\\^)')
+
+createToken('CARETTRIM', `(\\s*)${src[t.LONECARET]}\\s+`, true)
+exports.caretTrimReplace = '$1^'
+
+createToken('CARET', `^${src[t.LONECARET]}${src[t.XRANGEPLAIN]}$`)
+createToken('CARETLOOSE', `^${src[t.LONECARET]}${src[t.XRANGEPLAINLOOSE]}$`)
+
+// A simple gt/lt/eq thing, or just "" to indicate "any version"
+createToken('COMPARATORLOOSE', `^${src[t.GTLT]}\\s*(${src[t.LOOSEPLAIN]})$|^$`)
+createToken('COMPARATOR', `^${src[t.GTLT]}\\s*(${src[t.FULLPLAIN]})$|^$`)
+
+// An expression to strip any whitespace between the gtlt and the thing
+// it modifies, so that `> 1.2.3` ==> `>1.2.3`
+createToken('COMPARATORTRIM', `(\\s*)${src[t.GTLT]
+}\\s*(${src[t.LOOSEPLAIN]}|${src[t.XRANGEPLAIN]})`, true)
+exports.comparatorTrimReplace = '$1$2$3'
+
+// Something like `1.2.3 - 1.2.4`
+// Note that these all use the loose form, because they'll be
+// checked against either the strict or loose comparator form
+// later.
+createToken('HYPHENRANGE', `^\\s*(${src[t.XRANGEPLAIN]})` +
+                   `\\s+-\\s+` +
+                   `(${src[t.XRANGEPLAIN]})` +
+                   `\\s*$`)
+
+createToken('HYPHENRANGELOOSE', `^\\s*(${src[t.XRANGEPLAINLOOSE]})` +
+                        `\\s+-\\s+` +
+                        `(${src[t.XRANGEPLAINLOOSE]})` +
+                        `\\s*$`)
+
+// Star ranges basically just allow anything at all.
+createToken('STAR', '(<|>)?=?\\s*\\*')
+// >=0.0.0 is like a star
+createToken('GTE0', '^\\s*>=\\s*0\\.0\\.0\\s*$')
+createToken('GTE0PRE', '^\\s*>=\\s*0\\.0\\.0-0\\s*$')
+
+
+/***/ }),
+
 /***/ 4294:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -30335,6 +31078,81 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ 5185:
+/***/ ((module) => {
+
+class Node {
+	/// value;
+	/// next;
+
+	constructor(value) {
+		this.value = value;
+
+		// TODO: Remove this when targeting Node.js 12.
+		this.next = undefined;
+	}
+}
+
+class Queue {
+	// TODO: Use private class fields when targeting Node.js 12.
+	// #_head;
+	// #_tail;
+	// #_size;
+
+	constructor() {
+		this.clear();
+	}
+
+	enqueue(value) {
+		const node = new Node(value);
+
+		if (this._head) {
+			this._tail.next = node;
+			this._tail = node;
+		} else {
+			this._head = node;
+			this._tail = node;
+		}
+
+		this._size++;
+	}
+
+	dequeue() {
+		const current = this._head;
+		if (!current) {
+			return;
+		}
+
+		this._head = this._head.next;
+		this._size--;
+		return current.value;
+	}
+
+	clear() {
+		this._head = undefined;
+		this._tail = undefined;
+		this._size = 0;
+	}
+
+	get size() {
+		return this._size;
+	}
+
+	* [Symbol.iterator]() {
+		let current = this._head;
+
+		while (current) {
+			yield current.value;
+			current = current.next;
+		}
+	}
+}
+
+module.exports = Queue;
+
+
+/***/ }),
+
 /***/ 9042:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -30350,6 +31168,7 @@ var Input;
     Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
+    Input["Bumps"] = "bumps";
     Input["AutoMerge"] = "auto-merge";
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
@@ -30368,8 +31187,9 @@ var VersionDispatchInput;
     VersionDispatchInput["GithubToken"] = "github-token";
     VersionDispatchInput["Ref"] = "ref";
     VersionDispatchInput["VersionWorkflowId"] = "version-workflow-id";
-    VersionDispatchInput["ExcludeCommitTypes"] = "exclude-commit-types";
     VersionDispatchInput["ExcludeLabels"] = "exclude-labels";
+    VersionDispatchInput["DryRun"] = "dry-run";
+    VersionDispatchInput["PrNumber"] = "pr-number";
 })(VersionDispatchInput = exports.VersionDispatchInput || (exports.VersionDispatchInput = {}));
 exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
@@ -30383,95 +31203,251 @@ exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.parseMessage = void 0;
+const HEADER_REGEX = /^(?<type>[A-Za-z]+)(?:\((?<scope>[^)]+)\))?(?<breaking>!)?:/;
+const BREAKING_FOOTER_REGEX = /^BREAKING[ -]CHANGE:/m;
+/**
+ * Parse a conventional-commit subject (plus optional body for the
+ * `BREAKING CHANGE:` footer) into its `{ type, scope?, breaking }`
+ * components. Returns `null` when the subject does not match the
+ * `<type>(<scope>)!?: ...` grammar so the caller can decide what to do.
+ */
 function parseMessage(message) {
-    const type = message.match(/^([^!(:])+/)?.[0];
-    if (!type) {
-        throw new Error(`Failed to parse message as conventional commit: ${message}`);
-    }
-    return { type };
+    if (typeof message !== 'string' || message.length === 0)
+        return null;
+    const [subject = '', ...rest] = message.split(/\r?\n/);
+    const match = HEADER_REGEX.exec(subject.trim());
+    if (!match?.groups?.type)
+        return null;
+    const { type, scope, breaking } = match.groups;
+    const breakingFooter = BREAKING_FOOTER_REGEX.test(rest.join('\n'));
+    return {
+        type,
+        scope,
+        breaking: breaking === '!' || breakingFooter,
+    };
 }
 exports.parseMessage = parseMessage;
 
 
 /***/ }),
 
-/***/ 1716:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.readJson = void 0;
-async function readJson(path, { filesystem }) {
-    let buffer;
-    try {
-        buffer = await filesystem.promises.readFile(path);
-    }
-    catch {
-        return undefined;
-    }
-    return JSON.parse(buffer.toString());
-}
-exports.readJson = readJson;
-
-
-/***/ }),
-
-/***/ 4741:
+/***/ 9317:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.strategyAsArgument = exports.validateAllowedStrategies = exports.assertStrategy = exports.canUseFromNonDefaultBranch = exports.VersionStrategy = void 0;
-const fs = __nccwpck_require__(7147);
-const fs_1 = __nccwpck_require__(1716);
-const lerna_utils_1 = __nccwpck_require__(4801);
-var VersionStrategy;
-(function (VersionStrategy) {
-    VersionStrategy["ConventionalCommits"] = "conventional-commits";
-    VersionStrategy["Patch"] = "patch";
-    VersionStrategy["Minor"] = "minor";
-    VersionStrategy["Major"] = "major";
-    VersionStrategy["Premajor"] = "premajor";
-    VersionStrategy["Preminor"] = "preminor";
-    VersionStrategy["Prepatch"] = "prepatch";
-    VersionStrategy["Prerelease"] = "prerelease";
-})(VersionStrategy = exports.VersionStrategy || (exports.VersionStrategy = {}));
-function canUseFromNonDefaultBranch(strategy) {
-    return [
-        VersionStrategy.Minor,
-        VersionStrategy.Patch,
-        VersionStrategy.Preminor,
-        VersionStrategy.Prepatch,
-        VersionStrategy.Prerelease,
-    ].includes(strategy);
+exports.maxBump = exports.bumpFromMessage = exports.BUMP_MAJOR = exports.BUMP_MINOR = exports.BUMP_PATCH = exports.BUMP_NONE = void 0;
+const conventional_commits_1 = __nccwpck_require__(9879);
+exports.BUMP_NONE = 'none';
+exports.BUMP_PATCH = 'patch';
+exports.BUMP_MINOR = 'minor';
+exports.BUMP_MAJOR = 'major';
+const RANK = {
+    [exports.BUMP_NONE]: 0,
+    [exports.BUMP_PATCH]: 1,
+    [exports.BUMP_MINOR]: 2,
+    [exports.BUMP_MAJOR]: 3,
+};
+/**
+ * Map a single conventional-commit message to a bump level.
+ *
+ *   - `<type>(<scope>)!: ...` / `<type>!: ...`           → major
+ *   - body line `BREAKING CHANGE:` / `BREAKING-CHANGE:`  → major
+ *   - type === 'feat'                                    → minor
+ *   - type === 'fix' or 'perf'                           → patch
+ *   - anything else                                      → none
+ */
+function bumpFromMessage(message) {
+    const parsed = (0, conventional_commits_1.parseMessage)(message);
+    if (!parsed)
+        return exports.BUMP_NONE;
+    if (parsed.breaking)
+        return exports.BUMP_MAJOR;
+    if (parsed.type === 'feat')
+        return exports.BUMP_MINOR;
+    if (parsed.type === 'fix' || parsed.type === 'perf')
+        return exports.BUMP_PATCH;
+    return exports.BUMP_NONE;
 }
-exports.canUseFromNonDefaultBranch = canUseFromNonDefaultBranch;
-function assertStrategy(input) {
-    const strategies = Object.values(VersionStrategy);
-    if (!strategies.includes(input)) {
-        throw new Error(`Invalid version strategy ${input} provided. Permitted values are ${strategies}`);
-    }
+exports.bumpFromMessage = bumpFromMessage;
+/**
+ * Pick the higher of two bump levels.
+ */
+function maxBump(a, b) {
+    return RANK[a] >= RANK[b] ? a : b;
 }
-exports.assertStrategy = assertStrategy;
-async function validateAllowedStrategies({ packages, versionStrategy, filesystem = fs, }) {
-    const packageJson = await (0, fs_1.readJson)('package.json', { filesystem });
-    if (!packageJson?.release?.versionStrategy) {
-        return;
-    }
-    const packageNames = new Set(await Promise.all(packages.map((packagePath) => (0, lerna_utils_1.getPackageNameByPath)(packagePath, { filesystem }))));
-    for (const [packageName, allowedStrategies] of Object.entries(packageJson.release.versionStrategy)) {
-        if (packageNames.has(packageName) && !allowedStrategies.includes(versionStrategy)) {
-            throw new Error(`Attempted to use version strategy "${versionStrategy}", which is not allowed for ${packageName}. Allowed strategies are: ${allowedStrategies.join(', ')}`);
+exports.maxBump = maxBump;
+
+
+/***/ }),
+
+/***/ 6516:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.filesToPackages = void 0;
+/**
+ * Attribute a set of touched file paths to workspace packages.
+ *
+ * A file maps to a package iff its repo-relative path equals the package's
+ * directory or starts with it followed by a slash. This deliberately rejects
+ * sibling directories with overlapping prefixes (`features/abc` vs.
+ * `features/abc-old`).
+ *
+ * @param files — repo-relative paths.
+ * @param packagePaths — { packageName: repoRelativeDir }.
+ */
+function filesToPackages(files, packagePaths) {
+    const touched = new Set();
+    const entries = Object.entries(packagePaths).map(([name, dir]) => [
+        name,
+        ensureTrailingSlash(dir),
+    ]);
+    for (const file of files) {
+        for (const [name, prefix] of entries) {
+            if (file === prefix.slice(0, -1) || file.startsWith(prefix)) {
+                touched.add(name);
+            }
         }
     }
+    return touched;
 }
-exports.validateAllowedStrategies = validateAllowedStrategies;
-function strategyAsArgument(strategy) {
-    return strategy === VersionStrategy.ConventionalCommits ? '--conventional-commits' : strategy;
+exports.filesToPackages = filesToPackages;
+function ensureTrailingSlash(value) {
+    return value.endsWith('/') ? value : `${value}/`;
 }
-exports.strategyAsArgument = strategyAsArgument;
+
+
+/***/ }),
+
+/***/ 7993:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PREVIEW_MARKER = exports.clearVersionPreview = exports.renderPreviewComment = exports.nextVersion = exports.buildPreviewRows = exports.postVersionPreview = void 0;
+const path = __nccwpck_require__(1017);
+const core = __nccwpck_require__(2186);
+const semverInc = __nccwpck_require__(900);
+const MARKER = '<!-- lerna-release-action:version-preview -->';
+/**
+ * Post the version preview as a sticky comment on the PR. On every run we
+ * delete every prior preview comment (matched by a hidden HTML marker)
+ * and post a fresh one at the end of the conversation — so reviewers
+ * always see exactly one preview comment, anchored to the latest push.
+ */
+async function postVersionPreview({ client, repo, prNumber, bumps, packagePaths, filesystem, }) {
+    const rows = buildPreviewRows({ bumps, packagePaths, filesystem });
+    const body = rows.length === 0 ? '' : renderPreviewComment(rows);
+    const deleted = await deleteExistingPreviewComments({ client, repo, prNumber });
+    if (!body) {
+        if (deleted > 0)
+            core.info(`preview: cleared ${deleted} stale preview comment(s)`);
+        else
+            core.info('preview: no bumps from this PR; nothing to post');
+        return;
+    }
+    await client.rest.issues.createComment({
+        ...repo,
+        issue_number: prNumber,
+        body,
+    });
+    core.info(`preview: posted version preview to PR #${prNumber}`);
+}
+exports.postVersionPreview = postVersionPreview;
+function buildPreviewRows({ bumps, packagePaths, filesystem, }) {
+    const rows = [];
+    for (const [pkg, bump] of Object.entries(bumps)) {
+        const pkgPath = packagePaths[pkg];
+        if (!pkgPath) {
+            core.warning(`preview: no workspace path for "${pkg}"; skipping`);
+            continue;
+        }
+        const current = readVersion({ filesystem, pkgPath });
+        if (!current) {
+            core.warning(`preview: could not read version for "${pkg}" at ${pkgPath}; skipping`);
+            continue;
+        }
+        rows.push({ pkg, bump, current, next: nextVersion(current, bump) });
+    }
+    rows.sort((a, b) => a.pkg.localeCompare(b.pkg));
+    return rows;
+}
+exports.buildPreviewRows = buildPreviewRows;
+function readVersion({ filesystem, pkgPath, }) {
+    const jsonPath = path.join(pkgPath, 'package.json');
+    try {
+        const raw = filesystem.readFileSync(jsonPath, 'utf8');
+        const parsed = JSON.parse(raw);
+        return typeof parsed.version === 'string' ? parsed.version : null;
+    }
+    catch {
+        return null;
+    }
+}
+function nextVersion(current, bump) {
+    // While a package is in a prerelease cycle (`5.0.0-rc.96`), bump the
+    // prerelease counter rather than dropping the rc — a `feat!:` commit
+    // shouldn't accidentally promote a long-lived rc to a stable release.
+    // The caller can promote to stable via a separate workflow when ready.
+    const effectiveBump = isPrerelease(current) ? 'prerelease' : bump;
+    return semverInc(current, effectiveBump) ?? current;
+}
+exports.nextVersion = nextVersion;
+function isPrerelease(version) {
+    return version.includes('-');
+}
+function renderPreviewComment(rows) {
+    const lines = [
+        MARKER,
+        '## Version preview',
+        '',
+        'If merged as-is, this PR will release:',
+        '',
+        '| Package | Bump | Current | Next |',
+        '| --- | --- | --- | --- |',
+        ...rows.map((r) => `| \`${r.pkg}\` | ${r.bump} | ${r.current} | ${r.next} |`),
+        '',
+        '_Computed by [`lerna-release-action/version-dispatch`](https://github.com/ExodusMovement/lerna-release-action) from per-commit file attribution. Re-posted on every push so the latest preview is always at the end of this thread._',
+    ];
+    return lines.join('\n');
+}
+exports.renderPreviewComment = renderPreviewComment;
+/**
+ * Delete every prior preview comment on the PR. Used by the action's
+ * early-return paths (excluded label, wrong base branch, no workspace
+ * packages, etc.) to make sure a previously-posted preview comment
+ * does not linger after the PR transitions into a gated state.
+ */
+async function clearVersionPreview({ client, repo, prNumber, }) {
+    const deleted = await deleteExistingPreviewComments({ client, repo, prNumber });
+    if (deleted > 0)
+        core.info(`preview: cleared ${deleted} stale preview comment(s)`);
+}
+exports.clearVersionPreview = clearVersionPreview;
+async function deleteExistingPreviewComments({ client, repo, prNumber, }) {
+    const comments = await client.paginate(client.rest.issues.listComments, {
+        ...repo,
+        issue_number: prNumber,
+        per_page: 100,
+    });
+    const stale = comments.filter((c) => typeof c.body === 'string' && c.body.includes(MARKER));
+    for (const c of stale) {
+        try {
+            await client.rest.issues.deleteComment({ ...repo, comment_id: c.id });
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            core.warning(`preview: failed to delete stale comment ${c.id}: ${message}`);
+        }
+    }
+    return stale.length;
+}
+exports.PREVIEW_MARKER = MARKER;
 
 
 /***/ }),
@@ -41108,69 +42084,229 @@ var __webpack_exports__ = {};
 var exports = __webpack_exports__;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.versionDispatch = void 0;
+exports.aggregateBumps = exports.computeBumpsForPr = exports.versionDispatch = void 0;
 const core = __nccwpck_require__(2186);
 const github = __nccwpck_require__(5438);
-const constants_1 = __nccwpck_require__(9042);
 const fs = __nccwpck_require__(7147);
+const pLimit = __nccwpck_require__(7684);
 const lerna_utils_1 = __nccwpck_require__(4801);
-const strategy_1 = __nccwpck_require__(4741);
-const conventional_commits_1 = __nccwpck_require__(9879);
-async function versionDispatch({ filesystem = fs } = {}) {
-    const token = core.getInput(constants_1.VersionDispatchInput.GithubToken, { required: true });
-    const workflowId = core.getInput(constants_1.VersionDispatchInput.VersionWorkflowId);
-    const ref = core.getInput(constants_1.VersionDispatchInput.Ref);
-    const excludedCommitTypes = new Set(core.getInput(constants_1.VersionDispatchInput.ExcludeCommitTypes).split(','));
-    const excludedLabels = new Set(core.getInput(constants_1.VersionDispatchInput.ExcludeLabels).split(','));
-    const { repo, payload: { pull_request: pr }, } = github.context;
-    if (!pr) {
-        core.warning('Action triggered by non-PR related event.');
-        return;
-    }
-    if (!pr.merged) {
-        core.notice('PR was closed without merging.');
-        return;
-    }
-    const { type: commitType } = (0, conventional_commits_1.parseMessage)(pr.title);
-    if (excludedCommitTypes.has(commitType)) {
-        core.notice(`Skipped for excluded commit type "${commitType}"`);
-        return;
-    }
-    const excludedLabel = pr.labels.find((label) => excludedLabels.has(label.name));
-    if (excludedLabel) {
-        core.notice(`Skipped for excluded label "${excludedLabel}"`);
-        return;
-    }
-    const client = github.getOctokit(token);
-    const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
-    if (pr.base.ref !== defaultBranch) {
-        core.notice(`Skipped versioning for PR not targeting ${defaultBranch}`);
-        return;
-    }
-    const byPackageName = await (0, lerna_utils_1.getPathsByPackageNames)({ filesystem });
-    const affected = Object.keys(byPackageName).filter((name) => pr.labels.some((label) => label.name === name || label.name === name.split('/').pop()));
-    if (affected.length === 0) {
-        core.notice('No packages were affected.');
-        return;
-    }
-    await client.rest.actions.createWorkflowDispatch({
-        ref,
-        ...repo,
-        workflow_id: workflowId,
-        inputs: {
-            assignee: pr.user.login,
-            'version-strategy': strategy_1.VersionStrategy.ConventionalCommits,
-            packages: affected.join(','),
-        },
+const constants_1 = __nccwpck_require__(9042);
+const bumps_1 = __nccwpck_require__(9317);
+const files_to_packages_1 = __nccwpck_require__(6516);
+const preview_1 = __nccwpck_require__(7993);
+const GET_COMMIT_CONCURRENCY = 10;
+if (require.main === require.cache[eval('__filename')]) {
+    versionDispatch().catch((error) => {
+        if (error.stack)
+            core.debug(error.stack);
+        core.setFailed(String(error.message));
     });
 }
-exports.versionDispatch = versionDispatch;
-versionDispatch().catch((error) => {
-    if (error.stack) {
-        core.debug(error.stack);
+/**
+ * Inspect a merged PR's pre-squash commits, attribute each commit to
+ * workspace packages by the files it touched, derive a per-package bump
+ * level from each commit's conventional-commit subject (max bump wins
+ * per package), and dispatch the version workflow with a `{ pkg: bump }`
+ * JSON map plus the matching `packages` list.
+ *
+ * Title fallback — if no commit carries a release-worthy type, parse the
+ * PR title once and apply that bump to every workspace touched anywhere
+ * in the PR. Preserves the long-standing PR-title-is-the-release-level
+ * workflow for repos whose individual commits aren't conventional.
+ *
+ * The dispatched workflow is expected to forward `packages` and `bumps`
+ * to `lerna-release-action/version`. When `bumps` is unset that action
+ * falls back to the old `version-strategy` flow, so consumers that
+ * haven't updated their `version.yml` to forward `bumps` keep working.
+ *
+ * Preview mode — when invoked against a PR that has *not* been merged
+ * (e.g. `pull_request: synchronize` runs), the action skips the
+ * dispatch entirely and instead posts a sticky comment to the PR with
+ * the computed bumps and the resulting `current → next` versions. On
+ * every run the prior preview comment is deleted and a fresh one
+ * created, so reviewers always see exactly one preview comment,
+ * anchored at the end of the conversation timeline.
+ */
+async function versionDispatch({ filesystem = fs } = {}) {
+    const token = core.getInput(constants_1.VersionDispatchInput.GithubToken, { required: true });
+    const workflowId = core.getInput(constants_1.VersionDispatchInput.VersionWorkflowId) || 'version.yml';
+    const ref = core.getInput(constants_1.VersionDispatchInput.Ref) || 'master';
+    const excludedLabels = new Set(core
+        .getInput(constants_1.VersionDispatchInput.ExcludeLabels)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean));
+    const dryRun = core.getInput(constants_1.VersionDispatchInput.DryRun) === 'true';
+    const prNumberInput = core.getInput(constants_1.VersionDispatchInput.PrNumber);
+    const { repo, payload } = github.context;
+    const client = github.getOctokit(token);
+    let pr = null;
+    if (prNumberInput) {
+        const { data } = await client.rest.pulls.get({ ...repo, pull_number: Number(prNumberInput) });
+        pr = data;
     }
-    core.setFailed(String(error.message));
-});
+    else if (payload.pull_request) {
+        pr = payload.pull_request;
+    }
+    else {
+        core.warning('Action triggered by non-PR event and no `pr-number` was supplied.');
+        return null;
+    }
+    const isMerged = pr.merged === true;
+    const isPreview = !isMerged && pr.state !== 'closed';
+    if (!isMerged && !isPreview) {
+        core.notice('PR was closed without merging.');
+        return null;
+    }
+    const excludedLabel = (pr.labels ?? []).find((label) => excludedLabels.has(label.name));
+    if (excludedLabel) {
+        core.notice(`Skipped for excluded label "${excludedLabel.name}"`);
+        if (isPreview)
+            await (0, preview_1.clearVersionPreview)({ client, repo, prNumber: pr.number });
+        return null;
+    }
+    const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
+    if (pr.base?.ref && pr.base.ref !== defaultBranch) {
+        core.notice(`Skipped versioning for PR not targeting ${defaultBranch}`);
+        if (isPreview)
+            await (0, preview_1.clearVersionPreview)({ client, repo, prNumber: pr.number });
+        return null;
+    }
+    const packagePaths = await (0, lerna_utils_1.getPathsByPackageNames)({ filesystem });
+    if (Object.keys(packagePaths).length === 0) {
+        core.warning('No workspace packages discovered. Aborting.');
+        if (isPreview)
+            await (0, preview_1.clearVersionPreview)({ client, repo, prNumber: pr.number });
+        return null;
+    }
+    const bumps = await computeBumpsForPr({
+        client,
+        repo,
+        prNumber: pr.number,
+        packagePaths,
+        prTitle: pr.title,
+    });
+    const packageNames = Object.keys(bumps);
+    core.setOutput('packages', packageNames.join(','));
+    core.setOutput('bumps', JSON.stringify(bumps));
+    if (isPreview) {
+        await (0, preview_1.postVersionPreview)({
+            client,
+            repo,
+            prNumber: pr.number,
+            bumps,
+            packagePaths,
+            filesystem,
+        });
+        return bumps;
+    }
+    if (packageNames.length === 0) {
+        core.notice('No releaseable commits across workspace packages.');
+        return null;
+    }
+    if (dryRun) {
+        core.info(`dry-run: bumps = ${JSON.stringify(bumps, null, 2)}`);
+        return bumps;
+    }
+    try {
+        await client.rest.actions.createWorkflowDispatch({
+            ref,
+            ...repo,
+            workflow_id: workflowId,
+            inputs: {
+                assignee: pr.user?.login ?? '',
+                packages: packageNames.join(','),
+                bumps: JSON.stringify(bumps),
+            },
+        });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        core.setFailed(`Failed to dispatch ${workflowId}: ${message}`);
+        return bumps;
+    }
+    core.info(`Dispatched ${workflowId} with bumps ${JSON.stringify(bumps)}`);
+    return bumps;
+}
+exports.versionDispatch = versionDispatch;
+/**
+ * Walk a PR's individual commits and build a `{ pkg: bump }` map.
+ *
+ * I/O — paginates the PR's commits and fetches each commit's file list
+ * in parallel. The pure aggregation logic lives in {@link aggregateBumps}.
+ *
+ * @returns map keyed by workspace package name, with values from the
+ *   `Bump` type *minus* `none` — packages that received no bump are omitted.
+ */
+async function computeBumpsForPr({ client, repo, prNumber, packagePaths, prTitle, }) {
+    const commits = await client.paginate(client.rest.pulls.listCommits, {
+        ...repo,
+        pull_number: prNumber,
+        per_page: 100,
+    });
+    if (commits.length >= 250) {
+        core.warning(`PR #${prNumber} returned ${commits.length} commits, which is at or above GitHub's REST cap; some commits may have been truncated and missed by per-package attribution.`);
+    }
+    // Cap concurrency to avoid GitHub's secondary rate limit on PRs with
+    // many commits. 10 is well under the per-second ceiling while still
+    // ~10x faster than sequential awaits.
+    const limit = pLimit(GET_COMMIT_CONCURRENCY);
+    const commitsWithFiles = await Promise.all(commits.map((entry) => limit(async () => {
+        const { data: detail } = await client.rest.repos.getCommit({ ...repo, ref: entry.sha });
+        return {
+            sha: entry.sha,
+            message: entry.commit.message,
+            files: (detail.files ?? []).map((f) => f.filename),
+        };
+    })));
+    return aggregateBumps({ commits: commitsWithFiles, packagePaths, prTitle });
+}
+exports.computeBumpsForPr = computeBumpsForPr;
+/**
+ * Pure aggregation: turn `{ commits, packagePaths, prTitle }` into a
+ * `{ pkg: bump }` map. Extracted from {@link computeBumpsForPr} so it can
+ * be unit-tested without mocking GitHub.
+ */
+function aggregateBumps({ commits, packagePaths, prTitle, }) {
+    const bumps = {};
+    const touchedAcrossPr = new Set();
+    for (const commit of commits) {
+        const bump = (0, bumps_1.bumpFromMessage)(commit.message);
+        const packages = (0, files_to_packages_1.filesToPackages)(commit.files, packagePaths);
+        for (const name of packages)
+            touchedAcrossPr.add(name);
+        if (bump === bumps_1.BUMP_NONE) {
+            core.info(`skip ${commit.sha.slice(0, 7)}: ${firstLine(commit.message)} (no bump)`);
+            continue;
+        }
+        if (packages.size === 0) {
+            core.info(`skip ${commit.sha.slice(0, 7)}: ${firstLine(commit.message)} (${bump}, no workspace files)`);
+            continue;
+        }
+        for (const name of packages) {
+            bumps[name] = (0, bumps_1.maxBump)(bumps[name] ?? bumps_1.BUMP_NONE, bump);
+        }
+        core.info(`commit ${commit.sha.slice(0, 7)} (${bump}): ${[...packages].join(', ')} — ${firstLine(commit.message)}`);
+    }
+    for (const name of Object.keys(bumps)) {
+        if (bumps[name] === bumps_1.BUMP_NONE)
+            delete bumps[name];
+    }
+    if (Object.keys(bumps).length > 0)
+        return bumps;
+    const titleBump = (0, bumps_1.bumpFromMessage)(prTitle);
+    if (titleBump !== bumps_1.BUMP_NONE && touchedAcrossPr.size > 0) {
+        core.info(`no per-commit bump found; falling back to PR title "${prTitle}" → ${titleBump} for [${[...touchedAcrossPr].join(', ')}]`);
+        for (const name of touchedAcrossPr)
+            bumps[name] = titleBump;
+        return bumps;
+    }
+    return bumps;
+}
+exports.aggregateBumps = aggregateBumps;
+function firstLine(message) {
+    return message.split(/\r?\n/, 1)[0] ?? '';
+}
 
 })();
 

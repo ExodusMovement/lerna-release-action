@@ -1396,6 +1396,7 @@ __metadata:
     "@types/jest": ^27.4.1
     "@types/jest-when": ^3.5.2
     "@types/node": ^20.19.26
+    "@types/semver": ^7.5.0
     "@typescript-eslint/eslint-plugin": ^5.21.0
     "@typescript-eslint/parser": ^5.21.0
     "@vercel/ncc": ^0.38.1
@@ -1410,8 +1411,10 @@ __metadata:
     jest-extended: ^3.0.2
     jest-when: ^3.5.2
     memfs: ^3.4.7
+    p-limit: ^3.1.0
     p-retry: ^4.6.2
     prettier: ^3.2.4
+    semver: ^7.3.8
     ts-jest: ^29.0.3
     ts-node: ^10.9.1
     typescript: ^4.7.4
@@ -2756,6 +2759,13 @@ __metadata:
   version: 7.3.12
   resolution: "@types/semver@npm:7.3.12"
   checksum: 35536b2fc5602904f21cae681f6c9498e177dab3f54ae37c92f9a1b7e43c35f18bcd81e1c98c1cf0d33ee046bb06c771e9928c1c00a401d56a03f56549252a15
+  languageName: node
+  linkType: hard
+
+"@types/semver@npm:^7.5.0":
+  version: 7.7.1
+  resolution: "@types/semver@npm:7.7.1"
+  checksum: 76d218e414482a398148d5c28f2bfa017108869f3fc18cda379c9d8d062348f8b9653ae2fa8642d3b5b52e211928fe8be34f22da4e1f08245c84e0e51e040673
   languageName: node
   linkType: hard
 
