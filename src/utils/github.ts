@@ -1,6 +1,7 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 import retry from 'p-retry'
+import { readFile } from 'node:fs/promises'
 
 import { Repo } from './types'
 import { unwrapErrorMessage } from './errors'
@@ -156,6 +157,75 @@ async function createRef({ client, ref, sha, repo }: CreateRefParams) {
 
     throw e
   }
+}
+
+type CreateSignedCommitParams = {
+  client: GithubClient
+  repo: Repo
+  branch: string
+  expectedHeadOid: string
+  headline: string
+  body?: string
+  additions: string[]
+}
+
+type CreateCommitOnBranchResponse = {
+  createCommitOnBranch: {
+    commit: {
+      oid: string
+    }
+  }
+}
+
+// Creates the release branch and commits the changed files onto it via the
+// GraphQL `createCommitOnBranch` mutation, producing a commit signed with
+// GitHub's GPG key (shown as "Verified"). The commit author is the identity of
+// the authenticated token; the committer is GitHub itself. File contents are
+// read from the working tree, which matches the local HEAD after the amend.
+export async function createSignedCommit({
+  client,
+  repo,
+  branch,
+  expectedHeadOid,
+  headline,
+  body,
+  additions,
+}: CreateSignedCommitParams): Promise<string> {
+  await createRef({ client, repo, ref: `refs/heads/${branch}`, sha: expectedHeadOid })
+
+  const fileAdditions = await Promise.all(
+    additions.map(async (path) => {
+      const contents = await readFile(path, { encoding: 'base64' })
+      return { path, contents }
+    })
+  )
+
+  const { createCommitOnBranch } = await client.graphql<CreateCommitOnBranchResponse>(
+    /* GraphQL */ `
+      mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
+        createCommitOnBranch(input: $input) {
+          commit {
+            oid
+          }
+        }
+      }
+    `,
+    {
+      input: {
+        branch: {
+          repositoryNameWithOwner: `${repo.owner}/${repo.repo}`,
+          branchName: branch,
+        },
+        message: { headline, body },
+        expectedHeadOid,
+        fileChanges: {
+          additions: fileAdditions,
+        },
+      },
+    }
+  )
+
+  return createCommitOnBranch.commit.oid
 }
 
 type CreateTagsParams = {

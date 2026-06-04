@@ -43,10 +43,6 @@ export function commit({ message, body, flags }: CommitParams) {
   spawnSync('git', args)
 }
 
-export function pushHeadToOrigin() {
-  spawnSync('git', ['push', 'origin', 'HEAD'])
-}
-
 export function switchToBranch(branch: string) {
   spawnSync('git', ['switch', '--create', branch])
 }
@@ -104,9 +100,19 @@ type ConfigureUserParams = {
   name: string
   email: string
 }
+
 export function configureUser({ name, email }: ConfigureUserParams) {
   spawnSync('git', ['config', 'user.name', name])
   spawnSync('git', ['config', 'user.email', email])
+}
+
+// Lists files added or modified between two commits. Deletions are excluded
+// (`--diff-filter=d`) since the release flow only ever creates or updates files.
+export function getChangedFiles(base: string, head: string): string[] {
+  const stdout = spawnSync('git', ['diff', '--name-only', '-z', '--diff-filter=d', base, head])
+
+  // `-z` yields NUL-separated, verbatim pathnames.
+  return stdout.split('\0').filter((path) => path !== '')
 }
 
 type CheckoutPrParams = {

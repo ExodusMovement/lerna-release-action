@@ -85138,7 +85138,6 @@ var Input;
     Input["AutoMerge"] = "auto-merge";
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
-    Input["Committer"] = "committer";
     Input["BaseBranch"] = "base-branch";
     Input["FormatCommand"] = "format-command";
 })(Input = exports.Input || (exports.Input = {}));
@@ -85234,7 +85233,7 @@ exports.readJson = readJson;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.checkoutPr = exports.configureUser = exports.resetCommits = exports.cleanup = exports.checkout = exports.getStatusShort = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
+exports.checkoutPr = exports.getChangedFiles = exports.configureUser = exports.resetCommits = exports.cleanup = exports.checkout = exports.getStatusShort = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.commit = exports.add = void 0;
 const process_1 = __nccwpck_require__(69239);
 const objects_1 = __nccwpck_require__(48151);
 const assert = __nccwpck_require__(98061);
@@ -85257,10 +85256,6 @@ function commit({ message, body, flags }) {
     (0, process_1.spawnSync)('git', args);
 }
 exports.commit = commit;
-function pushHeadToOrigin() {
-    (0, process_1.spawnSync)('git', ['push', 'origin', 'HEAD']);
-}
-exports.pushHeadToOrigin = pushHeadToOrigin;
 function switchToBranch(branch) {
     (0, process_1.spawnSync)('git', ['switch', '--create', branch]);
 }
@@ -85310,6 +85305,14 @@ function configureUser({ name, email }) {
     (0, process_1.spawnSync)('git', ['config', 'user.email', email]);
 }
 exports.configureUser = configureUser;
+// Lists files added or modified between two commits. Deletions are excluded
+// (`--diff-filter=d`) since the release flow only ever creates or updates files.
+function getChangedFiles(base, head) {
+    const stdout = (0, process_1.spawnSync)('git', ['diff', '--name-only', '-z', '--diff-filter=d', base, head]);
+    // `-z` yields NUL-separated, verbatim pathnames.
+    return stdout.split('\0').filter((path) => path !== '');
+}
+exports.getChangedFiles = getChangedFiles;
 async function checkoutPr({ pr }) {
     core.info(`Pulling +refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`);
     // Fetch PR head ref which is available even if the branch was deleted
@@ -85334,9 +85337,10 @@ exports.checkoutPr = checkoutPr;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
+exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createSignedCommit = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(42186);
 const p_retry_1 = __nccwpck_require__(82548);
+const promises_1 = __nccwpck_require__(93977);
 const errors_1 = __nccwpck_require__(62579);
 const constants_1 = __nccwpck_require__(69042);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
@@ -85422,6 +85426,42 @@ async function createRef({ client, ref, sha, repo }) {
         throw e;
     }
 }
+// Creates the release branch and commits the changed files onto it via the
+// GraphQL `createCommitOnBranch` mutation, producing a commit signed with
+// GitHub's GPG key (shown as "Verified"). The commit author is the identity of
+// the authenticated token; the committer is GitHub itself. File contents are
+// read from the working tree, which matches the local HEAD after the amend.
+async function createSignedCommit({ client, repo, branch, expectedHeadOid, headline, body, additions, }) {
+    await createRef({ client, repo, ref: `refs/heads/${branch}`, sha: expectedHeadOid });
+    const fileAdditions = await Promise.all(additions.map(async (path) => {
+        const contents = await (0, promises_1.readFile)(path, { encoding: 'base64' });
+        return { path, contents };
+    }));
+    const { createCommitOnBranch } = await client.graphql(
+    /* GraphQL */ `
+      mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
+        createCommitOnBranch(input: $input) {
+          commit {
+            oid
+          }
+        }
+      }
+    `, {
+        input: {
+            branch: {
+                repositoryNameWithOwner: `${repo.owner}/${repo.repo}`,
+                branchName: branch,
+            },
+            message: { headline, body },
+            expectedHeadOid,
+            fileChanges: {
+                additions: fileAdditions,
+            },
+        },
+    });
+    return createCommitOnBranch.commit.oid;
+}
+exports.createSignedCommit = createSignedCommit;
 async function createTags({ client, repo, sha, tags }) {
     await Promise.all(tags.map((tag) => {
         const ref = `refs/tags/${tag.replace(/\r/, '')}`;
@@ -86472,6 +86512,14 @@ module.exports = require("node:assert");
 
 "use strict";
 module.exports = require("node:events");
+
+/***/ }),
+
+/***/ 93977:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:fs/promises");
 
 /***/ }),
 
@@ -97139,7 +97187,7 @@ if (require.main === require.cache[eval('__filename')]) {
         core.setFailed(String(error.message));
     });
 }
-async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), bumpsRaw = core.getInput(constants_1.Input.Bumps), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), committer = core.getInput(constants_1.Input.Committer), baseBranch = core.getInput(constants_1.Input.BaseBranch), formatCommand = core.getInput(constants_1.Input.FormatCommand), } = {}) {
+async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), bumpsRaw = core.getInput(constants_1.Input.Bumps), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), baseBranch = core.getInput(constants_1.Input.BaseBranch), formatCommand = core.getInput(constants_1.Input.FormatCommand), } = {}) {
     const bumps = (0, parse_bumps_1.parseBumps)(bumpsRaw);
     let narrowedStrategy = null;
     if (!bumps) {
@@ -97167,11 +97215,12 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
         return;
     }
     const base = baseBranch || defaultBranch;
-    committer = committer || assignee;
-    core.info(`Configure git user as ${committer}`);
+    // lerna requires a git identity to make its (throwaway) local commits. The
+    // identity is intentionally a fake placeholder since those commits are never
+    // pushed — the real release commit is signed by GitHub via createSignedCommit.
     (0, git_1.configureUser)({
-        name: committer,
-        email: `${committer}@users.noreply.github.com`,
+        name: 'lerna-release-action (throwaway, not pushed)',
+        email: 'noreply@invalid.local',
     });
     core.info('Creating object of previous package.json contents');
     const previousPackageContents = await (0, read_package_jsons_1.default)();
@@ -97237,8 +97286,20 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
         core.error(`Amend commit failed. Git status:\n${(0, git_1.getStatusShort)() || '(clean)'}`);
         throw error;
     }
-    core.info(`Pushing changes to ${branch}`);
-    (0, git_1.pushHeadToOrigin)();
+    // The local commits above are throwaway and never pushed; they only let us
+    // diff the net changed files against the checkout sha. The real release commit
+    // is made remotely via createCommitOnBranch so GitHub signs it ("Verified").
+    core.info(`Creating signed commit on ${branch}`);
+    const additions = (0, git_1.getChangedFiles)(preLernaSha, (0, git_1.getCommitSha)());
+    await (0, github_1.createSignedCommit)({
+        client,
+        repo,
+        branch,
+        expectedHeadOid: preLernaSha,
+        headline: message,
+        body: tags.join('\n'),
+        additions,
+    });
     core.info('Creating PR');
     const pullRequest = await (0, create_pull_request_1.default)({
         client,
