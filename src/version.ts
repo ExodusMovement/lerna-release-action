@@ -8,10 +8,10 @@ import {
   commit,
   configureUser,
   deleteTags,
+  getChangedFiles,
   getCommitMessage,
   getCommitSha,
   getStatusShort,
-  pushHeadToOrigin,
   resetCommits,
   switchToBranch,
 } from './utils/git'
@@ -34,7 +34,7 @@ import closePreviousPrs from './version/close-previous-prs'
 import { formatPackageFiles } from './utils/format'
 import { unwrapErrorMessage } from './utils/errors'
 import * as assert from 'assert'
-import { getDefaultBranch } from './utils/github'
+import { createSignedCommit, getDefaultBranch } from './utils/github'
 
 if (require.main === module) {
   version().catch((error: Error) => {
@@ -56,7 +56,6 @@ export default async function version({
   draft = core.getBooleanInput(Input.Draft),
   requestReviewers = core.getBooleanInput(Input.RequestReviewers),
   assignee = core.getInput(Input.Assignee),
-  committer = core.getInput(Input.Committer),
   baseBranch = core.getInput(Input.BaseBranch),
   formatCommand = core.getInput(Input.FormatCommand),
 } = {}) {
@@ -101,12 +100,12 @@ export default async function version({
 
   const base = baseBranch || defaultBranch
 
-  committer = committer || assignee
-  core.info(`Configure git user as ${committer}`)
-
+  // lerna requires a git identity to make its (throwaway) local commits. The
+  // identity is intentionally a fake placeholder since those commits are never
+  // pushed — the real release commit is signed by GitHub via createSignedCommit.
   configureUser({
-    name: committer,
-    email: `${committer}@users.noreply.github.com`,
+    name: 'lerna-release-action (throwaway, not pushed)',
+    email: 'noreply@invalid.local',
   })
 
   core.info('Creating object of previous package.json contents')
@@ -186,8 +185,20 @@ export default async function version({
     throw error
   }
 
-  core.info(`Pushing changes to ${branch}`)
-  pushHeadToOrigin()
+  // The local commits above are throwaway and never pushed; they only let us
+  // diff the net changed files against the checkout sha. The real release commit
+  // is made remotely via createCommitOnBranch so GitHub signs it ("Verified").
+  core.info(`Creating signed commit on ${branch}`)
+  const additions = getChangedFiles(preLernaSha, getCommitSha())
+  await createSignedCommit({
+    client,
+    repo,
+    branch,
+    expectedHeadOid: preLernaSha,
+    headline: message,
+    body: tags.join('\n'),
+    additions,
+  })
 
   core.info('Creating PR')
   const pullRequest = await createPullRequest({

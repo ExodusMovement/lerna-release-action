@@ -30276,7 +30276,6 @@ var Input;
     Input["AutoMerge"] = "auto-merge";
     Input["Draft"] = "draft";
     Input["RequestReviewers"] = "request-reviewers";
-    Input["Committer"] = "committer";
     Input["BaseBranch"] = "base-branch";
     Input["FormatCommand"] = "format-command";
 })(Input = exports.Input || (exports.Input = {}));
@@ -30352,7 +30351,7 @@ exports.unwrapErrorMessage = unwrapErrorMessage;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.checkoutPr = exports.configureUser = exports.resetCommits = exports.cleanup = exports.checkout = exports.getStatusShort = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.pushHeadToOrigin = exports.commit = exports.add = void 0;
+exports.checkoutPr = exports.getChangedFiles = exports.configureUser = exports.resetCommits = exports.cleanup = exports.checkout = exports.getStatusShort = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.commit = exports.add = void 0;
 const process_1 = __nccwpck_require__(9239);
 const objects_1 = __nccwpck_require__(8151);
 const assert = __nccwpck_require__(8061);
@@ -30375,10 +30374,6 @@ function commit({ message, body, flags }) {
     (0, process_1.spawnSync)('git', args);
 }
 exports.commit = commit;
-function pushHeadToOrigin() {
-    (0, process_1.spawnSync)('git', ['push', 'origin', 'HEAD']);
-}
-exports.pushHeadToOrigin = pushHeadToOrigin;
 function switchToBranch(branch) {
     (0, process_1.spawnSync)('git', ['switch', '--create', branch]);
 }
@@ -30428,6 +30423,14 @@ function configureUser({ name, email }) {
     (0, process_1.spawnSync)('git', ['config', 'user.email', email]);
 }
 exports.configureUser = configureUser;
+// Lists files added or modified between two commits. Deletions are excluded
+// (`--diff-filter=d`) since the release flow only ever creates or updates files.
+function getChangedFiles(base, head) {
+    const stdout = (0, process_1.spawnSync)('git', ['diff', '--name-only', '-z', '--diff-filter=d', base, head]);
+    // `-z` yields NUL-separated, verbatim pathnames.
+    return stdout.split('\0').filter((path) => path !== '');
+}
+exports.getChangedFiles = getChangedFiles;
 async function checkoutPr({ pr }) {
     core.info(`Pulling +refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`);
     // Fetch PR head ref which is available even if the branch was deleted
@@ -30452,9 +30455,10 @@ exports.checkoutPr = checkoutPr;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createPullRequest = void 0;
+exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createSignedCommit = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
 const p_retry_1 = __nccwpck_require__(2548);
+const promises_1 = __nccwpck_require__(3977);
 const errors_1 = __nccwpck_require__(2579);
 const constants_1 = __nccwpck_require__(9042);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
@@ -30540,6 +30544,42 @@ async function createRef({ client, ref, sha, repo }) {
         throw e;
     }
 }
+// Creates the release branch and commits the changed files onto it via the
+// GraphQL `createCommitOnBranch` mutation, producing a commit signed with
+// GitHub's GPG key (shown as "Verified"). The commit author is the identity of
+// the authenticated token; the committer is GitHub itself. File contents are
+// read from the working tree, which matches the local HEAD after the amend.
+async function createSignedCommit({ client, repo, branch, expectedHeadOid, headline, body, additions, }) {
+    await createRef({ client, repo, ref: `refs/heads/${branch}`, sha: expectedHeadOid });
+    const fileAdditions = await Promise.all(additions.map(async (path) => {
+        const contents = await (0, promises_1.readFile)(path, { encoding: 'base64' });
+        return { path, contents };
+    }));
+    const { createCommitOnBranch } = await client.graphql(
+    /* GraphQL */ `
+      mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
+        createCommitOnBranch(input: $input) {
+          commit {
+            oid
+          }
+        }
+      }
+    `, {
+        input: {
+            branch: {
+                repositoryNameWithOwner: `${repo.owner}/${repo.repo}`,
+                branchName: branch,
+            },
+            message: { headline, body },
+            expectedHeadOid,
+            fileChanges: {
+                additions: fileAdditions,
+            },
+        },
+    });
+    return createCommitOnBranch.commit.oid;
+}
+exports.createSignedCommit = createSignedCommit;
 async function createTags({ client, repo, sha, tags }) {
     await Promise.all(tags.map((tag) => {
         const ref = `refs/tags/${tag.replace(/\r/, '')}`;
@@ -30838,6 +30878,14 @@ module.exports = require("node:events");
 
 "use strict";
 module.exports = require("node:fs");
+
+/***/ }),
+
+/***/ 3977:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:fs/promises");
 
 /***/ }),
 
