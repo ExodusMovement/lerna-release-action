@@ -85315,9 +85315,15 @@ function getChangedFiles(base, head) {
 exports.getChangedFiles = getChangedFiles;
 async function checkoutPr({ pr }) {
     core.info(`Pulling +refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`);
-    // Fetch PR head ref which is available even if the branch was deleted
+    // Fetch PR head ref which is available even if the branch was deleted.
+    // Shallow (--depth=1): publishing only needs the tree at the PR head sha —
+    // `lerna publish from-package` reads on-disk package.json versions and does
+    // not walk history, and tags are created via the GitHub API on the push sha,
+    // not via local git. Avoids pulling connecting history into the shallow
+    // checkout the consumer workflow starts from.
     const stdout = (0, process_1.spawnSync)('git', [
         'fetch',
+        '--depth=1',
         'origin',
         `+refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`,
     ]);
