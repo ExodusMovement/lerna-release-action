@@ -8,11 +8,22 @@ import { GithubClient } from '../utils/github'
 
 const MARKER = '<!-- lerna-release-action:version-preview -->'
 
+const FIRST_RELEASE_BUMP = 'first release — publish manually'
+const NO_CURRENT_VERSION = '—'
+
+const FIRST_RELEASE_NOTE =
+  '> ⚠️ **Manual publish needed.** The package(s) marked _first release_ have never been published, ' +
+  'so lerna-release-action will **not** release them automatically on merge. ' +
+  'Publish the first version manually (run the version workflow for the package, then let publish run on the release PR).'
+
 export type PreviewRow = {
   pkg: string
   bump: Bump
   current: string
   next: string
+  // True when the package has never been published. Its first release is
+  // not auto-dispatched on merge; a maintainer must cut it manually.
+  firstRelease?: boolean
 }
 
 type PostPreviewParams = {
@@ -22,6 +33,9 @@ type PostPreviewParams = {
   bumps: Record<string, Bump>
   packagePaths: Record<string, string>
   filesystem: Filesystem
+  // Names of packages in `bumps` that have never been published. These are
+  // surfaced in the preview as first releases rather than bumps.
+  unreleased?: Set<string>
 }
 
 /**
@@ -37,8 +51,9 @@ export async function postVersionPreview({
   bumps,
   packagePaths,
   filesystem,
+  unreleased,
 }: PostPreviewParams): Promise<void> {
-  const rows = buildPreviewRows({ bumps, packagePaths, filesystem })
+  const rows = buildPreviewRows({ bumps, packagePaths, filesystem, unreleased })
   const body = rows.length === 0 ? '' : renderPreviewComment(rows)
 
   const deleted = await deleteExistingPreviewComments({ client, repo, prNumber })
@@ -61,10 +76,12 @@ export function buildPreviewRows({
   bumps,
   packagePaths,
   filesystem,
+  unreleased,
 }: {
   bumps: Record<string, Bump>
   packagePaths: Record<string, string>
   filesystem: Filesystem
+  unreleased?: Set<string>
 }): PreviewRow[] {
   const rows: PreviewRow[] = []
   for (const [pkg, bump] of Object.entries(bumps)) {
@@ -74,13 +91,20 @@ export function buildPreviewRows({
       continue
     }
 
-    const current = readVersion({ filesystem, pkgPath })
-    if (!current) {
+    const declared = readVersion({ filesystem, pkgPath })
+    if (!declared) {
       core.warning(`preview: could not read version for "${pkg}" at ${pkgPath}; skipping`)
       continue
     }
 
-    rows.push({ pkg, bump, current, next: nextVersion(current, bump) })
+    // A never-published package has no "current" version on the registry —
+    // its first release is the version declared in package.json, cut by hand.
+    if (unreleased?.has(pkg)) {
+      rows.push({ pkg, bump, current: NO_CURRENT_VERSION, next: declared, firstRelease: true })
+      continue
+    }
+
+    rows.push({ pkg, bump, current: declared, next: nextVersion(declared, bump) })
   }
 
   rows.sort((a, b) => a.pkg.localeCompare(b.pkg))
@@ -118,6 +142,7 @@ function isPrerelease(version: string): boolean {
 }
 
 export function renderPreviewComment(rows: PreviewRow[]): string {
+  const hasFirstRelease = rows.some((r) => r.firstRelease)
   const lines = [
     MARKER,
     '## Version preview',
@@ -126,8 +151,12 @@ export function renderPreviewComment(rows: PreviewRow[]): string {
     '',
     '| Package | Bump | Current | Next |',
     '| --- | --- | --- | --- |',
-    ...rows.map((r) => `| \`${r.pkg}\` | ${r.bump} | ${r.current} | ${r.next} |`),
+    ...rows.map((r) => {
+      const bump = r.firstRelease ? FIRST_RELEASE_BUMP : r.bump
+      return `| \`${r.pkg}\` | ${bump} | ${r.current} | ${r.next} |`
+    }),
     '',
+    ...(hasFirstRelease ? [FIRST_RELEASE_NOTE, ''] : []),
     '_Computed by [`lerna-release-action/version-dispatch`](https://github.com/ExodusMovement/lerna-release-action) from per-commit file attribution. Re-posted on every push so the latest preview is always at the end of this thread._',
   ]
   return lines.join('\n')
