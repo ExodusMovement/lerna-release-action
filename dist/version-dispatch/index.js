@@ -31333,14 +31333,19 @@ const path = __nccwpck_require__(1017);
 const core = __nccwpck_require__(2186);
 const semverInc = __nccwpck_require__(900);
 const MARKER = '<!-- lerna-release-action:version-preview -->';
+const FIRST_RELEASE_BUMP = 'first release — publish manually';
+const NO_CURRENT_VERSION = '—';
+const FIRST_RELEASE_NOTE = '> ⚠️ **Manual publish needed.** The package(s) marked _first release_ have never been published, ' +
+    'so lerna-release-action will **not** release them automatically on merge. ' +
+    'Publish the first version manually (run the version workflow for the package, then let publish run on the release PR).';
 /**
  * Post the version preview as a sticky comment on the PR. On every run we
  * delete every prior preview comment (matched by a hidden HTML marker)
  * and post a fresh one at the end of the conversation — so reviewers
  * always see exactly one preview comment, anchored to the latest push.
  */
-async function postVersionPreview({ client, repo, prNumber, bumps, packagePaths, filesystem, }) {
-    const rows = buildPreviewRows({ bumps, packagePaths, filesystem });
+async function postVersionPreview({ client, repo, prNumber, bumps, packagePaths, filesystem, unreleased, }) {
+    const rows = buildPreviewRows({ bumps, packagePaths, filesystem, unreleased });
     const body = rows.length === 0 ? '' : renderPreviewComment(rows);
     const deleted = await deleteExistingPreviewComments({ client, repo, prNumber });
     if (!body) {
@@ -31358,7 +31363,7 @@ async function postVersionPreview({ client, repo, prNumber, bumps, packagePaths,
     core.info(`preview: posted version preview to PR #${prNumber}`);
 }
 exports.postVersionPreview = postVersionPreview;
-function buildPreviewRows({ bumps, packagePaths, filesystem, }) {
+function buildPreviewRows({ bumps, packagePaths, filesystem, unreleased, }) {
     const rows = [];
     for (const [pkg, bump] of Object.entries(bumps)) {
         const pkgPath = packagePaths[pkg];
@@ -31366,12 +31371,18 @@ function buildPreviewRows({ bumps, packagePaths, filesystem, }) {
             core.warning(`preview: no workspace path for "${pkg}"; skipping`);
             continue;
         }
-        const current = readVersion({ filesystem, pkgPath });
-        if (!current) {
+        const declared = readVersion({ filesystem, pkgPath });
+        if (!declared) {
             core.warning(`preview: could not read version for "${pkg}" at ${pkgPath}; skipping`);
             continue;
         }
-        rows.push({ pkg, bump, current, next: nextVersion(current, bump) });
+        // A never-published package has no "current" version on the registry —
+        // its first release is the version declared in package.json, cut by hand.
+        if (unreleased?.has(pkg)) {
+            rows.push({ pkg, bump, current: NO_CURRENT_VERSION, next: declared, firstRelease: true });
+            continue;
+        }
+        rows.push({ pkg, bump, current: declared, next: nextVersion(declared, bump) });
     }
     rows.sort((a, b) => a.pkg.localeCompare(b.pkg));
     return rows;
@@ -31401,6 +31412,7 @@ function isPrerelease(version) {
     return version.includes('-');
 }
 function renderPreviewComment(rows) {
+    const hasFirstRelease = rows.some((r) => r.firstRelease);
     const lines = [
         MARKER,
         '## Version preview',
@@ -31409,8 +31421,12 @@ function renderPreviewComment(rows) {
         '',
         '| Package | Bump | Current | Next |',
         '| --- | --- | --- | --- |',
-        ...rows.map((r) => `| \`${r.pkg}\` | ${r.bump} | ${r.current} | ${r.next} |`),
+        ...rows.map((r) => {
+            const bump = r.firstRelease ? FIRST_RELEASE_BUMP : r.bump;
+            return `| \`${r.pkg}\` | ${bump} | ${r.current} | ${r.next} |`;
+        }),
         '',
+        ...(hasFirstRelease ? [FIRST_RELEASE_NOTE, ''] : []),
         '_Computed by [`lerna-release-action/version-dispatch`](https://github.com/ExodusMovement/lerna-release-action) from per-commit file attribution. Re-posted on every push so the latest preview is always at the end of this thread._',
     ];
     return lines.join('\n');
@@ -31447,6 +31463,48 @@ async function deleteExistingPreviewComments({ client, repo, prNumber, }) {
     return stale.length;
 }
 exports.PREVIEW_MARKER = MARKER;
+
+
+/***/ }),
+
+/***/ 8320:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isPackageReleased = void 0;
+const core = __nccwpck_require__(2186);
+/**
+ * Whether `name` has ever been released, determined by the existence of a
+ * lerna-style git tag `<name>@<version>` in the repo.
+ *
+ * Tags are queried via the GitHub API (`git/matching-refs`) rather than
+ * local git: the version-dispatch checkout is shallow and does not fetch
+ * tags, so `git tag -l` would come back empty. Tags are the release flow's
+ * own source of truth — both `version` and `publish` create
+ * `<pkg>@<version>` tags — so a package with no matching tag has never been
+ * released, regardless of which (public or private) registry it targets.
+ *
+ * Any API failure is treated as released (`true`) so a transient error
+ * never suspends auto-release for a package that really has been released.
+ */
+async function isPackageReleased({ client, repo, name, }) {
+    try {
+        const { data } = await client.rest.git.listMatchingRefs({
+            ...repo,
+            ref: `tags/${name}@`,
+            per_page: 1,
+        });
+        return data.length > 0;
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        core.warning(`Could not list tags for "${name}"; assuming it has been released. ${message}`);
+        return true;
+    }
+}
+exports.isPackageReleased = isPackageReleased;
 
 
 /***/ }),
@@ -42094,6 +42152,7 @@ const constants_1 = __nccwpck_require__(9042);
 const bumps_1 = __nccwpck_require__(9317);
 const files_to_packages_1 = __nccwpck_require__(6516);
 const preview_1 = __nccwpck_require__(7993);
+const released_1 = __nccwpck_require__(8320);
 const GET_COMMIT_CONCURRENCY = 10;
 if (require.main === require.cache[eval('__filename')]) {
     versionDispatch().catch((error) => {
@@ -42127,7 +42186,7 @@ if (require.main === require.cache[eval('__filename')]) {
  * created, so reviewers always see exactly one preview comment,
  * anchored at the end of the conversation timeline.
  */
-async function versionDispatch({ filesystem = fs } = {}) {
+async function versionDispatch({ filesystem = fs, isReleased } = {}) {
     const token = core.getInput(constants_1.VersionDispatchInput.GithubToken, { required: true });
     const workflowId = core.getInput(constants_1.VersionDispatchInput.VersionWorkflowId) || 'version.yml';
     const ref = core.getInput(constants_1.VersionDispatchInput.Ref) || 'master';
@@ -42140,6 +42199,7 @@ async function versionDispatch({ filesystem = fs } = {}) {
     const prNumberInput = core.getInput(constants_1.VersionDispatchInput.PrNumber);
     const { repo, payload } = github.context;
     const client = github.getOctokit(token);
+    const hasBeenReleased = isReleased ?? ((name) => (0, released_1.isPackageReleased)({ client, repo, name }));
     let pr = null;
     if (prNumberInput) {
         const { data } = await client.rest.pulls.get({ ...repo, pull_number: Number(prNumberInput) });
@@ -42192,9 +42252,26 @@ async function versionDispatch({ filesystem = fs } = {}) {
             delete bumps[name];
         }
     }
-    const packageNames = Object.keys(bumps);
+    // A package that has never been released has no baseline to bump from —
+    // its first release is the version already declared in package.json and
+    // must be cut manually. Exclude such packages from the auto-dispatch, but
+    // still surface them in the preview so reviewers know a manual release is
+    // pending.
+    const unreleased = new Set();
+    for (const name of Object.keys(bumps)) {
+        if (!(await hasBeenReleased(name))) {
+            core.info(`skip ${name}: never released — first release must be cut manually`);
+            unreleased.add(name);
+        }
+    }
+    const releasableBumps = {};
+    for (const [name, bump] of Object.entries(bumps)) {
+        if (!unreleased.has(name))
+            releasableBumps[name] = bump;
+    }
+    const packageNames = Object.keys(releasableBumps);
     core.setOutput('packages', packageNames.join(','));
-    core.setOutput('bumps', JSON.stringify(bumps));
+    core.setOutput('bumps', JSON.stringify(releasableBumps));
     if (isPreview) {
         await (0, preview_1.postVersionPreview)({
             client,
@@ -42203,16 +42280,20 @@ async function versionDispatch({ filesystem = fs } = {}) {
             bumps,
             packagePaths,
             filesystem,
+            unreleased,
         });
         return bumps;
+    }
+    if (unreleased.size > 0) {
+        core.notice(`Skipping auto-release for never-released package(s): ${[...unreleased].join(', ')}. Publish the first version manually.`);
     }
     if (packageNames.length === 0) {
         core.notice('No releaseable commits across workspace packages.');
         return null;
     }
     if (dryRun) {
-        core.info(`dry-run: bumps = ${JSON.stringify(bumps, null, 2)}`);
-        return bumps;
+        core.info(`dry-run: bumps = ${JSON.stringify(releasableBumps, null, 2)}`);
+        return releasableBumps;
     }
     try {
         await client.rest.actions.createWorkflowDispatch({
@@ -42222,17 +42303,17 @@ async function versionDispatch({ filesystem = fs } = {}) {
             inputs: {
                 assignee: pr.user?.login ?? '',
                 packages: packageNames.join(','),
-                bumps: JSON.stringify(bumps),
+                bumps: JSON.stringify(releasableBumps),
             },
         });
     }
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         core.setFailed(`Failed to dispatch ${workflowId}: ${message}`);
-        return bumps;
+        return releasableBumps;
     }
-    core.info(`Dispatched ${workflowId} with bumps ${JSON.stringify(bumps)}`);
-    return bumps;
+    core.info(`Dispatched ${workflowId} with bumps ${JSON.stringify(releasableBumps)}`);
+    return releasableBumps;
 }
 exports.versionDispatch = versionDispatch;
 /**

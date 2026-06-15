@@ -9,9 +9,13 @@ import { Filesystem } from './utils/types'
 import { Bump, BUMP_NONE, bumpFromMessage, maxBump } from './version-dispatch/bumps'
 import { filesToPackages } from './version-dispatch/files-to-packages'
 import { clearVersionPreview, postVersionPreview } from './version-dispatch/preview'
+import { isPackageReleased } from './version-dispatch/released'
 
 type Params = {
   filesystem?: Filesystem
+  // Whether a package has ever been released. Injectable for tests; defaults
+  // to checking the repo for a lerna-style `<pkg>@<version>` git tag.
+  isReleased?: (name: string) => boolean | Promise<boolean>
 }
 
 const GET_COMMIT_CONCURRENCY = 10
@@ -48,7 +52,7 @@ if (require.main === module) {
  * created, so reviewers always see exactly one preview comment,
  * anchored at the end of the conversation timeline.
  */
-export async function versionDispatch({ filesystem = fs }: Params = {}) {
+export async function versionDispatch({ filesystem = fs, isReleased }: Params = {}) {
   const token = core.getInput(Input.GithubToken, { required: true })
   const workflowId = core.getInput(Input.VersionWorkflowId) || 'version.yml'
   const ref = core.getInput(Input.Ref) || 'master'
@@ -64,6 +68,9 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
 
   const { repo, payload } = github.context
   const client = github.getOctokit(token)
+
+  const hasBeenReleased =
+    isReleased ?? ((name: string) => isPackageReleased({ client, repo, name }))
 
   let pr: PullRequest | null = null
   if (prNumberInput) {
@@ -123,9 +130,27 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
     }
   }
 
-  const packageNames = Object.keys(bumps)
+  // A package that has never been released has no baseline to bump from —
+  // its first release is the version already declared in package.json and
+  // must be cut manually. Exclude such packages from the auto-dispatch, but
+  // still surface them in the preview so reviewers know a manual release is
+  // pending.
+  const unreleased = new Set<string>()
+  for (const name of Object.keys(bumps)) {
+    if (!(await hasBeenReleased(name))) {
+      core.info(`skip ${name}: never released — first release must be cut manually`)
+      unreleased.add(name)
+    }
+  }
+
+  const releasableBumps: Record<string, Bump> = {}
+  for (const [name, bump] of Object.entries(bumps)) {
+    if (!unreleased.has(name)) releasableBumps[name] = bump
+  }
+
+  const packageNames = Object.keys(releasableBumps)
   core.setOutput('packages', packageNames.join(','))
-  core.setOutput('bumps', JSON.stringify(bumps))
+  core.setOutput('bumps', JSON.stringify(releasableBumps))
 
   if (isPreview) {
     await postVersionPreview({
@@ -135,8 +160,15 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
       bumps,
       packagePaths,
       filesystem,
+      unreleased,
     })
     return bumps
+  }
+
+  if (unreleased.size > 0) {
+    core.notice(
+      `Skipping auto-release for never-released package(s): ${[...unreleased].join(', ')}. Publish the first version manually.`
+    )
   }
 
   if (packageNames.length === 0) {
@@ -145,8 +177,8 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
   }
 
   if (dryRun) {
-    core.info(`dry-run: bumps = ${JSON.stringify(bumps, null, 2)}`)
-    return bumps
+    core.info(`dry-run: bumps = ${JSON.stringify(releasableBumps, null, 2)}`)
+    return releasableBumps
   }
 
   try {
@@ -157,17 +189,17 @@ export async function versionDispatch({ filesystem = fs }: Params = {}) {
       inputs: {
         assignee: pr.user?.login ?? '',
         packages: packageNames.join(','),
-        bumps: JSON.stringify(bumps),
+        bumps: JSON.stringify(releasableBumps),
       },
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     core.setFailed(`Failed to dispatch ${workflowId}: ${message}`)
-    return bumps
+    return releasableBumps
   }
 
-  core.info(`Dispatched ${workflowId} with bumps ${JSON.stringify(bumps)}`)
-  return bumps
+  core.info(`Dispatched ${workflowId} with bumps ${JSON.stringify(releasableBumps)}`)
+  return releasableBumps
 }
 
 type PullRequest = {

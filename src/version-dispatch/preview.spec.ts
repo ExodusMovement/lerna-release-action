@@ -89,6 +89,20 @@ describe('buildPreviewRows', () => {
       { pkg: '@exodus/atoms', bump: BUMP_MAJOR, current: '1.0.0', next: '2.0.0' },
     ])
   })
+
+  it('marks never-published packages as first releases (no current, declared next)', () => {
+    const fs = makeFs({ '@exodus/atoms': '1.0.0', '@exodus/balances': '2.5.0' })
+    const rows = buildPreviewRows({
+      bumps: { '@exodus/atoms': BUMP_MAJOR, '@exodus/balances': BUMP_PATCH },
+      packagePaths,
+      filesystem: fs as never,
+      unreleased: new Set(['@exodus/atoms']),
+    })
+    expect(rows).toEqual([
+      { pkg: '@exodus/atoms', bump: BUMP_MAJOR, current: '—', next: '1.0.0', firstRelease: true },
+      { pkg: '@exodus/balances', bump: BUMP_PATCH, current: '2.5.0', next: '2.5.1' },
+    ])
+  })
 })
 
 describe('renderPreviewComment', () => {
@@ -98,6 +112,21 @@ describe('renderPreviewComment', () => {
     ])
     expect(body.startsWith(PREVIEW_MARKER)).toBe(true)
     expect(body).toContain('| `@exodus/atoms` | major | 1.0.0 | 2.0.0 |')
+  })
+
+  it('renders a first-release row and manual-release note', () => {
+    const body = renderPreviewComment([
+      { pkg: '@exodus/atoms', bump: BUMP_MINOR, current: '—', next: '1.0.0', firstRelease: true },
+    ])
+    expect(body).toContain('| `@exodus/atoms` | first release — publish manually | — | 1.0.0 |')
+    expect(body).toContain('Manual publish needed')
+  })
+
+  it('omits the manual-release note when there are no first releases', () => {
+    const body = renderPreviewComment([
+      { pkg: '@exodus/atoms', bump: BUMP_MAJOR, current: '1.0.0', next: '2.0.0' },
+    ])
+    expect(body).not.toContain('Manual publish needed')
   })
 })
 

@@ -149,7 +149,7 @@ describe('versionDispatch', () => {
       }
     )
 
-    await versionDispatch({ filesystem: fs as never })
+    await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
     expect(client.rest.actions.createWorkflowDispatch).toHaveBeenCalledWith({
       ...repo,
@@ -196,7 +196,7 @@ describe('versionDispatch', () => {
       }
     )
 
-    await versionDispatch({ filesystem: fs as never })
+    await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
     expect(client.rest.actions.createWorkflowDispatch).toHaveBeenCalledWith({
       ...repo,
@@ -208,6 +208,69 @@ describe('versionDispatch', () => {
         bumps: JSON.stringify({ '@exodus/balances': 'patch' }),
       },
     })
+  })
+
+  it('excludes never-released packages from the dispatch', async () => {
+    github.context.payload = {
+      pull_request: {
+        title: 'feat: cool stuff',
+        number: 123,
+        merged: true,
+        user: { login: 'brucewayne' },
+        base: { ref },
+        labels: [],
+      },
+    }
+
+    setupPaginate(
+      [
+        { sha: 'aaa1111', commit: { message: 'feat(atoms)!: drop legacy' } },
+        { sha: 'bbb2222', commit: { message: 'fix(balances): tidy' } },
+      ],
+      {
+        aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
+        bbb2222: [{ filename: 'modules/balances/x.ts' }],
+      }
+    )
+
+    // @exodus/atoms has never been released — it should be skipped, leaving
+    // only the already-published @exodus/balances in the dispatch payload.
+    await versionDispatch({
+      filesystem: fs as never,
+      isReleased: (name) => name !== '@exodus/atoms',
+    })
+
+    expect(client.rest.actions.createWorkflowDispatch).toHaveBeenCalledWith({
+      ...repo,
+      ref,
+      workflow_id: workflowId,
+      inputs: {
+        assignee: 'brucewayne',
+        packages: '@exodus/balances',
+        bumps: JSON.stringify({ '@exodus/balances': 'patch' }),
+      },
+    })
+  })
+
+  it('does not dispatch when every bumped package is never-released', async () => {
+    github.context.payload = {
+      pull_request: {
+        title: 'feat: cool stuff',
+        number: 123,
+        merged: true,
+        user: { login: 'brucewayne' },
+        base: { ref },
+        labels: [],
+      },
+    }
+
+    setupPaginate([{ sha: 'aaa1111', commit: { message: 'feat(atoms)!: drop legacy' } }], {
+      aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
+    })
+
+    await versionDispatch({ filesystem: fs as never, isReleased: () => false })
+
+    expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
   })
 
   it('falls back to the PR title when no commit carries a bump', async () => {
@@ -233,7 +296,7 @@ describe('versionDispatch', () => {
       }
     )
 
-    await versionDispatch({ filesystem: fs as never })
+    await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
     expect(client.rest.actions.createWorkflowDispatch).toHaveBeenCalledWith({
       ...repo,
@@ -281,7 +344,7 @@ describe('versionDispatch', () => {
       github.context.payload = payload as never
       setupPaginate([], {})
 
-      await versionDispatch({ filesystem: fs as never })
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
       expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
     })
@@ -294,7 +357,7 @@ describe('versionDispatch', () => {
         aaa1111: [{ filename: 'libraries/atoms/x.ts' }],
       })
 
-      await versionDispatch({ filesystem: fs as never })
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
       expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
     })
@@ -305,7 +368,7 @@ describe('versionDispatch', () => {
         aaa1111: [{ filename: 'README.md' }],
       })
 
-      await versionDispatch({ filesystem: fs as never })
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
       expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
     })
@@ -354,7 +417,7 @@ describe('versionDispatch', () => {
         aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
       })
 
-      await versionDispatch({ filesystem: fs as never })
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
       expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
       expect(client.rest.issues.createComment).toHaveBeenCalledTimes(1)
@@ -363,6 +426,48 @@ describe('versionDispatch', () => {
       expect(args.body).toContain(PREVIEW_MARKER)
       expect(args.body).toContain('@exodus/atoms')
       expect(args.body).toContain('2.0.0')
+    })
+
+    it('renders never-released packages as first releases in the preview', async () => {
+      github.context.payload = {
+        pull_request: {
+          title: 'feat: pending',
+          number: 555,
+          merged: false,
+          state: 'open',
+          user: { login: 'brucewayne' },
+          base: { ref },
+          labels: [],
+        },
+      }
+
+      setupPreviewPaginate(
+        [
+          { sha: 'aaa1111', commit: { message: 'feat(atoms): brand new package' } },
+          { sha: 'bbb2222', commit: { message: 'fix(balances): tidy' } },
+        ],
+        {
+          aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
+          bbb2222: [{ filename: 'modules/balances/x.ts' }],
+        }
+      )
+
+      // @exodus/atoms (declared 1.0.0) has never been released.
+      await versionDispatch({
+        filesystem: fs as never,
+        isReleased: (name) => name !== '@exodus/atoms',
+      })
+
+      expect(client.rest.issues.createComment).toHaveBeenCalledTimes(1)
+      const [args] = (client.rest.issues.createComment as unknown as jest.Mock).mock.calls[0]
+      // First release: no current version, next is the declared 1.0.0, and a
+      // manual-release note is included.
+      expect(args.body).toContain(
+        '| `@exodus/atoms` | first release — publish manually | — | 1.0.0 |'
+      )
+      expect(args.body).toContain('Manual publish needed')
+      // The already-published package still previews a normal bump.
+      expect(args.body).toContain('| `@exodus/balances` | patch | 2.7.9 | 2.7.10 |')
     })
 
     it('deletes every stale preview comment before posting the new one', async () => {
@@ -388,7 +493,7 @@ describe('versionDispatch', () => {
         ]
       )
 
-      await versionDispatch({ filesystem: fs as never })
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
       expect(client.rest.issues.deleteComment).toHaveBeenCalledTimes(2)
       expect(client.rest.issues.deleteComment).toHaveBeenCalledWith({
@@ -421,7 +526,7 @@ describe('versionDispatch', () => {
         [{ id: 9100, body: `${PREVIEW_MARKER}\nstale preview from before the label was added` }]
       )
 
-      await versionDispatch({ filesystem: fs as never })
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
       expect(client.rest.issues.deleteComment).toHaveBeenCalledWith({
         ...repo,
@@ -450,7 +555,7 @@ describe('versionDispatch', () => {
         [{ id: 9101, body: `${PREVIEW_MARKER}\nstale preview from when base was master` }]
       )
 
-      await versionDispatch({ filesystem: fs as never })
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
       expect(client.rest.issues.deleteComment).toHaveBeenCalledWith({
         ...repo,
@@ -504,7 +609,7 @@ describe('versionDispatch', () => {
         }
       )
 
-      await versionDispatch({ filesystem: fs as never })
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
       expect(client.rest.issues.createComment).toHaveBeenCalledTimes(1)
       const [args] = (client.rest.issues.createComment as unknown as jest.Mock).mock.calls[0]
@@ -552,7 +657,7 @@ describe('versionDispatch', () => {
         [{ id: 9200, body: `${PREVIEW_MARKER}\nstale preview from before private flag was set` }]
       )
 
-      await versionDispatch({ filesystem: fs as never })
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
       expect(client.rest.issues.deleteComment).toHaveBeenCalledWith({
         ...repo,
@@ -580,7 +685,7 @@ describe('versionDispatch', () => {
         [{ id: 9004, body: `${PREVIEW_MARKER}\nstale preview` }]
       )
 
-      await versionDispatch({ filesystem: fs as never })
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
 
       expect(client.rest.issues.deleteComment).toHaveBeenCalledWith({
         ...repo,
