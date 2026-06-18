@@ -6,9 +6,14 @@ import * as core from '@actions/core'
 import { when } from 'jest-when'
 import { checkoutPr } from './utils/git'
 import { extractTags } from './publish/extract-tags'
+import { getPublishedTags } from './publish/get-published-tags'
 
 jest.mock('node:child_process', () => ({
   spawnSync: jest.fn(() => ({ stdout: '', status: 0 })),
+}))
+
+jest.mock('./publish/get-published-tags', () => ({
+  getPublishedTags: jest.fn().mockResolvedValue([]),
 }))
 
 jest.mock('./utils/github', () => ({
@@ -189,6 +194,42 @@ describe('publish', () => {
     expect(createTags).toHaveBeenCalledWith(
       expect.objectContaining({
         tags: ['@exodus/pay-schemas@2.8.0'],
+      })
+    )
+  })
+
+  test('recovers published packages from npm when summary is empty on failure', async () => {
+    when(client.rest.repos.getBranchRules)
+      .calledWith({
+        ...repo,
+        branch: 'master',
+      })
+      .mockResolvedValue({
+        data: [{ ruleset_id: 42 }, { ruleset_id: 73 }],
+      } as any)
+
+    when(core.getMultilineInput)
+      .calledWith('required-branch-rulesets')
+      .mockReturnValue(['42', '73'])
+
+    jest.mocked(spawnSync).mockReturnValue({
+      stdout: '',
+      stderr: '',
+      status: 4,
+    } as never)
+
+    // lerna aborted before writing the summary file, so nothing is extracted.
+    jest.mocked(extractTags).mockReturnValue([])
+    jest
+      .mocked(getPublishedTags)
+      .mockResolvedValue(['@exodus/safe-string@1.4.1', '@exodus/errors@3.7.1'])
+
+    await publish()
+
+    expect(core.setFailed).toHaveBeenCalled()
+    expect(createTags).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ['@exodus/safe-string@1.4.1', '@exodus/errors@3.7.1'],
       })
     )
   })
