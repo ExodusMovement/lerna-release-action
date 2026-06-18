@@ -30377,15 +30377,20 @@ function readManifest(path) {
     }
 }
 // ponytail: one `npm view` per changed package — fine for the handful a release
-// touches. npm exits 0 and prints the version when it's live; a 404 (never
-// published) or a transient error exits non-zero, so the tag is skipped and
-// recovered on the next release run (createTags is idempotent).
+// touches. npm exits 0 and prints the version when it's live; an empty stdout
+// (existing package, missing version) or a 404 (never published) means it's
+// not. Retry on a non-zero exit to ride out transient registry errors; a
+// genuine 404 just costs 3 quick calls (and only for the failed package).
 function isPublished(name, version) {
-    const { stdout, status } = (0, node_child_process_1.spawnSync)('npm', ['view', `${name}@${version}`, 'version'], {
-        encoding: 'utf8',
-        maxBuffer: Number.MAX_SAFE_INTEGER,
-    });
-    return status === 0 && stdout.trim() !== '';
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const { stdout, status } = (0, node_child_process_1.spawnSync)('npm', ['view', `${name}@${version}`, 'version'], {
+            encoding: 'utf8',
+            maxBuffer: Number.MAX_SAFE_INTEGER,
+        });
+        if (status === 0)
+            return stdout.trim() === version;
+    }
+    return false;
 }
 
 
