@@ -52,11 +52,11 @@ function readManifest(path: string): PackageJson | undefined {
   }
 }
 
-// ponytail: one `npm view` per changed package — fine for the handful a release
-// touches. npm exits 0 and prints the version when it's live; an empty stdout
-// (existing package, missing version) or a 404 (never published) means it's
-// not. Retry on a non-zero exit to ride out transient registry errors; a
-// genuine 404 just costs 3 quick calls (and only for the failed package).
+// One `npm view` per changed package — fine for the handful a release touches.
+// npm exits 0 and prints the version when it's live; an empty stdout (existing
+// package, missing version) or a 404 (never published) means it's not. Retry on
+// a non-zero exit to ride out transient registry errors; a genuine 404 just
+// costs 3 quick calls (and only for the failed package).
 function isPublished(name: string, version: string): boolean {
   for (let attempt = 0; attempt < 3; attempt++) {
     const { stdout, status } = spawnSync('npm', ['view', `${name}@${version}`, 'version'], {
