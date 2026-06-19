@@ -30328,6 +30328,74 @@ exports.extractTags = extractTags;
 
 /***/ }),
 
+/***/ 2999:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getPublishedTags = void 0;
+const fs = __nccwpck_require__(7561);
+const node_child_process_1 = __nccwpck_require__(7718);
+// Recovers the `name@version` tags for packages that actually reached npm by
+// reading the release PR's changed package.json files and checking each against
+// the registry.
+//
+// `lerna publish` aborts on the first package it can't publish (e.g. a new
+// package the bot lacks access to) and exits before writing its summary file,
+// so the packages it *did* publish would otherwise go untagged. Missing tags
+// drift git from npm and make the next release regenerate already-shipped
+// changelog entries — sometimes as a false-positive breaking change. Tagging
+// from npm instead of the summary decouples the published packages from the
+// failed one.
+async function getPublishedTags({ client, repo, prNumber }) {
+    const files = await client.paginate(client.rest.pulls.listFiles, {
+        ...repo,
+        pull_number: prNumber,
+    });
+    const manifests = files
+        .map((file) => file.filename)
+        .filter((filename) => filename.endsWith('package.json'));
+    const tags = [];
+    for (const manifest of manifests) {
+        const pkg = readManifest(manifest);
+        if (!pkg?.name || !pkg.version || pkg.private)
+            continue;
+        if (isPublished(pkg.name, pkg.version)) {
+            tags.push(`${pkg.name}@${pkg.version}`);
+        }
+    }
+    return tags;
+}
+exports.getPublishedTags = getPublishedTags;
+function readManifest(path) {
+    try {
+        return JSON.parse(fs.readFileSync(path, { encoding: 'utf8' }));
+    }
+    catch {
+        return undefined;
+    }
+}
+// One `npm view` per changed package — fine for the handful a release touches.
+// npm exits 0 and prints the version when it's live; an empty stdout (existing
+// package, missing version) or a 404 (never published) means it's not. Retry on
+// a non-zero exit to ride out transient registry errors; a genuine 404 just
+// costs 3 quick calls (and only for the failed package).
+function isPublished(name, version) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const { stdout, status } = (0, node_child_process_1.spawnSync)('npm', ['view', `${name}@${version}`, 'version'], {
+            encoding: 'utf8',
+            maxBuffer: Number.MAX_SAFE_INTEGER,
+        });
+        if (status === 0)
+            return stdout.trim() === version;
+    }
+    return false;
+}
+
+
+/***/ }),
+
 /***/ 2579:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -32691,6 +32759,7 @@ const constants_1 = __nccwpck_require__(9042);
 const github = __nccwpck_require__(5438);
 const github_1 = __nccwpck_require__(1225);
 const extract_tags_1 = __nccwpck_require__(4672);
+const get_published_tags_1 = __nccwpck_require__(2999);
 const node_child_process_1 = __nccwpck_require__(7718);
 const git_1 = __nccwpck_require__(8682);
 async function publish() {
@@ -32741,15 +32810,26 @@ async function publish() {
     }
     core.debug(lernaOutput);
     core.info('Identifying published packages');
-    const tags = (0, extract_tags_1.extractTags)();
-    if (tags.length === 0) {
+    const tags = new Set((0, extract_tags_1.extractTags)());
+    // On a partial failure lerna aborts before writing its summary file, so the
+    // packages it did publish are missing from `extractTags()`. Recover them from
+    // npm and tag them anyway — otherwise the missing tags corrupt the next
+    // release's changelog. Skipped on workflow_dispatch (no PR to scope the
+    // lookup to); tags can be pushed manually there.
+    if (status !== 0 && pr) {
+        core.info('Publish failed; recovering published packages from npm');
+        for (const tag of await (0, get_published_tags_1.getPublishedTags)({ client, repo, prNumber: pr.number })) {
+            tags.add(tag);
+        }
+    }
+    if (tags.size === 0) {
         core.notice('No new packages versions found. Tagging aborted.');
         return;
     }
-    const publishedPackages = tags.join(',');
+    const publishedPackages = [...tags].join(',');
     core.notice(`Published the following versions: ${publishedPackages}`);
     core.info(`Adding tags to commit ${sha}`);
-    await (0, github_1.createTags)({ client, repo, tags, sha });
+    await (0, github_1.createTags)({ client, repo, tags: [...tags], sha });
     core.setOutput('published-packages', publishedPackages);
 }
 exports.publish = publish;

@@ -3,6 +3,7 @@ import { PublishInput as Input } from './constants'
 import * as github from '@actions/github'
 import { createTags, getReleasePr } from './utils/github'
 import { extractTags } from './publish/extract-tags'
+import { getPublishedTags } from './publish/get-published-tags'
 import { spawnSync } from 'node:child_process'
 import { checkoutPr } from './utils/git'
 
@@ -71,18 +72,30 @@ export async function publish() {
   core.debug(lernaOutput)
 
   core.info('Identifying published packages')
-  const tags = extractTags()
+  const tags = new Set(extractTags())
 
-  if (tags.length === 0) {
+  // On a partial failure lerna aborts before writing its summary file, so the
+  // packages it did publish are missing from `extractTags()`. Recover them from
+  // npm and tag them anyway — otherwise the missing tags corrupt the next
+  // release's changelog. Skipped on workflow_dispatch (no PR to scope the
+  // lookup to); tags can be pushed manually there.
+  if (status !== 0 && pr) {
+    core.info('Publish failed; recovering published packages from npm')
+    for (const tag of await getPublishedTags({ client, repo, prNumber: pr.number })) {
+      tags.add(tag)
+    }
+  }
+
+  if (tags.size === 0) {
     core.notice('No new packages versions found. Tagging aborted.')
     return
   }
 
-  const publishedPackages = tags.join(',')
+  const publishedPackages = [...tags].join(',')
   core.notice(`Published the following versions: ${publishedPackages}`)
 
   core.info(`Adding tags to commit ${sha}`)
-  await createTags({ client, repo, tags, sha })
+  await createTags({ client, repo, tags: [...tags], sha })
   core.setOutput('published-packages', publishedPackages)
 }
 
