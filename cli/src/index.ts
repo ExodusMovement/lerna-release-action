@@ -13,6 +13,7 @@ import {
   validateAllowedStrategies,
 } from './action/version/strategy'
 import { version } from './local'
+import listUnreleased from './list-unreleased'
 import logger from './utils/logger'
 import { spawnSync } from './utils/process'
 
@@ -27,6 +28,10 @@ program
   )
   .option('-l, --local', 'Allows running the version workflow locally in case GH has issues')
   .option(
+    '--list-unreleased',
+    'Print packages with unreleased feat/fix/perf/breaking changes as a comma-separated list, then exit. Compose with: release $(release --list-unreleased)'
+  )
+  .option(
     '--github-token <token>',
     'Required for local versioning when token is not stored in ~/.config/gh/hosts.yml'
   )
@@ -34,7 +39,16 @@ program
 async function main() {
   program.parse()
 
-  const { versionStrategy, local } = program.opts<ProgramOpts>()
+  const { versionStrategy, local, listUnreleased: listUnreleasedFlag } = program.opts<ProgramOpts>()
+
+  if (listUnreleasedFlag) {
+    const packages = await listUnreleased()
+    packages.sort(byBasenameAsc)
+    // Only the CSV goes to stdout so `$(release --list-unreleased)` stays clean.
+    process.stdout.write(`${packages.join(',')}\n`)
+    return
+  }
+
   assertStrategy(versionStrategy)
 
   const [packagesCsv] = program.args
