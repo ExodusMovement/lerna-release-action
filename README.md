@@ -108,3 +108,22 @@ jobs:
           github-token: ${{ secrets.GH_AUTOMATION_PAT }}
           exclude-commit-types: chore,docs,test,ci
 ```
+
+### Running from a subdirectory
+
+All three actions (`version`, `publish`, `version-dispatch`) accept an optional
+`path` input — the working directory to run in, relative to the checkout root.
+Set it when the lerna workspace lives in a subdirectory of the repository
+rather than at its root:
+
+```yaml
+- uses: ExodusMovement/lerna-release-action/version@master
+  with:
+    github-token: ${{ secrets.GH_AUTOMATION_PAT }}
+    packages: ${{ inputs.packages }}
+    path: apps/mobile
+```
+
+The actions still create commits, tags and PRs against the whole repository —
+`path` only scopes where lerna, the package manager and workspace discovery
+run. When omitted, the actions run at the checkout root exactly as before.
