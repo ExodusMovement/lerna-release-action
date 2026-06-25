@@ -79,6 +79,7 @@ describe('getChangedFiles', () => {
       const files = getChangedFiles('base-sha', 'head-sha')
       expect(spy).toHaveBeenCalledWith('git', [
         'diff',
+        '--no-relative',
         '--name-only',
         '-z',
         '--diff-filter=d',

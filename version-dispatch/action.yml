@@ -12,6 +12,9 @@ inputs:
   github-token:
     description: 'Token used to create a PR'
     required: true
+  path:
+    description: 'Working directory to run in, relative to the checkout root. Set this when the lerna workspace lives in a subdirectory of the repository. Defaults to the checkout root.'
+    required: false
   ref:
     description: 'Ref to checkout'
     default: 'master'

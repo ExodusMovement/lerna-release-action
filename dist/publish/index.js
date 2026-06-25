@@ -30269,6 +30269,7 @@ var Input;
     Input["Assignee"] = "assignee";
     Input["GithubToken"] = "github-token";
     Input["Packages"] = "packages";
+    Input["Path"] = "path";
     Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
@@ -30282,12 +30283,14 @@ var Input;
 var PublishInput;
 (function (PublishInput) {
     PublishInput["GithubToken"] = "github-token";
+    PublishInput["Path"] = "path";
     PublishInput["RequiredBranchRulesets"] = "required-branch-rulesets";
     PublishInput["DistTag"] = "dist-tag";
 })(PublishInput = exports.PublishInput || (exports.PublishInput = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
     VersionDispatchInput["GithubToken"] = "github-token";
+    VersionDispatchInput["Path"] = "path";
     VersionDispatchInput["Ref"] = "ref";
     VersionDispatchInput["VersionWorkflowId"] = "version-workflow-id";
     VersionDispatchInput["ExcludeLabels"] = "exclude-labels";
@@ -30493,8 +30496,19 @@ function configureUser({ name, email }) {
 exports.configureUser = configureUser;
 // Lists files added or modified between two commits. Deletions are excluded
 // (`--diff-filter=d`) since the release flow only ever creates or updates files.
+// `--no-relative` forces repo-root-relative paths regardless of the consumer's
+// `diff.relative` git config, so callers running from a subdirectory still get
+// paths the GitHub API and a repo-root file read can resolve.
 function getChangedFiles(base, head) {
-    const stdout = (0, process_1.spawnSync)('git', ['diff', '--name-only', '-z', '--diff-filter=d', base, head]);
+    const stdout = (0, process_1.spawnSync)('git', [
+        'diff',
+        '--no-relative',
+        '--name-only',
+        '-z',
+        '--diff-filter=d',
+        base,
+        head,
+    ]);
     // `-z` yields NUL-separated, verbatim pathnames.
     return stdout.split('\0').filter((path) => path !== '');
 }
@@ -30533,6 +30547,7 @@ exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = expor
 const core = __nccwpck_require__(2186);
 const p_retry_1 = __nccwpck_require__(2548);
 const promises_1 = __nccwpck_require__(3977);
+const node_path_1 = __nccwpck_require__(9411);
 const errors_1 = __nccwpck_require__(2579);
 const constants_1 = __nccwpck_require__(9042);
 async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
@@ -30623,10 +30638,12 @@ async function createRef({ client, ref, sha, repo }) {
 // GitHub's GPG key (shown as "Verified"). The commit author is the identity of
 // the authenticated token; the committer is GitHub itself. File contents are
 // read from the working tree, which matches the local HEAD after the amend.
-async function createSignedCommit({ client, repo, branch, expectedHeadOid, headline, body, additions, }) {
+async function createSignedCommit({ client, repo, branch, expectedHeadOid, headline, body, additions, repoRoot = '', }) {
     await createRef({ client, repo, ref: `refs/heads/${branch}`, sha: expectedHeadOid });
     const fileAdditions = await Promise.all(additions.map(async (path) => {
-        const contents = await (0, promises_1.readFile)(path, { encoding: 'base64' });
+        const contents = await (0, promises_1.readFile)(repoRoot ? (0, node_path_1.resolve)(repoRoot, path) : path, {
+            encoding: 'base64',
+        });
         return { path, contents };
     }));
     const { createCommitOnBranch } = await client.graphql(
@@ -30819,6 +30836,53 @@ exports.pluralize = pluralize;
 
 /***/ }),
 
+/***/ 8417:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.toWorkspaceRelativePaths = exports.applyWorkingDirectory = void 0;
+const node_path_1 = __nccwpck_require__(9411);
+const core = __nccwpck_require__(2186);
+const process_1 = __nccwpck_require__(9239);
+/**
+ * Move into the consumer-supplied working directory and report where the
+ * resulting cwd sits inside the git repository.
+ *
+ * When `workingDirectory` is empty the cwd is left untouched and reported as
+ * the repo root with an empty prefix, so every caller keeps its previous
+ * behavior byte-for-byte. The prefix is derived from `git rev-parse
+ * --show-toplevel` rather than assumed, so it is correct whether the
+ * directory is the repo root itself (a nested checkout) or a subdirectory of
+ * a larger repo.
+ */
+function applyWorkingDirectory(workingDirectory) {
+    if (!workingDirectory) {
+        return { repoRoot: process.cwd(), repoRelativePrefix: '' };
+    }
+    core.info(`Changing working directory to ${workingDirectory}`);
+    process.chdir(workingDirectory);
+    const repoRoot = (0, process_1.spawnSync)('git', ['rev-parse', '--show-toplevel']).trim();
+    return { repoRoot, repoRelativePrefix: (0, node_path_1.relative)(repoRoot, process.cwd()) };
+}
+exports.applyWorkingDirectory = applyWorkingDirectory;
+/**
+ * Translate repo-root-relative paths (as returned by the GitHub API) into
+ * paths relative to the current working directory, dropping any that fall
+ * outside it. With an empty prefix the paths are returned unchanged.
+ */
+function toWorkspaceRelativePaths(paths, repoRelativePrefix) {
+    if (!repoRelativePrefix)
+        return paths;
+    const prefix = repoRelativePrefix.endsWith('/') ? repoRelativePrefix : `${repoRelativePrefix}/`;
+    return paths.filter((path) => path.startsWith(prefix)).map((path) => path.slice(prefix.length));
+}
+exports.toWorkspaceRelativePaths = toWorkspaceRelativePaths;
+
+
+/***/ }),
+
 /***/ 9491:
 /***/ ((module) => {
 
@@ -30960,6 +31024,14 @@ module.exports = require("node:fs");
 
 "use strict";
 module.exports = require("node:fs/promises");
+
+/***/ }),
+
+/***/ 9411:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:path");
 
 /***/ }),
 
@@ -32762,7 +32834,9 @@ const extract_tags_1 = __nccwpck_require__(4672);
 const get_published_tags_1 = __nccwpck_require__(2999);
 const node_child_process_1 = __nccwpck_require__(7718);
 const git_1 = __nccwpck_require__(8682);
+const working_directory_1 = __nccwpck_require__(8417);
 async function publish() {
+    (0, working_directory_1.applyWorkingDirectory)(core.getInput(constants_1.PublishInput.Path));
     const token = core.getInput(constants_1.PublishInput.GithubToken, { required: true });
     const requiredRulesets = core.getMultilineInput(constants_1.PublishInput.RequiredBranchRulesets);
     const client = github.getOctokit(token);

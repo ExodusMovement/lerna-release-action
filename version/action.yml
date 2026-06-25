@@ -7,6 +7,9 @@ inputs:
   packages:
     description: 'Selected packages as comma separated string, e.g. modules/storage-spec,libraries/formatting'
     required: true
+  path:
+    description: 'Working directory to run in, relative to the checkout root. Set this when the lerna workspace lives in a subdirectory of the repository. Defaults to the checkout root.'
+    required: false
   version-strategy:
     description: 'Versioning strategy, supports conventional-commits and static versioning through: patch, minor, major, premajor, preminor, prepatch, prerelease. Ignored when `bumps` is provided.'
     default: 'conventional-commits'

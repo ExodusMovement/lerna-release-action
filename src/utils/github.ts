@@ -2,6 +2,7 @@ import * as core from '@actions/core'
 import * as github from '@actions/github'
 import retry from 'p-retry'
 import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 
 import { Repo } from './types'
 import { unwrapErrorMessage } from './errors'
@@ -167,6 +168,11 @@ type CreateSignedCommitParams = {
   headline: string
   body?: string
   additions: string[]
+  // Absolute repo root used to read each addition's contents from disk. The
+  // addition paths stay repo-root-relative for the API; only the on-disk read
+  // is rebased so the commit works when the action runs in a subdirectory.
+  // Defaults to reading additions relative to the current working directory.
+  repoRoot?: string
 }
 
 type CreateCommitOnBranchResponse = {
@@ -190,12 +196,15 @@ export async function createSignedCommit({
   headline,
   body,
   additions,
+  repoRoot = '',
 }: CreateSignedCommitParams): Promise<string> {
   await createRef({ client, repo, ref: `refs/heads/${branch}`, sha: expectedHeadOid })
 
   const fileAdditions = await Promise.all(
     additions.map(async (path) => {
-      const contents = await readFile(path, { encoding: 'base64' })
+      const contents = await readFile(repoRoot ? resolve(repoRoot, path) : path, {
+        encoding: 'base64',
+      })
       return { path, contents }
     })
   )

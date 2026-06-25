@@ -108,8 +108,19 @@ export function configureUser({ name, email }: ConfigureUserParams) {
 
 // Lists files added or modified between two commits. Deletions are excluded
 // (`--diff-filter=d`) since the release flow only ever creates or updates files.
+// `--no-relative` forces repo-root-relative paths regardless of the consumer's
+// `diff.relative` git config, so callers running from a subdirectory still get
+// paths the GitHub API and a repo-root file read can resolve.
 export function getChangedFiles(base: string, head: string): string[] {
-  const stdout = spawnSync('git', ['diff', '--name-only', '-z', '--diff-filter=d', base, head])
+  const stdout = spawnSync('git', [
+    'diff',
+    '--no-relative',
+    '--name-only',
+    '-z',
+    '--diff-filter=d',
+    base,
+    head,
+  ])
 
   // `-z` yields NUL-separated, verbatim pathnames.
   return stdout.split('\0').filter((path) => path !== '')

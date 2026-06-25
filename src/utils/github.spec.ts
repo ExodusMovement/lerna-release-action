@@ -80,4 +80,30 @@ describe('createSignedCommit', () => {
 
     expect(oid).toBe('signed-oid')
   })
+
+  it('reads addition contents from repoRoot while keeping API paths repo-root-relative', async () => {
+    await createSignedCommit({
+      client,
+      repo,
+      branch: 'ci/release/123',
+      expectedHeadOid: 'base-sha',
+      headline: 'chore(release): publish',
+      additions: ['apps/mobile/a/package.json'],
+      repoRoot: '/checkout',
+    })
+
+    expect(readFile).toHaveBeenCalledWith('/checkout/apps/mobile/a/package.json', {
+      encoding: 'base64',
+    })
+
+    const [, variables] = graphql.mock.calls[0]
+    expect(variables.input.fileChanges.additions).toEqual([
+      {
+        path: 'apps/mobile/a/package.json',
+        contents: Buffer.from('contents of /checkout/apps/mobile/a/package.json').toString(
+          'base64'
+        ),
+      },
+    ])
+  })
 })
