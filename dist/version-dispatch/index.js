@@ -31165,6 +31165,7 @@ var Input;
     Input["Assignee"] = "assignee";
     Input["GithubToken"] = "github-token";
     Input["Packages"] = "packages";
+    Input["Path"] = "path";
     Input["Ref"] = "ref";
     Input["VersionExtraArgs"] = "version-extra-args";
     Input["VersionStrategy"] = "version-strategy";
@@ -31178,12 +31179,14 @@ var Input;
 var PublishInput;
 (function (PublishInput) {
     PublishInput["GithubToken"] = "github-token";
+    PublishInput["Path"] = "path";
     PublishInput["RequiredBranchRulesets"] = "required-branch-rulesets";
     PublishInput["DistTag"] = "dist-tag";
 })(PublishInput = exports.PublishInput || (exports.PublishInput = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
     VersionDispatchInput["GithubToken"] = "github-token";
+    VersionDispatchInput["Path"] = "path";
     VersionDispatchInput["Ref"] = "ref";
     VersionDispatchInput["VersionWorkflowId"] = "version-workflow-id";
     VersionDispatchInput["ExcludeLabels"] = "exclude-labels";
@@ -31226,6 +31229,77 @@ function parseMessage(message) {
     };
 }
 exports.parseMessage = parseMessage;
+
+
+/***/ }),
+
+/***/ 9239:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.spawnSync = void 0;
+const child_process_1 = __nccwpck_require__(2081);
+const spawnSync = (command, args, options = {}) => {
+    const { stdout, stderr, status } = (0, child_process_1.spawnSync)(command, args, {
+        encoding: 'utf8',
+        ...options,
+        shell: false,
+    });
+    if (status !== 0) {
+        throw new Error(stderr);
+    }
+    return stdout;
+};
+exports.spawnSync = spawnSync;
+
+
+/***/ }),
+
+/***/ 8417:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.toWorkspaceRelativePaths = exports.applyWorkingDirectory = void 0;
+const node_path_1 = __nccwpck_require__(9411);
+const core = __nccwpck_require__(2186);
+const process_1 = __nccwpck_require__(9239);
+/**
+ * Move into the consumer-supplied working directory and report where the
+ * resulting cwd sits inside the git repository.
+ *
+ * When `workingDirectory` is empty the cwd is left untouched and reported as
+ * the repo root with an empty prefix, so every caller keeps its previous
+ * behavior byte-for-byte. The prefix is derived from `git rev-parse
+ * --show-toplevel` rather than assumed, so it is correct whether the
+ * directory is the repo root itself (a nested checkout) or a subdirectory of
+ * a larger repo.
+ */
+function applyWorkingDirectory(workingDirectory) {
+    if (!workingDirectory) {
+        return { repoRoot: process.cwd(), repoRelativePrefix: '' };
+    }
+    core.info(`Changing working directory to ${workingDirectory}`);
+    process.chdir(workingDirectory);
+    const repoRoot = (0, process_1.spawnSync)('git', ['rev-parse', '--show-toplevel']).trim();
+    return { repoRoot, repoRelativePrefix: (0, node_path_1.relative)(repoRoot, process.cwd()) };
+}
+exports.applyWorkingDirectory = applyWorkingDirectory;
+/**
+ * Translate repo-root-relative paths (as returned by the GitHub API) into
+ * paths relative to the current working directory, dropping any that fall
+ * outside it. With an empty prefix the paths are returned unchanged.
+ */
+function toWorkspaceRelativePaths(paths, repoRelativePrefix) {
+    if (!repoRelativePrefix)
+        return paths;
+    const prefix = repoRelativePrefix.endsWith('/') ? repoRelativePrefix : `${repoRelativePrefix}/`;
+    return paths.filter((path) => path.startsWith(prefix)).map((path) => path.slice(prefix.length));
+}
+exports.toWorkspaceRelativePaths = toWorkspaceRelativePaths;
 
 
 /***/ }),
@@ -31533,6 +31607,14 @@ module.exports = require("buffer");
 
 /***/ }),
 
+/***/ 2081:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("child_process");
+
+/***/ }),
+
 /***/ 6206:
 /***/ ((module) => {
 
@@ -31618,6 +31700,14 @@ module.exports = require("net");
 
 "use strict";
 module.exports = require("node:events");
+
+/***/ }),
+
+/***/ 9411:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:path");
 
 /***/ }),
 
@@ -42153,6 +42243,7 @@ const bumps_1 = __nccwpck_require__(9317);
 const files_to_packages_1 = __nccwpck_require__(6516);
 const preview_1 = __nccwpck_require__(7993);
 const released_1 = __nccwpck_require__(8320);
+const working_directory_1 = __nccwpck_require__(8417);
 const GET_COMMIT_CONCURRENCY = 10;
 if (require.main === require.cache[eval('__filename')]) {
     versionDispatch().catch((error) => {
@@ -42188,6 +42279,7 @@ if (require.main === require.cache[eval('__filename')]) {
  */
 async function versionDispatch({ filesystem = fs, isReleased } = {}) {
     const token = core.getInput(constants_1.VersionDispatchInput.GithubToken, { required: true });
+    const { repoRelativePrefix } = (0, working_directory_1.applyWorkingDirectory)(core.getInput(constants_1.VersionDispatchInput.Path));
     const workflowId = core.getInput(constants_1.VersionDispatchInput.VersionWorkflowId) || 'version.yml';
     const ref = core.getInput(constants_1.VersionDispatchInput.Ref) || 'master';
     const excludedLabels = new Set(core
@@ -42245,6 +42337,7 @@ async function versionDispatch({ filesystem = fs, isReleased } = {}) {
         prNumber: pr.number,
         packagePaths,
         prTitle: pr.title,
+        repoRelativePrefix,
     });
     for (const name of Object.keys(bumps)) {
         if (isPrivatePackage({ filesystem, pkgPath: packagePaths[name] })) {
@@ -42325,7 +42418,7 @@ exports.versionDispatch = versionDispatch;
  * @returns map keyed by workspace package name, with values from the
  *   `Bump` type *minus* `none` — packages that received no bump are omitted.
  */
-async function computeBumpsForPr({ client, repo, prNumber, packagePaths, prTitle, }) {
+async function computeBumpsForPr({ client, repo, prNumber, packagePaths, prTitle, repoRelativePrefix = '', }) {
     const commits = await client.paginate(client.rest.pulls.listCommits, {
         ...repo,
         pull_number: prNumber,
@@ -42343,7 +42436,7 @@ async function computeBumpsForPr({ client, repo, prNumber, packagePaths, prTitle
         return {
             sha: entry.sha,
             message: entry.commit.message,
-            files: (detail.files ?? []).map((f) => f.filename),
+            files: (0, working_directory_1.toWorkspaceRelativePaths)((detail.files ?? []).map((f) => f.filename), repoRelativePrefix),
         };
     })));
     return aggregateBumps({ commits: commitsWithFiles, packagePaths, prTitle });
