@@ -1,5 +1,5 @@
 import * as github from '@actions/github'
-import { versionDispatch } from './version-dispatch'
+import { computeBumpsForPr, versionDispatch } from './version-dispatch'
 import { GithubClient } from './utils/github'
 import { Volume } from 'memfs/lib/volume'
 import { createFsFromJSON } from './utils/testing'
@@ -161,6 +161,31 @@ describe('versionDispatch', () => {
         bumps: JSON.stringify({ '@exodus/atoms': 'major', '@exodus/balances': 'patch' }),
       },
     })
+  })
+
+  it('rebases repo-root-relative commit files into a subdirectory workspace before attribution', async () => {
+    setupPaginate(
+      [
+        { sha: 'aaa1111', commit: { message: 'feat(atoms)!: drop legacy' } },
+        { sha: 'bbb2222', commit: { message: 'fix(balances): tidy' } },
+      ],
+      {
+        // GitHub returns repo-root-relative paths; the workspace lives under apps/mobile.
+        aaa1111: [{ filename: 'apps/mobile/libraries/atoms/index.ts' }],
+        bbb2222: [{ filename: 'apps/mobile/modules/balances/x.ts' }, { filename: 'README.md' }],
+      }
+    )
+
+    const bumps = await computeBumpsForPr({
+      client,
+      repo,
+      prNumber: 123,
+      packagePaths: { '@exodus/atoms': 'libraries/atoms', '@exodus/balances': 'modules/balances' },
+      prTitle: 'feat: cool stuff',
+      repoRelativePrefix: 'apps/mobile',
+    })
+
+    expect(bumps).toEqual({ '@exodus/atoms': 'major', '@exodus/balances': 'patch' })
   })
 
   it('skips private packages when computing the dispatch payload', async () => {

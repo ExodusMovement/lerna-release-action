@@ -35,6 +35,7 @@ import { formatPackageFiles } from './utils/format'
 import { unwrapErrorMessage } from './utils/errors'
 import * as assert from 'assert'
 import { createSignedCommit, getDefaultBranch } from './utils/github'
+import { applyWorkingDirectory } from './utils/working-directory'
 
 if (require.main === module) {
   version().catch((error: Error) => {
@@ -49,6 +50,7 @@ if (require.main === module) {
 export default async function version({
   packagesCsv = core.getInput(Input.Packages, { required: true }),
   token = core.getInput(Input.GithubToken, { required: true }),
+  workingDirectory = core.getInput(Input.Path),
   versionExtraArgs = core.getInput(Input.VersionExtraArgs),
   versionStrategy = core.getInput(Input.VersionStrategy),
   bumpsRaw = core.getInput(Input.Bumps),
@@ -59,6 +61,8 @@ export default async function version({
   baseBranch = core.getInput(Input.BaseBranch),
   formatCommand = core.getInput(Input.FormatCommand),
 } = {}) {
+  const { repoRoot } = applyWorkingDirectory(workingDirectory)
+
   const bumps = parseBumps(bumpsRaw)
   let narrowedStrategy: VersionStrategy | null = null
   if (!bumps) {
@@ -198,6 +202,7 @@ export default async function version({
     headline: message,
     body: tags.join('\n'),
     additions,
+    repoRoot,
   })
 
   core.info('Creating PR')

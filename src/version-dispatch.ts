@@ -10,6 +10,7 @@ import { Bump, BUMP_NONE, bumpFromMessage, maxBump } from './version-dispatch/bu
 import { filesToPackages } from './version-dispatch/files-to-packages'
 import { clearVersionPreview, postVersionPreview } from './version-dispatch/preview'
 import { isPackageReleased } from './version-dispatch/released'
+import { applyWorkingDirectory, toWorkspaceRelativePaths } from './utils/working-directory'
 
 type Params = {
   filesystem?: Filesystem
@@ -54,6 +55,7 @@ if (require.main === module) {
  */
 export async function versionDispatch({ filesystem = fs, isReleased }: Params = {}) {
   const token = core.getInput(Input.GithubToken, { required: true })
+  const { repoRelativePrefix } = applyWorkingDirectory(core.getInput(Input.Path))
   const workflowId = core.getInput(Input.VersionWorkflowId) || 'version.yml'
   const ref = core.getInput(Input.Ref) || 'master'
   const excludedLabels = new Set(
@@ -121,6 +123,7 @@ export async function versionDispatch({ filesystem = fs, isReleased }: Params = 
     prNumber: pr.number,
     packagePaths,
     prTitle: pr.title,
+    repoRelativePrefix,
   })
 
   for (const name of Object.keys(bumps)) {
@@ -218,6 +221,11 @@ type ComputeBumpsParams = {
   prNumber: number
   packagePaths: Record<string, string>
   prTitle: string
+  // Working directory's path relative to the repo root. The GitHub API returns
+  // repo-root-relative file paths; package paths are cwd-relative, so commit
+  // files are rebased into the working directory before attribution. Empty
+  // when the action runs at the repo root.
+  repoRelativePrefix?: string
 }
 
 type CommitWithFiles = {
@@ -241,6 +249,7 @@ export async function computeBumpsForPr({
   prNumber,
   packagePaths,
   prTitle,
+  repoRelativePrefix = '',
 }: ComputeBumpsParams): Promise<Record<string, Bump>> {
   const commits = await client.paginate(client.rest.pulls.listCommits, {
     ...repo,
@@ -265,7 +274,10 @@ export async function computeBumpsForPr({
         return {
           sha: entry.sha,
           message: entry.commit.message,
-          files: (detail.files ?? []).map((f) => f.filename),
+          files: toWorkspaceRelativePaths(
+            (detail.files ?? []).map((f) => f.filename),
+            repoRelativePrefix
+          ),
         }
       })
     )

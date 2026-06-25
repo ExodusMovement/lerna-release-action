@@ -6,8 +6,11 @@ import { extractTags } from './publish/extract-tags'
 import { getPublishedTags } from './publish/get-published-tags'
 import { spawnSync } from 'node:child_process'
 import { checkoutPr } from './utils/git'
+import { applyWorkingDirectory } from './utils/working-directory'
 
 export async function publish() {
+  applyWorkingDirectory(core.getInput(Input.Path))
+
   const token = core.getInput(Input.GithubToken, { required: true })
   const requiredRulesets = core.getMultilineInput(Input.RequiredBranchRulesets)
   const client = github.getOctokit(token)
