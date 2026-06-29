@@ -31233,6 +31233,52 @@ exports.parseMessage = parseMessage;
 
 /***/ }),
 
+/***/ 6334:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.fetchPrCommitsWithFiles = void 0;
+const core = __nccwpck_require__(2186);
+const pLimit = __nccwpck_require__(7684);
+// Cap concurrency to avoid GitHub's secondary rate limit on PRs with many
+// commits. 10 is well under the per-second ceiling while still ~10x faster
+// than sequential awaits.
+const GET_COMMIT_CONCURRENCY = 10;
+/**
+ * Fetch a PR's individual (pre-squash) commits together with the files each
+ * touched. Used both to attribute per-package bumps (version-dispatch) and to
+ * attribute per-package changelog entries (version/update-changelog), so the
+ * two always agree on which commit affected which package.
+ *
+ * The commit list is paginated; each commit's file list is fetched in parallel
+ * under a concurrency cap.
+ */
+async function fetchPrCommitsWithFiles({ client, repo, prNumber, }) {
+    const commits = await client.paginate(client.rest.pulls.listCommits, {
+        ...repo,
+        pull_number: prNumber,
+        per_page: 100,
+    });
+    if (commits.length >= 250) {
+        core.warning(`PR #${prNumber} returned ${commits.length} commits, which is at or above GitHub's REST cap; some commits may have been truncated and missed by per-package attribution.`);
+    }
+    const limit = pLimit(GET_COMMIT_CONCURRENCY);
+    return Promise.all(commits.map((entry) => limit(async () => {
+        const { data: detail } = await client.rest.repos.getCommit({ ...repo, ref: entry.sha });
+        return {
+            sha: entry.sha,
+            message: entry.commit.message,
+            files: (detail.files ?? []).map((f) => f.filename),
+        };
+    })));
+}
+exports.fetchPrCommitsWithFiles = fetchPrCommitsWithFiles;
+
+
+/***/ }),
+
 /***/ 9239:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -42236,7 +42282,6 @@ const path = __nccwpck_require__(1017);
 const core = __nccwpck_require__(2186);
 const github = __nccwpck_require__(5438);
 const fs = __nccwpck_require__(7147);
-const pLimit = __nccwpck_require__(7684);
 const lerna_utils_1 = __nccwpck_require__(4801);
 const constants_1 = __nccwpck_require__(9042);
 const bumps_1 = __nccwpck_require__(9317);
@@ -42244,7 +42289,7 @@ const files_to_packages_1 = __nccwpck_require__(6516);
 const preview_1 = __nccwpck_require__(7993);
 const released_1 = __nccwpck_require__(8320);
 const working_directory_1 = __nccwpck_require__(8417);
-const GET_COMMIT_CONCURRENCY = 10;
+const pr_commits_1 = __nccwpck_require__(6334);
 if (require.main === require.cache[eval('__filename')]) {
     versionDispatch().catch((error) => {
         if (error.stack)
@@ -42419,27 +42464,12 @@ exports.versionDispatch = versionDispatch;
  *   `Bump` type *minus* `none` — packages that received no bump are omitted.
  */
 async function computeBumpsForPr({ client, repo, prNumber, packagePaths, prTitle, repoRelativePrefix = '', }) {
-    const commits = await client.paginate(client.rest.pulls.listCommits, {
-        ...repo,
-        pull_number: prNumber,
-        per_page: 100,
-    });
-    if (commits.length >= 250) {
-        core.warning(`PR #${prNumber} returned ${commits.length} commits, which is at or above GitHub's REST cap; some commits may have been truncated and missed by per-package attribution.`);
-    }
-    // Cap concurrency to avoid GitHub's secondary rate limit on PRs with
-    // many commits. 10 is well under the per-second ceiling while still
-    // ~10x faster than sequential awaits.
-    const limit = pLimit(GET_COMMIT_CONCURRENCY);
-    const commitsWithFiles = await Promise.all(commits.map((entry) => limit(async () => {
-        const { data: detail } = await client.rest.repos.getCommit({ ...repo, ref: entry.sha });
-        return {
-            sha: entry.sha,
-            message: entry.commit.message,
-            files: (0, working_directory_1.toWorkspaceRelativePaths)((detail.files ?? []).map((f) => f.filename), repoRelativePrefix),
-        };
-    })));
-    return aggregateBumps({ commits: commitsWithFiles, packagePaths, prTitle });
+    const rawCommits = await (0, pr_commits_1.fetchPrCommitsWithFiles)({ client, repo, prNumber });
+    const commits = rawCommits.map((commit) => ({
+        ...commit,
+        files: (0, working_directory_1.toWorkspaceRelativePaths)(commit.files, repoRelativePrefix),
+    }));
+    return aggregateBumps({ commits, packagePaths, prTitle });
 }
 exports.computeBumpsForPr = computeBumpsForPr;
 /**

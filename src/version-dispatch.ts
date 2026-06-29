@@ -2,7 +2,6 @@ import * as path from 'path'
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 import * as fs from 'fs'
-import pLimit = require('p-limit')
 import { getPathsByPackageNames } from '@exodus/lerna-utils'
 import { VersionDispatchInput as Input } from './constants'
 import { Filesystem } from './utils/types'
@@ -11,6 +10,7 @@ import { filesToPackages } from './version-dispatch/files-to-packages'
 import { clearVersionPreview, postVersionPreview } from './version-dispatch/preview'
 import { isPackageReleased } from './version-dispatch/released'
 import { applyWorkingDirectory, toWorkspaceRelativePaths } from './utils/working-directory'
+import { CommitWithFiles, fetchPrCommitsWithFiles } from './utils/pr-commits'
 
 type Params = {
   filesystem?: Filesystem
@@ -18,8 +18,6 @@ type Params = {
   // to checking the repo for a lerna-style `<pkg>@<version>` git tag.
   isReleased?: (name: string) => boolean | Promise<boolean>
 }
-
-const GET_COMMIT_CONCURRENCY = 10
 
 if (require.main === module) {
   versionDispatch().catch((error: Error) => {
@@ -228,12 +226,6 @@ type ComputeBumpsParams = {
   repoRelativePrefix?: string
 }
 
-type CommitWithFiles = {
-  sha: string
-  message: string
-  files: string[]
-}
-
 /**
  * Walk a PR's individual commits and build a `{ pkg: bump }` map.
  *
@@ -251,39 +243,13 @@ export async function computeBumpsForPr({
   prTitle,
   repoRelativePrefix = '',
 }: ComputeBumpsParams): Promise<Record<string, Bump>> {
-  const commits = await client.paginate(client.rest.pulls.listCommits, {
-    ...repo,
-    pull_number: prNumber,
-    per_page: 100,
-  })
+  const rawCommits = await fetchPrCommitsWithFiles({ client, repo, prNumber })
+  const commits: CommitWithFiles[] = rawCommits.map((commit) => ({
+    ...commit,
+    files: toWorkspaceRelativePaths(commit.files, repoRelativePrefix),
+  }))
 
-  if (commits.length >= 250) {
-    core.warning(
-      `PR #${prNumber} returned ${commits.length} commits, which is at or above GitHub's REST cap; some commits may have been truncated and missed by per-package attribution.`
-    )
-  }
-
-  // Cap concurrency to avoid GitHub's secondary rate limit on PRs with
-  // many commits. 10 is well under the per-second ceiling while still
-  // ~10x faster than sequential awaits.
-  const limit = pLimit(GET_COMMIT_CONCURRENCY)
-  const commitsWithFiles = await Promise.all(
-    commits.map((entry) =>
-      limit(async (): Promise<CommitWithFiles> => {
-        const { data: detail } = await client.rest.repos.getCommit({ ...repo, ref: entry.sha })
-        return {
-          sha: entry.sha,
-          message: entry.commit.message,
-          files: toWorkspaceRelativePaths(
-            (detail.files ?? []).map((f) => f.filename),
-            repoRelativePrefix
-          ),
-        }
-      })
-    )
-  )
-
-  return aggregateBumps({ commits: commitsWithFiles, packagePaths, prTitle })
+  return aggregateBumps({ commits, packagePaths, prTitle })
 }
 
 type AggregateBumpsParams = {

@@ -28,6 +28,7 @@ describe('versionPackages', () => {
         '--yes',
         '--no-private',
         '--force-publish',
+        '--no-changelog',
       ],
       { encoding: 'utf8', shell: false }
     )
@@ -75,6 +76,7 @@ describe('versionPackages', () => {
         '--yes',
         '--no-private',
         '--force-publish',
+        '--no-changelog',
         '--let-bruce-wayne-decide',
       ],
       { encoding: 'utf8', shell: false }
