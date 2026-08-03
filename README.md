@@ -128,8 +128,8 @@ produce a changelog entry, so releasing on the PR's commits would publish a
 version whose changelog reads `**Note:** Version bump only for package …`.
 
 To release from a PR, give it a `feat:`, `fix:`, `perf:` or breaking (`!`)
-title. Commit-level types still decide *which* packages bump and by how much;
-the title decides *whether* anything releases at all.
+title. Commit-level types still decide _which_ packages bump and by how much;
+the title decides _whether_ anything releases at all.
 
 Because the title is part of the gate, include `edited` in the workflow's
 `types:` — otherwise retitling a PR leaves a stale preview comment (or a
