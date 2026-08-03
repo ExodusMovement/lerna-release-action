@@ -42259,6 +42259,13 @@ if (require.main === require.cache[eval('__filename')]) {
  * per package), and dispatch the version workflow with a `{ pkg: bump }`
  * JSON map plus the matching `packages` list.
  *
+ * Title gate — a PR whose title carries no release-worthy type releases
+ * nothing, regardless of its commits. Squash-merged PRs put the title on
+ * the default branch, and changelogs are generated from that history, so
+ * a `chore:`/`docs:`/non-conventional title cannot produce a changelog
+ * entry for any package. Releasing on its commits would publish versions
+ * whose changelog reads "Version bump only".
+ *
  * Title fallback — if no commit carries a release-worthy type, parse the
  * PR title once and apply that bump to every workspace touched anywhere
  * in the PR. Preserves the long-standing PR-title-is-the-release-level
@@ -42313,6 +42320,17 @@ async function versionDispatch({ filesystem = fs, isReleased } = {}) {
     const excludedLabel = (pr.labels ?? []).find((label) => excludedLabels.has(label.name));
     if (excludedLabel) {
         core.notice(`Skipped for excluded label "${excludedLabel.name}"`);
+        if (isPreview)
+            await (0, preview_1.clearVersionPreview)({ client, repo, prNumber: pr.number });
+        return null;
+    }
+    // The PR title is what lands on the default branch when the PR is squashed,
+    // and the changelog is generated from that history. A non-releasing title
+    // therefore cannot produce a changelog entry, so releasing anything for it
+    // would cut a version whose changelog reads "version bump only". Gate on the
+    // title before spending any API calls on commit attribution.
+    if ((0, bumps_1.bumpFromMessage)(pr.title) === bumps_1.BUMP_NONE) {
+        core.notice(`Skipped for non-releasing PR title "${pr.title}"`);
         if (isPreview)
             await (0, preview_1.clearVersionPreview)({ client, repo, prNumber: pr.number });
         return null;

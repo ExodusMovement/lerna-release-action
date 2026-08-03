@@ -397,6 +397,32 @@ describe('versionDispatch', () => {
 
       expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
     })
+
+    it.each(['chore(libs): resolve sibling packages', 'docs: rewrite readme', 'Update deps'])(
+      'should abort for non-releasing title "%s" even when commits bump',
+      async (title) => {
+        github.context.payload = { pull_request: { ...defaults, title } }
+        setupPaginate([{ sha: 'aaa1111', commit: { message: 'feat(atoms): shiny' } }], {
+          aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
+        })
+
+        await versionDispatch({ filesystem: fs as never, isReleased: () => true })
+
+        expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+      }
+    )
+
+    it('should abort on a non-releasing title before fetching any commits', async () => {
+      github.context.payload = { pull_request: { ...defaults, title: 'chore: cleanup' } }
+      setupPaginate([{ sha: 'aaa1111', commit: { message: 'feat(atoms): shiny' } }], {
+        aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
+      })
+
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
+
+      expect(client.paginate).not.toHaveBeenCalled()
+      expect(client.rest.repos.getCommit).not.toHaveBeenCalled()
+    })
   })
 
   describe('preview mode (unmerged PR)', () => {
@@ -694,7 +720,7 @@ describe('versionDispatch', () => {
     it('clears stale comments and posts nothing when no commits bump anything', async () => {
       github.context.payload = {
         pull_request: {
-          title: 'chore: cleanup',
+          title: 'feat: pending',
           number: 555,
           merged: false,
           state: 'open',
@@ -706,7 +732,7 @@ describe('versionDispatch', () => {
 
       setupPreviewPaginate(
         [{ sha: 'ccc3333', commit: { message: 'chore: lockfile' } }],
-        { ccc3333: [{ filename: 'libraries/atoms/x.ts' }] },
+        { ccc3333: [{ filename: 'README.md' }] },
         [{ id: 9004, body: `${PREVIEW_MARKER}\nstale preview` }]
       )
 
@@ -715,6 +741,35 @@ describe('versionDispatch', () => {
       expect(client.rest.issues.deleteComment).toHaveBeenCalledWith({
         ...repo,
         comment_id: 9004,
+      })
+      expect(client.rest.issues.createComment).not.toHaveBeenCalled()
+      expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
+    })
+
+    it('clears stale comments and posts nothing for a non-releasing PR title', async () => {
+      github.context.payload = {
+        pull_request: {
+          title: 'chore(libs): resolve sibling packages through the workspace protocol',
+          number: 555,
+          merged: false,
+          state: 'open',
+          user: { login: 'brucewayne' },
+          base: { ref },
+          labels: [],
+        },
+      }
+
+      setupPreviewPaginate(
+        [{ sha: 'ccc3333', commit: { message: 'feat(atoms): shiny' } }],
+        { ccc3333: [{ filename: 'libraries/atoms/x.ts' }] },
+        [{ id: 9005, body: `${PREVIEW_MARKER}\nstale preview from a releasing title` }]
+      )
+
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
+
+      expect(client.rest.issues.deleteComment).toHaveBeenCalledWith({
+        ...repo,
+        comment_id: 9005,
       })
       expect(client.rest.issues.createComment).not.toHaveBeenCalled()
       expect(client.rest.actions.createWorkflowDispatch).not.toHaveBeenCalled()
