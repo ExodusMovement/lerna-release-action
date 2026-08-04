@@ -93,6 +93,12 @@ name: Version dispatch
 on:
   pull_request:
     types:
+      - opened
+      - synchronize
+      - reopened
+      - edited # required: the PR title gates the release, so title edits must re-run this
+      - labeled
+      - unlabeled
       - closed
 
 jobs:
@@ -108,6 +114,26 @@ jobs:
           github-token: ${{ secrets.GH_AUTOMATION_PAT }}
           exclude-commit-types: chore,docs,test,ci
 ```
+
+#### PR title gates the release
+
+A PR whose title carries no release-worthy conventional-commit type (`chore:`,
+`docs:`, `refactor:`, or a non-conventional subject) releases nothing, whatever
+its individual commits say — no version dispatch on merge, and no version
+preview comment while the PR is open.
+
+The reason is squash merging: the PR title becomes the commit on the default
+branch, and changelogs are generated from that history. A `chore:` title cannot
+produce a changelog entry, so releasing on the PR's commits would publish a
+version whose changelog reads `**Note:** Version bump only for package …`.
+
+To release from a PR, give it a `feat:`, `fix:`, `perf:` or breaking (`!`)
+title. Commit-level types still decide _which_ packages bump and by how much;
+the title decides _whether_ anything releases at all.
+
+Because the title is part of the gate, include `edited` in the workflow's
+`types:` — otherwise retitling a PR leaves a stale preview comment (or a
+missing one) until the next push.
 
 ### Running from a subdirectory
 
