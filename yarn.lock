@@ -1402,6 +1402,7 @@ __metadata:
     "@vercel/ncc": ^0.38.1
     conventional-changelog-conventionalcommits: ^5.0.0
     conventional-changelog-core: ^4.2.4
+    conventional-commits-parser: ^3.2.4
     eslint: ^8.56.0
     eslint-import-resolver-typescript: ^2.7.1
     get-stream: ^6.0.1
@@ -4081,7 +4082,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"conventional-commits-parser@npm:^3.2.0":
+"conventional-commits-parser@npm:^3.2.0, conventional-commits-parser@npm:^3.2.4":
   version: 3.2.4
   resolution: "conventional-commits-parser@npm:3.2.4"
   dependencies:

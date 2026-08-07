@@ -44399,6 +44399,85 @@ function onceStrict (fn) {
 
 /***/ }),
 
+/***/ 57684:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const Queue = __nccwpck_require__(15185);
+
+const pLimit = concurrency => {
+	if (!((Number.isInteger(concurrency) || concurrency === Infinity) && concurrency > 0)) {
+		throw new TypeError('Expected `concurrency` to be a number from 1 and up');
+	}
+
+	const queue = new Queue();
+	let activeCount = 0;
+
+	const next = () => {
+		activeCount--;
+
+		if (queue.size > 0) {
+			queue.dequeue()();
+		}
+	};
+
+	const run = async (fn, resolve, ...args) => {
+		activeCount++;
+
+		const result = (async () => fn(...args))();
+
+		resolve(result);
+
+		try {
+			await result;
+		} catch {}
+
+		next();
+	};
+
+	const enqueue = (fn, resolve, ...args) => {
+		queue.enqueue(run.bind(null, fn, resolve, ...args));
+
+		(async () => {
+			// This function needs to wait until the next microtask before comparing
+			// `activeCount` to `concurrency`, because `activeCount` is updated asynchronously
+			// when the run function is dequeued and called. The comparison in the if-statement
+			// needs to happen asynchronously as well to get an up-to-date value for `activeCount`.
+			await Promise.resolve();
+
+			if (activeCount < concurrency && queue.size > 0) {
+				queue.dequeue()();
+			}
+		})();
+	};
+
+	const generator = (fn, ...args) => new Promise(resolve => {
+		enqueue(fn, resolve, ...args);
+	});
+
+	Object.defineProperties(generator, {
+		activeCount: {
+			get: () => activeCount
+		},
+		pendingCount: {
+			get: () => queue.size
+		},
+		clearQueue: {
+			value: () => {
+				queue.clear();
+			}
+		}
+	});
+
+	return generator;
+};
+
+module.exports = pLimit;
+
+
+/***/ }),
+
 /***/ 82548:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -85119,6 +85198,81 @@ try {
 
 /***/ }),
 
+/***/ 15185:
+/***/ ((module) => {
+
+class Node {
+	/// value;
+	/// next;
+
+	constructor(value) {
+		this.value = value;
+
+		// TODO: Remove this when targeting Node.js 12.
+		this.next = undefined;
+	}
+}
+
+class Queue {
+	// TODO: Use private class fields when targeting Node.js 12.
+	// #_head;
+	// #_tail;
+	// #_size;
+
+	constructor() {
+		this.clear();
+	}
+
+	enqueue(value) {
+		const node = new Node(value);
+
+		if (this._head) {
+			this._tail.next = node;
+			this._tail = node;
+		} else {
+			this._head = node;
+			this._tail = node;
+		}
+
+		this._size++;
+	}
+
+	dequeue() {
+		const current = this._head;
+		if (!current) {
+			return;
+		}
+
+		this._head = this._head.next;
+		this._size--;
+		return current.value;
+	}
+
+	clear() {
+		this._head = undefined;
+		this._tail = undefined;
+		this._size = 0;
+	}
+
+	get size() {
+		return this._size;
+	}
+
+	* [Symbol.iterator]() {
+		let current = this._head;
+
+		while (current) {
+			yield current.value;
+			current = current.next;
+		}
+	}
+}
+
+module.exports = Queue;
+
+
+/***/ }),
+
 /***/ 69042:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -85649,6 +85803,52 @@ exports.updateLockfile = updateLockfile;
 
 /***/ }),
 
+/***/ 66334:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.fetchPrCommitsWithFiles = void 0;
+const core = __nccwpck_require__(42186);
+const pLimit = __nccwpck_require__(57684);
+// Cap concurrency to avoid GitHub's secondary rate limit on PRs with many
+// commits. 10 is well under the per-second ceiling while still ~10x faster
+// than sequential awaits.
+const GET_COMMIT_CONCURRENCY = 10;
+/**
+ * Fetch a PR's individual (pre-squash) commits together with the files each
+ * touched. Used both to attribute per-package bumps (version-dispatch) and to
+ * attribute per-package changelog entries (version/update-changelog), so the
+ * two always agree on which commit affected which package.
+ *
+ * The commit list is paginated; each commit's file list is fetched in parallel
+ * under a concurrency cap.
+ */
+async function fetchPrCommitsWithFiles({ client, repo, prNumber, }) {
+    const commits = await client.paginate(client.rest.pulls.listCommits, {
+        ...repo,
+        pull_number: prNumber,
+        per_page: 100,
+    });
+    if (commits.length >= 250) {
+        core.warning(`PR #${prNumber} returned ${commits.length} commits, which is at or above GitHub's REST cap; some commits may have been truncated and missed by per-package attribution.`);
+    }
+    const limit = pLimit(GET_COMMIT_CONCURRENCY);
+    return Promise.all(commits.map((entry) => limit(async () => {
+        const { data: detail } = await client.rest.repos.getCommit({ ...repo, ref: entry.sha });
+        return {
+            sha: entry.sha,
+            message: entry.commit.message,
+            files: (detail.files ?? []).map((f) => f.filename),
+        };
+    })));
+}
+exports.fetchPrCommitsWithFiles = fetchPrCommitsWithFiles;
+
+
+/***/ }),
+
 /***/ 69239:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -85756,6 +85956,131 @@ function toWorkspaceRelativePaths(paths, repoRelativePrefix) {
     return paths.filter((path) => path.startsWith(prefix)).map((path) => path.slice(prefix.length));
 }
 exports.toWorkspaceRelativePaths = toWorkspaceRelativePaths;
+
+
+/***/ }),
+
+/***/ 26516:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.filesToPackages = void 0;
+/**
+ * Attribute a set of touched file paths to workspace packages.
+ *
+ * A file maps to a package iff its repo-relative path equals the package's
+ * directory or starts with it followed by a slash. This deliberately rejects
+ * sibling directories with overlapping prefixes (`features/abc` vs.
+ * `features/abc-old`).
+ *
+ * @param files — repo-relative paths.
+ * @param packagePaths — { packageName: repoRelativeDir }.
+ */
+function filesToPackages(files, packagePaths) {
+    const touched = new Set();
+    const entries = Object.entries(packagePaths).map(([name, dir]) => [
+        name,
+        ensureTrailingSlash(dir),
+    ]);
+    for (const file of files) {
+        for (const [name, prefix] of entries) {
+            if (file === prefix.slice(0, -1) || file.startsWith(prefix)) {
+                touched.add(name);
+            }
+        }
+    }
+    return touched;
+}
+exports.filesToPackages = filesToPackages;
+function ensureTrailingSlash(value) {
+    return value.endsWith('/') ? value : `${value}/`;
+}
+
+
+/***/ }),
+
+/***/ 97294:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.decomposeForPackage = exports.formatCommitterDate = exports.extractPrNumber = void 0;
+const conventionalCommitsParser = __nccwpck_require__(41655);
+const files_to_packages_1 = __nccwpck_require__(26516);
+const working_directory_1 = __nccwpck_require__(48417);
+// GitHub's squash-merge convention appends ` (#<pr>)` to the commit subject.
+const PR_REF_RE = /\(#(\d+)\)\s*$/;
+/**
+ * Extract the squash-merge PR number from a commit's first line, e.g.
+ * `fix(fusion): keychain type (#17399)` → 17399. Returns null when the
+ * subject carries no trailing `(#N)` — a non-squash commit, a direct push,
+ * or a custom merge — so the caller can fall back to the commit as-is.
+ */
+function extractPrNumber(header) {
+    if (typeof header !== 'string')
+        return null;
+    const firstLine = header.split(/\r?\n/, 1)[0] ?? '';
+    const match = PR_REF_RE.exec(firstLine);
+    return match ? Number(match[1]) : null;
+}
+exports.extractPrNumber = extractPrNumber;
+/**
+ * Format a git committer date (`%ci`/`%cI`) to `yyyy-mm-dd` in UTC, matching
+ * conventional-changelog-core's default transform. The release header date is
+ * derived from this, so it must not be left as a raw timestamp.
+ */
+function formatCommitterDate(value) {
+    const raw = String(value);
+    const date = new Date(raw);
+    if (!Number.isNaN(date.getTime()))
+        return date.toISOString().slice(0, 10);
+    // Both `%ci` ("2026-06-29 17:42:51 +0000") and `%cI` ISO strings start with
+    // the calendar date, so a slice is a safe last resort if parsing fails.
+    return raw.slice(0, 10);
+}
+exports.formatCommitterDate = formatCommitterDate;
+/**
+ * Re-attribute a squash commit to a single package.
+ *
+ * A GitHub squash collapses a PR's commits into one, so conventional-changelog
+ * — which keys a commit to a package by the files it touched — would render
+ * that single commit's *entire* concatenated message (breaking-change footers
+ * and all) into the changelog of every package the PR touched. This rebuilds
+ * the per-package view from the PR's pre-squash commits: keep only the
+ * sub-commits whose files map to `packageName`, re-parse each one on its own
+ * (so unrelated bodies and `Co-Authored-By` trailers never bleed in), and
+ * stamp the squash commit's identity so links still resolve to the merged
+ * commit and PR.
+ *
+ * @returns the parsed commits to emit for this package. Empty when no
+ *   sub-commit touches it (the writer then renders a bump-only entry).
+ */
+function decomposeForPackage({ squash, subCommits, packageName, packagePaths, parserOpts, prNumber, repoRelativePrefix = '', }) {
+    const emitted = [];
+    for (const sub of subCommits) {
+        const files = (0, working_directory_1.toWorkspaceRelativePaths)(sub.files, repoRelativePrefix);
+        if (!(0, files_to_packages_1.filesToPackages)(files, packagePaths).has(packageName))
+            continue;
+        const parsed = conventionalCommitsParser.sync(sub.message, parserOpts);
+        // Identity comes from the squash commit that actually landed on the
+        // default branch — the pre-squash SHAs are unreachable after merge.
+        parsed.hash = squash.hash;
+        parsed.committerDate = squash.committerDate;
+        parsed.gitTags = squash.gitTags;
+        // The writer renders the (#N) link from a trailing reference in the
+        // subject (GitHub's squash convention). Pre-squash subjects lack it, so
+        // append it unless the author already wrote one.
+        if (typeof parsed.subject === 'string' && !PR_REF_RE.test(parsed.subject)) {
+            parsed.subject = `${parsed.subject} (#${prNumber})`;
+        }
+        emitted.push(parsed);
+    }
+    return emitted;
+}
+exports.decomposeForPackage = decomposeForPackage;
 
 
 /***/ }),
@@ -86154,6 +86479,8 @@ const core = __nccwpck_require__(42186);
 const fs_1 = __nccwpck_require__(61716);
 const createConfig = __nccwpck_require__(88761);
 const conventionalChangelogCore = __nccwpck_require__(93064);
+const changelog_transform_1 = __nccwpck_require__(97294);
+const errors_1 = __nccwpck_require__(62579);
 const EOL = '\n';
 const BLANK_LINE = EOL + EOL;
 const COMMIT_GUIDELINE = 'See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.';
@@ -86182,7 +86509,57 @@ async function readExistingChangelog(packageDir) {
         : contents.slice(headerIndex + COMMIT_GUIDELINE.length + BLANK_LINE.length);
     return [changelogPath, contentsWithoutHeader];
 }
-async function updateChangelog(packageDir) {
+/**
+ * Build the `options.transform` hook for conventional-changelog-core. Core
+ * invokes it once per commit in the changelog range (with the through-stream
+ * as `this`), and a transform may emit any number of commits via `this.push`.
+ * We use that to swap each squash commit for the subset of its pre-squash
+ * commits that actually touched this package — see {@link decomposeForPackage}.
+ */
+function makePerPackageTransform({ packageName, parserOpts, packagePaths, repoRelativePrefix, loadPrCommits, }) {
+    return function (commit, cb) {
+        const push = this.push.bind(this);
+        void (async () => {
+            // Reproduce the one side effect of core's default transform that we are
+            // replacing: the release-header date is derived from committerDate. Work
+            // on a copy rather than mutating the streamed commit in place.
+            const squash = commit.committerDate
+                ? { ...commit, committerDate: (0, changelog_transform_1.formatCommitterDate)(commit.committerDate) }
+                : commit;
+            const prNumber = (0, changelog_transform_1.extractPrNumber)(squash.header ?? squash.subject);
+            if (prNumber == null) {
+                // Not a squash merge (direct push, custom merge strategy): there is
+                // nothing to decompose, so keep the commit as core parsed it.
+                push(squash);
+                return;
+            }
+            let subCommits;
+            try {
+                subCommits = await loadPrCommits(prNumber);
+            }
+            catch (error) {
+                core.warning(`changelog: could not load commits for PR #${prNumber} (${(0, errors_1.unwrapErrorMessage)(error, 'unknown error')}); keeping the squash commit as-is`);
+                push(squash);
+                return;
+            }
+            const emitted = (0, changelog_transform_1.decomposeForPackage)({
+                squash,
+                subCommits,
+                packageName,
+                packagePaths,
+                parserOpts,
+                prNumber,
+                repoRelativePrefix,
+            });
+            if (emitted.length === 0) {
+                core.debug(`changelog: PR #${prNumber} touched ${packageName} but no pre-squash commit attributed to it; omitting`);
+            }
+            for (const entry of emitted)
+                push(entry);
+        })().then(() => cb(), (error) => cb(error));
+    };
+}
+async function updateChangelog(packageDir, attribution) {
     const config = await createConfig();
     core.debug(JSON.stringify(config));
     const packageJson = await (0, fs_1.readJson)(path.join(packageDir, 'package.json'), {
@@ -86196,7 +86573,14 @@ async function updateChangelog(packageDir) {
         config: config.conventionalChangelog,
         lernaPackage: packageJson.name,
     };
-    const gitRawCommitsOpts = Object.assign({}, options.config.gitRawCommitsOpts, {
+    if (attribution) {
+        options.transform = makePerPackageTransform({
+            packageName: packageJson.name,
+            parserOpts: config.parserOpts,
+            ...attribution,
+        });
+    }
+    const gitRawCommitsOpts = Object.assign({}, config.conventionalChangelog?.gitRawCommitsOpts, {
         path: packageDir,
     });
     const changelogStream = conventionalChangelogCore(options, {}, gitRawCommitsOpts);
@@ -86237,6 +86621,14 @@ function versionPackages({ extraArgs, versionStrategy }) {
         '--no-private',
         '--force-publish',
     ];
+    // With --conventional-commits lerna would write CHANGELOG.md files itself,
+    // using the same squash-blind logic that leaks one package's breaking footer
+    // into every package the commit touched. Suppress it and let this action
+    // generate changelogs with per-package attribution (see updateChangelog).
+    // Static strategies never write changelogs, so the flag is only needed here.
+    if (versionStrategy === strategy_1.VersionStrategy.ConventionalCommits) {
+        args.push('--no-changelog');
+    }
     if (extraArgs) {
         args.push(...extraArgs.split(' '));
     }
@@ -97239,6 +97631,7 @@ var exports = __webpack_exports__;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __nccwpck_require__(42186);
 const github = __nccwpck_require__(95438);
+const fs = __nccwpck_require__(57147);
 const constants_1 = __nccwpck_require__(69042);
 const normalize_packages_1 = __nccwpck_require__(22581);
 const git_1 = __nccwpck_require__(88682);
@@ -97258,6 +97651,8 @@ const errors_1 = __nccwpck_require__(62579);
 const assert = __nccwpck_require__(39491);
 const github_1 = __nccwpck_require__(1225);
 const working_directory_1 = __nccwpck_require__(48417);
+const lerna_utils_1 = __nccwpck_require__(64801);
+const pr_commits_1 = __nccwpck_require__(66334);
 if (require.main === require.cache[eval('__filename')]) {
     version().catch((error) => {
         if (error.stack) {
@@ -97267,7 +97662,7 @@ if (require.main === require.cache[eval('__filename')]) {
     });
 }
 async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), workingDirectory = core.getInput(constants_1.Input.Path), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), bumpsRaw = core.getInput(constants_1.Input.Bumps), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), baseBranch = core.getInput(constants_1.Input.BaseBranch), formatCommand = core.getInput(constants_1.Input.FormatCommand), } = {}) {
-    const { repoRoot } = (0, working_directory_1.applyWorkingDirectory)(workingDirectory);
+    const { repoRoot, repoRelativePrefix } = (0, working_directory_1.applyWorkingDirectory)(workingDirectory);
     const bumps = (0, parse_bumps_1.parseBumps)(bumpsRaw);
     let narrowedStrategy = null;
     if (!bumps) {
@@ -97337,16 +97732,29 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
     core.info('Deleting previous tags and cleaning up working directory');
     (0, git_1.deleteTags)(tags);
     (0, git_1.cleanup)();
-    const usedStaticOrExplicit = bumps
-        ? true
-        : narrowedStrategy !== strategy_1.VersionStrategy.ConventionalCommits;
-    if (usedStaticOrExplicit) {
-        core.info(`Explicit / static bump used. Trying to generate changelogs manually.`);
-        await Promise.all(packages.map((packageDir) => (0, update_changelog_1.default)(packageDir)));
-        (0, format_1.formatPackageFiles)({ formatCommand, packages });
-        (0, git_1.add)(packages);
-        (0, git_1.commit)({ message: 'chore: update changelogs' });
-    }
+    // This action always generates changelogs itself now: the explicit-`bumps`
+    // and static paths never had lerna write them, and the conventional-commits
+    // path runs lerna with --no-changelog (see versionPackages) for the same
+    // reason. A single squash commit can span several packages, so re-attribute
+    // each commit to its package by file path instead of letting
+    // conventional-changelog copy the whole squash message (breaking-change
+    // footers and all) into every touched package's changelog.
+    core.info('Generating changelogs');
+    const packagePaths = await (0, lerna_utils_1.getPathsByPackageNames)({ filesystem: fs });
+    const prCommitCache = new Map();
+    const loadPrCommits = (prNumber) => {
+        let cached = prCommitCache.get(prNumber);
+        if (!cached) {
+            cached = (0, pr_commits_1.fetchPrCommitsWithFiles)({ client, repo, prNumber });
+            prCommitCache.set(prNumber, cached);
+        }
+        return cached;
+    };
+    const attribution = { packagePaths, repoRelativePrefix, loadPrCommits };
+    await Promise.all(packages.map((packageDir) => (0, update_changelog_1.default)(packageDir, attribution)));
+    (0, format_1.formatPackageFiles)({ formatCommand, packages });
+    (0, git_1.add)(packages);
+    (0, git_1.commit)({ message: 'chore: update changelogs' });
     core.info('Reverting changes to dependencies bumped but not included in release');
     await (0, revert_unwanted_dependency_changes_1.default)({ packages, previousPackageContents });
     core.info(`Git status before lockfile refresh:\n${(0, git_1.getStatusShort)() || '(clean)'}`);

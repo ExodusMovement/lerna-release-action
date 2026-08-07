@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
+import * as fs from 'fs'
 import { Input, RELEASE_PR_LABEL } from './constants'
 import normalizePackages from './version/normalize-packages'
 import {
@@ -29,13 +30,15 @@ import {
   validateAllowedStrategies,
   VersionStrategy,
 } from './version/strategy'
-import updateChangelog from './version/update-changelog'
+import updateChangelog, { ChangelogAttribution } from './version/update-changelog'
 import closePreviousPrs from './version/close-previous-prs'
 import { formatPackageFiles } from './utils/format'
 import { unwrapErrorMessage } from './utils/errors'
 import * as assert from 'assert'
 import { createSignedCommit, getDefaultBranch } from './utils/github'
 import { applyWorkingDirectory } from './utils/working-directory'
+import { getPathsByPackageNames } from '@exodus/lerna-utils'
+import { CommitWithFiles, fetchPrCommitsWithFiles } from './utils/pr-commits'
 
 if (require.main === module) {
   version().catch((error: Error) => {
@@ -61,7 +64,7 @@ export default async function version({
   baseBranch = core.getInput(Input.BaseBranch),
   formatCommand = core.getInput(Input.FormatCommand),
 } = {}) {
-  const { repoRoot } = applyWorkingDirectory(workingDirectory)
+  const { repoRoot, repoRelativePrefix } = applyWorkingDirectory(workingDirectory)
 
   const bumps = parseBumps(bumpsRaw)
   let narrowedStrategy: VersionStrategy | null = null
@@ -156,16 +159,32 @@ export default async function version({
   deleteTags(tags)
   cleanup()
 
-  const usedStaticOrExplicit = bumps
-    ? true
-    : narrowedStrategy !== VersionStrategy.ConventionalCommits
-  if (usedStaticOrExplicit) {
-    core.info(`Explicit / static bump used. Trying to generate changelogs manually.`)
-    await Promise.all(packages.map((packageDir) => updateChangelog(packageDir)))
-    formatPackageFiles({ formatCommand, packages })
-    add(packages)
-    commit({ message: 'chore: update changelogs' })
+  // This action always generates changelogs itself now: the explicit-`bumps`
+  // and static paths never had lerna write them, and the conventional-commits
+  // path runs lerna with --no-changelog (see versionPackages) for the same
+  // reason. A single squash commit can span several packages, so re-attribute
+  // each commit to its package by file path instead of letting
+  // conventional-changelog copy the whole squash message (breaking-change
+  // footers and all) into every touched package's changelog.
+  core.info('Generating changelogs')
+  const packagePaths = await getPathsByPackageNames({ filesystem: fs })
+  const prCommitCache = new Map<number, Promise<CommitWithFiles[]>>()
+  const loadPrCommits = (prNumber: number) => {
+    let cached = prCommitCache.get(prNumber)
+    if (!cached) {
+      cached = fetchPrCommitsWithFiles({ client, repo, prNumber })
+      prCommitCache.set(prNumber, cached)
+    }
+
+    return cached
   }
+
+  const attribution: ChangelogAttribution = { packagePaths, repoRelativePrefix, loadPrCommits }
+
+  await Promise.all(packages.map((packageDir) => updateChangelog(packageDir, attribution)))
+  formatPackageFiles({ formatCommand, packages })
+  add(packages)
+  commit({ message: 'chore: update changelogs' })
 
   core.info('Reverting changes to dependencies bumped but not included in release')
   await revertUnwantedDependencyChanges({ packages, previousPackageContents })

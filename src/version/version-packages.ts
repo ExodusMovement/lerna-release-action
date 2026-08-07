@@ -24,6 +24,15 @@ function versionPackages({ extraArgs, versionStrategy }: Params) {
     '--force-publish',
   ]
 
+  // With --conventional-commits lerna would write CHANGELOG.md files itself,
+  // using the same squash-blind logic that leaks one package's breaking footer
+  // into every package the commit touched. Suppress it and let this action
+  // generate changelogs with per-package attribution (see updateChangelog).
+  // Static strategies never write changelogs, so the flag is only needed here.
+  if (versionStrategy === VersionStrategy.ConventionalCommits) {
+    args.push('--no-changelog')
+  }
+
   if (extraArgs) {
     args.push(...extraArgs.split(' '))
   }
