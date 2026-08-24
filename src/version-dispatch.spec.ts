@@ -163,6 +163,37 @@ describe('versionDispatch', () => {
     })
   })
 
+  it('dispatches major when the PR title is breaking but its commits are not', async () => {
+    github.context.payload = {
+      pull_request: {
+        title: 'feat(atoms)!: add the secure details API',
+        number: 123,
+        merged: true,
+        user: { login: 'brucewayne' },
+        base: { ref },
+        labels: [],
+      },
+    }
+
+    setupPaginate(
+      [{ sha: 'aaa1111', commit: { message: 'feat(atoms): add the secure details API' } }],
+      { aaa1111: [{ filename: 'libraries/atoms/index.ts' }] }
+    )
+
+    await versionDispatch({ filesystem: fs as never, isReleased: () => true })
+
+    expect(client.rest.actions.createWorkflowDispatch).toHaveBeenCalledWith({
+      ...repo,
+      ref,
+      workflow_id: workflowId,
+      inputs: {
+        assignee: 'brucewayne',
+        packages: '@exodus/atoms',
+        bumps: JSON.stringify({ '@exodus/atoms': 'major' }),
+      },
+    })
+  })
+
   it('rebases repo-root-relative commit files into a subdirectory workspace before attribution', async () => {
     setupPaginate(
       [
