@@ -35,7 +35,7 @@ inputs:
 
 outputs:
   bumps:
-    description: 'JSON-encoded map from package name to bump level, computed from the PR commits.'
+    description: "JSON-encoded map from package name to bump level, computed from the PR's commits and title."
   packages:
     description: 'Comma-separated list of workspace package names with a non-empty bump.'
 

@@ -68,6 +68,46 @@ describe('aggregateBumps', () => {
     expect(bumps).toEqual({})
   })
 
+  it('promotes every released package to major for a breaking PR title', () => {
+    const bumps = aggregateBumps({
+      commits: [
+        {
+          sha: 'aaa1111',
+          message: 'feat(atoms): add the secure details API',
+          files: ['libraries/atoms/index.ts'],
+        },
+        {
+          sha: 'bbb2222',
+          message: 'fix(balances): tidy',
+          files: ['modules/balances/x.ts'],
+        },
+      ],
+      packagePaths,
+      prTitle: 'feat(atoms)!: add the secure details API',
+    })
+    expect(bumps).toEqual({ '@exodus/atoms': 'major', '@exodus/balances': 'major' })
+  })
+
+  it('leaves the release set to the commits even for a breaking PR title', () => {
+    const bumps = aggregateBumps({
+      commits: [
+        {
+          sha: 'aaa1111',
+          message: 'feat(atoms): new helper',
+          files: ['libraries/atoms/index.ts'],
+        },
+        {
+          sha: 'bbb2222',
+          message: 'chore(wallet): tidy',
+          files: ['libraries/wallet/x.ts'],
+        },
+      ],
+      packagePaths,
+      prTitle: 'feat(atoms)!: new helper',
+    })
+    expect(bumps).toEqual({ '@exodus/atoms': 'major' })
+  })
+
   it('falls back to the PR title when no commit carries a bump', () => {
     const bumps = aggregateBumps({
       commits: [

@@ -31501,7 +31501,7 @@ function renderPreviewComment(rows) {
         }),
         '',
         ...(hasFirstRelease ? [FIRST_RELEASE_NOTE, ''] : []),
-        '_Computed by [`lerna-release-action/version-dispatch`](https://github.com/ExodusMovement/lerna-release-action) from per-commit file attribution. Re-posted on every push so the latest preview is always at the end of this thread._',
+        '_Computed by [`lerna-release-action/version-dispatch`](https://github.com/ExodusMovement/lerna-release-action) from per-commit file attribution, with a breaking PR title forcing `major`. Re-posted on every push so the latest preview is always at the end of this thread._',
     ];
     return lines.join('\n');
 }
@@ -42266,6 +42266,10 @@ if (require.main === require.cache[eval('__filename')]) {
  * entry for any package. Releasing on its commits would publish versions
  * whose changelog reads "Version bump only".
  *
+ * Breaking title — a `!` in the title promotes every package the commits
+ * selected to `major`, whatever level those commits carry. See
+ * {@link promoteToMajor}.
+ *
  * Title fallback — if no commit carries a release-worthy type, parse the
  * PR title once and apply that bump to every workspace touched anywhere
  * in the PR. Preserves the long-standing PR-title-is-the-release-level
@@ -42490,9 +42494,12 @@ function aggregateBumps({ commits, packagePaths, prTitle, }) {
         if (bumps[name] === bumps_1.BUMP_NONE)
             delete bumps[name];
     }
-    if (Object.keys(bumps).length > 0)
-        return bumps;
     const titleBump = (0, bumps_1.bumpFromMessage)(prTitle);
+    if (Object.keys(bumps).length > 0) {
+        if (titleBump === bumps_1.BUMP_MAJOR)
+            return promoteToMajor({ bumps, prTitle });
+        return bumps;
+    }
     if (titleBump !== bumps_1.BUMP_NONE && touchedAcrossPr.size > 0) {
         core.info(`no per-commit bump found; falling back to PR title "${prTitle}" → ${titleBump} for [${[...touchedAcrossPr].join(', ')}]`);
         for (const name of touchedAcrossPr)
@@ -42502,6 +42509,27 @@ function aggregateBumps({ commits, packagePaths, prTitle, }) {
     return bumps;
 }
 exports.aggregateBumps = aggregateBumps;
+/**
+ * Raise every package selected for release to `major`. Called only for a
+ * breaking PR title, whose marker outranks the levels the PR's own commits
+ * carry: the title is what a squash merge lands on the default branch, so it
+ * is what the generated changelog and every consumer read. A commit that
+ * omits the marker would otherwise ship an incompatible version under a
+ * range that still resolves to it.
+ *
+ * The release set is left alone: which packages release stays the commits'
+ * decision, since only they carry the per-package file attribution.
+ */
+function promoteToMajor({ bumps, prTitle, }) {
+    const promoted = {};
+    for (const [name, bump] of Object.entries(bumps)) {
+        if (bump !== bumps_1.BUMP_MAJOR) {
+            core.info(`promote ${name} to major (was ${bump}): breaking PR title "${prTitle}"`);
+        }
+        promoted[name] = bumps_1.BUMP_MAJOR;
+    }
+    return promoted;
+}
 function firstLine(message) {
     return message.split(/\r?\n/, 1)[0] ?? '';
 }

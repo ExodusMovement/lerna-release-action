@@ -157,7 +157,7 @@ export function renderPreviewComment(rows: PreviewRow[]): string {
     }),
     '',
     ...(hasFirstRelease ? [FIRST_RELEASE_NOTE, ''] : []),
-    '_Computed by [`lerna-release-action/version-dispatch`](https://github.com/ExodusMovement/lerna-release-action) from per-commit file attribution. Re-posted on every push so the latest preview is always at the end of this thread._',
+    '_Computed by [`lerna-release-action/version-dispatch`](https://github.com/ExodusMovement/lerna-release-action) from per-commit file attribution, with a breaking PR title forcing `major`. Re-posted on every push so the latest preview is always at the end of this thread._',
   ]
   return lines.join('\n')
 }

@@ -128,12 +128,27 @@ produce a changelog entry, so releasing on the PR's commits would publish a
 version whose changelog reads `**Note:** Version bump only for package …`.
 
 To release from a PR, give it a `feat:`, `fix:`, `perf:` or breaking (`!`)
-title. Commit-level types still decide _which_ packages bump and by how much;
-the title decides _whether_ anything releases at all.
+title. The title decides _whether_ anything releases at all, and commit-level
+types decide _which_ packages bump. The commits also decide by how much, unless
+the title is breaking.
 
 Because the title is part of the gate, include `edited` in the workflow's
 `types:` — otherwise retitling a PR leaves a stale preview comment (or a
 missing one) until the next push.
+
+#### A breaking PR title releases a major
+
+A `!` in the title promotes every package the PR releases to `major`, whatever
+level its individual commits carry. Squash merging is again the reason: the
+title is the commit that lands on the default branch, so its `!` is what the
+generated changelog and every consumer see. A `feat(x)!:` title over a plain
+`feat(x):` commit would otherwise cut a minor whose changelog carries a
+`BREAKING CHANGES` section, and consumers would resolve the incompatible
+version through a range that still matches it.
+
+The title never widens the release set. A package that no releasing commit
+touched stays unreleased, because only the commits carry the per-package file
+attribution.
 
 ### Running from a subdirectory
 
