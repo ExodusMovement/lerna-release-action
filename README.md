@@ -52,6 +52,18 @@ To use it, set the `auto-merge` input of the action to `true`.
     auto-merge: true
 ```
 
+#### Labelling the release PR
+
+The Version action always labels the release PR with `publish-on-merge` and one label per released package. To apply additional labels, pass them as a comma-separated string via the `labels` input.
+
+```yaml
+- uses: ExodusMovement/lerna-release-action/version@master
+  name: Version
+  with:
+    # other inputs here
+    labels: release,automated
+```
+
 ### Publish workflow
 
 ```yaml

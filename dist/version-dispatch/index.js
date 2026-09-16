@@ -31175,6 +31175,7 @@ var Input;
     Input["RequestReviewers"] = "request-reviewers";
     Input["BaseBranch"] = "base-branch";
     Input["FormatCommand"] = "format-command";
+    Input["Labels"] = "labels";
 })(Input = exports.Input || (exports.Input = {}));
 var PublishInput;
 (function (PublishInput) {

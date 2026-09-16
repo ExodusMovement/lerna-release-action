@@ -1,4 +1,18 @@
-import { truncate } from './strings'
+import { splitCsv, truncate } from './strings'
+
+describe('splitCsv', () => {
+  it('should split on commas and trim whitespace', () => {
+    expect(splitCsv(' release , automated,ci ')).toEqual(['release', 'automated', 'ci'])
+  })
+
+  it('should drop empty entries', () => {
+    expect(splitCsv('release,,ci,')).toEqual(['release', 'ci'])
+  })
+
+  it('should return an empty array for an empty string', () => {
+    expect(splitCsv('')).toEqual([])
+  })
+})
 
 describe('truncate', () => {
   it('should keep full words split by punctuation', () => {

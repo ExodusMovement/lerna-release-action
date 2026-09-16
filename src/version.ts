@@ -36,6 +36,7 @@ import { unwrapErrorMessage } from './utils/errors'
 import * as assert from 'assert'
 import { createSignedCommit, getDefaultBranch } from './utils/github'
 import { applyWorkingDirectory } from './utils/working-directory'
+import { splitCsv } from './utils/strings'
 
 if (require.main === module) {
   version().catch((error: Error) => {
@@ -60,6 +61,7 @@ export default async function version({
   assignee = core.getInput(Input.Assignee),
   baseBranch = core.getInput(Input.BaseBranch),
   formatCommand = core.getInput(Input.FormatCommand),
+  labelsCsv = core.getInput(Input.Labels),
 } = {}) {
   const { repoRoot } = applyWorkingDirectory(workingDirectory)
 
@@ -214,7 +216,7 @@ export default async function version({
     packages,
     tags,
     branch,
-    labels: [RELEASE_PR_LABEL],
+    labels: [RELEASE_PR_LABEL, ...splitCsv(labelsCsv)],
     assignees: [assignee],
     autoMerge,
     requestReviewers,

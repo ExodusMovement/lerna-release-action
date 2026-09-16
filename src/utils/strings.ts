@@ -30,6 +30,13 @@ export function truncate(text: string, maxLen: number) {
   return `${text.slice(0, splitAt)}${ellipsis}`
 }
 
+export function splitCsv(text: string): string[] {
+  return text
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
 export function pluralize(word: string, count: number) {
   if (count === 1) return word
 
