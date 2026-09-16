@@ -85141,6 +85141,7 @@ var Input;
     Input["RequestReviewers"] = "request-reviewers";
     Input["BaseBranch"] = "base-branch";
     Input["FormatCommand"] = "format-command";
+    Input["Labels"] = "labels";
 })(Input = exports.Input || (exports.Input = {}));
 var PublishInput;
 (function (PublishInput) {
@@ -85160,6 +85161,28 @@ var VersionDispatchInput;
     VersionDispatchInput["PrNumber"] = "pr-number";
 })(VersionDispatchInput = exports.VersionDispatchInput || (exports.VersionDispatchInput = {}));
 exports.RELEASE_PR_LABEL = 'publish-on-merge';
+
+
+/***/ }),
+
+/***/ 58873:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.joinNatural = exports.unique = void 0;
+function unique(array) {
+    return array.filter((e, i) => array.indexOf(e) === i);
+}
+exports.unique = unique;
+function joinNatural(array) {
+    if (array.length === 1)
+        return array[0]; // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    const [last] = array.slice(-1);
+    return array.slice(0, -1).join(', ') + `, and ${last}`;
+}
+exports.joinNatural = joinNatural;
 
 
 /***/ }),
@@ -85679,7 +85702,7 @@ exports.spawnSync = spawnSync;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.pluralize = exports.truncate = exports.toKebabCase = void 0;
+exports.pluralize = exports.splitCsv = exports.truncate = exports.toKebabCase = void 0;
 function toKebabCase(text) {
     return text.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
 }
@@ -85703,6 +85726,13 @@ function truncate(text, maxLen) {
     return `${text.slice(0, splitAt)}${ellipsis}`;
 }
 exports.truncate = truncate;
+function splitCsv(text) {
+    return text
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+}
+exports.splitCsv = splitCsv;
 function pluralize(word, count) {
     if (count === 1)
         return word;
@@ -85803,11 +85833,12 @@ exports["default"] = closePreviousPrs;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const github_1 = __nccwpck_require__(1225);
 const strings_1 = __nccwpck_require__(38927);
+const arrays_1 = __nccwpck_require__(58873);
 const path = __nccwpck_require__(71017);
 async function createPullRequest({ client, tags, repo, base, branch, packages, labels, assignees, autoMerge, draft, requestReviewers, }) {
     const packageNames = packages.map((it) => path.basename(it));
     const packageList = packageNames.map((it) => `- ${it}`).join('\n');
-    labels = [...packageNames, ...(labels ?? [])];
+    labels = (0, arrays_1.unique)([...packageNames, ...(labels ?? [])]);
     return (0, github_1.createPullRequest)({
         repo,
         client,
@@ -97258,6 +97289,7 @@ const errors_1 = __nccwpck_require__(62579);
 const assert = __nccwpck_require__(39491);
 const github_1 = __nccwpck_require__(1225);
 const working_directory_1 = __nccwpck_require__(48417);
+const strings_1 = __nccwpck_require__(38927);
 if (require.main === require.cache[eval('__filename')]) {
     version().catch((error) => {
         if (error.stack) {
@@ -97266,7 +97298,7 @@ if (require.main === require.cache[eval('__filename')]) {
         core.setFailed(String(error.message));
     });
 }
-async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), workingDirectory = core.getInput(constants_1.Input.Path), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), bumpsRaw = core.getInput(constants_1.Input.Bumps), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), baseBranch = core.getInput(constants_1.Input.BaseBranch), formatCommand = core.getInput(constants_1.Input.FormatCommand), } = {}) {
+async function version({ packagesCsv = core.getInput(constants_1.Input.Packages, { required: true }), token = core.getInput(constants_1.Input.GithubToken, { required: true }), workingDirectory = core.getInput(constants_1.Input.Path), versionExtraArgs = core.getInput(constants_1.Input.VersionExtraArgs), versionStrategy = core.getInput(constants_1.Input.VersionStrategy), bumpsRaw = core.getInput(constants_1.Input.Bumps), autoMerge = core.getBooleanInput(constants_1.Input.AutoMerge), draft = core.getBooleanInput(constants_1.Input.Draft), requestReviewers = core.getBooleanInput(constants_1.Input.RequestReviewers), assignee = core.getInput(constants_1.Input.Assignee), baseBranch = core.getInput(constants_1.Input.BaseBranch), formatCommand = core.getInput(constants_1.Input.FormatCommand), labelsCsv = core.getInput(constants_1.Input.Labels), } = {}) {
     const { repoRoot } = (0, working_directory_1.applyWorkingDirectory)(workingDirectory);
     const bumps = (0, parse_bumps_1.parseBumps)(bumpsRaw);
     let narrowedStrategy = null;
@@ -97390,7 +97422,7 @@ async function version({ packagesCsv = core.getInput(constants_1.Input.Packages,
         packages,
         tags,
         branch,
-        labels: [constants_1.RELEASE_PR_LABEL],
+        labels: [constants_1.RELEASE_PR_LABEL, ...(0, strings_1.splitCsv)(labelsCsv)],
         assignees: [assignee],
         autoMerge,
         requestReviewers,

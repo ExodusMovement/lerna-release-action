@@ -30279,6 +30279,7 @@ var Input;
     Input["RequestReviewers"] = "request-reviewers";
     Input["BaseBranch"] = "base-branch";
     Input["FormatCommand"] = "format-command";
+    Input["Labels"] = "labels";
 })(Input = exports.Input || (exports.Input = {}));
 var PublishInput;
 (function (PublishInput) {
@@ -30802,7 +30803,7 @@ exports.spawnSync = spawnSync;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.pluralize = exports.truncate = exports.toKebabCase = void 0;
+exports.pluralize = exports.splitCsv = exports.truncate = exports.toKebabCase = void 0;
 function toKebabCase(text) {
     return text.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
 }
@@ -30826,6 +30827,13 @@ function truncate(text, maxLen) {
     return `${text.slice(0, splitAt)}${ellipsis}`;
 }
 exports.truncate = truncate;
+function splitCsv(text) {
+    return text
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+}
+exports.splitCsv = splitCsv;
 function pluralize(word, count) {
     if (count === 1)
         return word;
