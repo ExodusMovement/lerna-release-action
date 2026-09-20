@@ -7,6 +7,7 @@ import { getPublishedTags } from './publish/get-published-tags'
 import { spawnSync } from 'node:child_process'
 import { checkoutPr } from './utils/git'
 import { applyWorkingDirectory } from './utils/working-directory'
+import { detectPackageManager } from './utils/package-manager'
 
 export async function publish() {
   applyWorkingDirectory(core.getInput(Input.Path))
@@ -60,7 +61,10 @@ export async function publish() {
     lernaArgs.push('--dist-tag', distTag)
   }
 
-  const { stdout, stderr, status } = spawnSync('npx', lernaArgs, {
+  // Validate the pnpm workspace before Lerna rewrites manifests for publish hooks.
+  const command = detectPackageManager()?.command === 'pnpm' ? 'pnpm' : 'npx'
+  const args = command === 'pnpm' ? ['exec', ...lernaArgs] : lernaArgs
+  const { stdout, stderr, status } = spawnSync(command, args, {
     encoding: 'utf8',
     maxBuffer: Number.MAX_SAFE_INTEGER,
   })

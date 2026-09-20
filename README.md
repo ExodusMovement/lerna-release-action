@@ -96,6 +96,8 @@ jobs:
 
 When refreshing the lockfile after selective versioning, the action prefers the repository's declared package manager from the root `package.json#packageManager` or `lerna.json#npmClient`. If neither is present, it falls back to lockfile detection.
 
+Publishing uses the same detection and runs Lerna through `pnpm exec` in pnpm workspaces, keeping `npx` for other workspaces. This lets pnpm validate installed dependencies before Lerna rewrites workspace references for packing. Publish hooks then inherit pnpm's validated execution context instead of checking the temporary manifests against the original lockfile. Dependency verification and publish hooks remain enabled.
+
 ### Version dispatch workflow
 
 Automatically start versioning of packages when a PR is merged. Requires using `ExodusMovement/lerna-package-name-action` to label PRs, as these package labels will be used to determine the packages to be versioned.
