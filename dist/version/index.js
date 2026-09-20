@@ -85615,7 +85615,7 @@ exports.flagsAsArguments = flagsAsArguments;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.updateLockfile = void 0;
+exports.updateLockfile = exports.detectPackageManager = void 0;
 const fs = __nccwpck_require__(57147);
 const core = __nccwpck_require__(42186);
 const process_1 = __nccwpck_require__(69239);
@@ -85646,7 +85646,7 @@ function readJson(relativePath, filesystem) {
 function parsePackageManager(packageManager) {
     return packageManager?.match(/^(pnpm|yarn|npm)(?:@|$)/)?.[1];
 }
-function detectPackageManager(filesystem) {
+function detectPackageManager(filesystem = fs) {
     const rootPackageJson = readJson('package.json', filesystem);
     const lernaJson = readJson('lerna.json', filesystem);
     const configuredPackageManager = parsePackageManager(rootPackageJson?.packageManager) ?? lernaJson?.npmClient;
@@ -85659,6 +85659,7 @@ function detectPackageManager(filesystem) {
         }
     }
 }
+exports.detectPackageManager = detectPackageManager;
 function updateLockfile({ filesystem = fs } = {}) {
     const packageManager = detectPackageManager(filesystem);
     if (!packageManager) {

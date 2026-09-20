@@ -30773,6 +30773,70 @@ exports.flagsAsArguments = flagsAsArguments;
 
 /***/ }),
 
+/***/ 2435:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.updateLockfile = exports.detectPackageManager = void 0;
+const fs = __nccwpck_require__(7147);
+const core = __nccwpck_require__(2186);
+const process_1 = __nccwpck_require__(9239);
+const packageManagers = {
+    yarn: { lockfile: 'yarn.lock', command: 'yarn', args: ['--no-immutable'] },
+    pnpm: {
+        lockfile: 'pnpm-lock.yaml',
+        command: 'pnpm',
+        args: ['install', '--frozen-lockfile', 'false'],
+    },
+    npm: { lockfile: 'package-lock.json', command: 'npm', args: ['install'] },
+};
+const lockfileCommands = {
+    'yarn.lock': { command: 'yarn', args: ['--no-immutable'] },
+    'pnpm-lock.yaml': { command: 'pnpm', args: ['install', '--frozen-lockfile', 'false'] },
+    'package-lock.json': { command: 'npm', args: ['install'] },
+};
+function readJson(relativePath, filesystem) {
+    try {
+        return JSON.parse(filesystem.readFileSync(relativePath, 'utf8'));
+    }
+    catch (error) {
+        if (error.code !== 'ENOENT') {
+            // Ignore malformed JSON and non-ENOENT read failures to preserve prior behavior.
+        }
+    }
+}
+function parsePackageManager(packageManager) {
+    return packageManager?.match(/^(pnpm|yarn|npm)(?:@|$)/)?.[1];
+}
+function detectPackageManager(filesystem = fs) {
+    const rootPackageJson = readJson('package.json', filesystem);
+    const lernaJson = readJson('lerna.json', filesystem);
+    const configuredPackageManager = parsePackageManager(rootPackageJson?.packageManager) ?? lernaJson?.npmClient;
+    if (configuredPackageManager) {
+        return packageManagers[configuredPackageManager];
+    }
+    for (const [lockfile, { command, args }] of Object.entries(lockfileCommands)) {
+        if (filesystem.existsSync(lockfile)) {
+            return { command, args };
+        }
+    }
+}
+exports.detectPackageManager = detectPackageManager;
+function updateLockfile({ filesystem = fs } = {}) {
+    const packageManager = detectPackageManager(filesystem);
+    if (!packageManager) {
+        throw new Error('Unable to determine package manager: expected packageManager/npmClient or a supported lockfile.');
+    }
+    core.info(`Refreshing lockfile with ${packageManager.command} ${packageManager.args.join(' ')}`);
+    (0, process_1.spawnSync)(packageManager.command, [...packageManager.args]);
+}
+exports.updateLockfile = updateLockfile;
+
+
+/***/ }),
+
 /***/ 9239:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -32843,6 +32907,7 @@ const get_published_tags_1 = __nccwpck_require__(2999);
 const node_child_process_1 = __nccwpck_require__(7718);
 const git_1 = __nccwpck_require__(8682);
 const working_directory_1 = __nccwpck_require__(8417);
+const package_manager_1 = __nccwpck_require__(2435);
 async function publish() {
     (0, working_directory_1.applyWorkingDirectory)(core.getInput(constants_1.PublishInput.Path));
     const token = core.getInput(constants_1.PublishInput.GithubToken, { required: true });
@@ -32881,7 +32946,10 @@ async function publish() {
     if (distTag) {
         lernaArgs.push('--dist-tag', distTag);
     }
-    const { stdout, stderr, status } = (0, node_child_process_1.spawnSync)('npx', lernaArgs, {
+    // Validate the pnpm workspace before Lerna rewrites manifests for publish hooks.
+    const command = (0, package_manager_1.detectPackageManager)()?.command === 'pnpm' ? 'pnpm' : 'npx';
+    const args = command === 'pnpm' ? ['exec', ...lernaArgs] : lernaArgs;
+    const { stdout, stderr, status } = (0, node_child_process_1.spawnSync)(command, args, {
         encoding: 'utf8',
         maxBuffer: Number.MAX_SAFE_INTEGER,
     });

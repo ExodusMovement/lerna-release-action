@@ -7,6 +7,11 @@ import { when } from 'jest-when'
 import { checkoutPr } from './utils/git'
 import { extractTags } from './publish/extract-tags'
 import { getPublishedTags } from './publish/get-published-tags'
+import { detectPackageManager } from './utils/package-manager'
+
+jest.mock('./utils/package-manager', () => ({
+  detectPackageManager: jest.fn(),
+}))
 
 jest.mock('node:child_process', () => ({
   spawnSync: jest.fn(() => ({ stdout: '', status: 0 })),
@@ -58,6 +63,9 @@ describe('publish', () => {
   })
 
   beforeEach(() => {
+    jest.mocked(detectPackageManager).mockReturnValue(undefined)
+    when(core.getInput).calledWith('dist-tag').mockReturnValue('')
+    jest.mocked(core.getMultilineInput).mockReturnValue([])
     when(getReleasePr)
       .calledWith(
         expect.objectContaining({
@@ -130,6 +138,53 @@ describe('publish', () => {
     await publish()
 
     expect(spawnSync).not.toHaveBeenCalled()
+  })
+
+  test.each(['push', 'workflow_dispatch'])(
+    'runs Lerna through pnpm exec for a pnpm workspace on %s',
+    async (eventName) => {
+      Object.defineProperty(github, 'context', {
+        value: { repo, eventName, ref: 'refs/heads/master', payload: {}, sha: commitSha },
+      })
+      jest.mocked(detectPackageManager).mockReturnValue({
+        command: 'pnpm',
+        args: ['install', '--frozen-lockfile', 'false'],
+      })
+      when(core.getInput).calledWith('dist-tag').mockReturnValue('next')
+
+      await publish()
+
+      expect(spawnSync).toHaveBeenCalledWith(
+        'pnpm',
+        [
+          'exec',
+          'lerna',
+          'publish',
+          'from-package',
+          '--yes',
+          '--no-private',
+          '--summary-file',
+          '--dist-tag',
+          'next',
+        ],
+        expect.objectContaining({ encoding: 'utf8' })
+      )
+    }
+  )
+
+  test.each(['npm', 'yarn'] as const)('keeps npx for a %s workspace', async (command) => {
+    jest.mocked(detectPackageManager).mockReturnValue({
+      command,
+      args: command === 'yarn' ? ['--no-immutable'] : ['install'],
+    })
+
+    await publish()
+
+    expect(spawnSync).toHaveBeenCalledWith(
+      'npx',
+      ['lerna', 'publish', 'from-package', '--yes', '--no-private', '--summary-file'],
+      expect.objectContaining({ encoding: 'utf8' })
+    )
   })
 
   test('publishes if all rulesets are applied', async () => {

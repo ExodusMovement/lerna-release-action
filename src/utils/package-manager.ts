@@ -37,7 +37,7 @@ function parsePackageManager(packageManager?: string) {
     | undefined
 }
 
-function detectPackageManager(filesystem: Filesystem) {
+export function detectPackageManager(filesystem: Filesystem = fs) {
   const rootPackageJson = readJson<{ packageManager?: string }>('package.json', filesystem)
   const lernaJson = readJson<{ npmClient?: keyof typeof packageManagers }>('lerna.json', filesystem)
 
