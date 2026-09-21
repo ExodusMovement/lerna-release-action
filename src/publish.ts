@@ -81,6 +81,16 @@ export async function publish() {
   core.info('Identifying published packages')
   const tags = new Set(extractTags())
 
+  const tag = async (created: string[]) => {
+    if (created.length === 0) return
+    core.info(`Adding tags to commit ${sha}`)
+    await createTags({ client, repo, tags: created, sha })
+  }
+
+  // Tag what lerna reported before the recovery lookup below, so a failure in
+  // recovery can only cost the recovered tags, never the ones lerna confirmed.
+  await tag([...tags])
+
   // On a partial failure lerna aborts before writing its summary file, so the
   // packages it did publish are missing from `extractTags()`. Recover them from
   // npm and tag them anyway — otherwise the missing tags corrupt the next
@@ -88,9 +98,14 @@ export async function publish() {
   // lookup to); tags can be pushed manually there.
   if (status !== 0 && pr) {
     core.info('Publish failed; recovering published packages from npm')
-    for (const tag of await getPublishedTags({ client, repo, prNumber: pr.number })) {
-      tags.add(tag)
+    const published = await getPublishedTags({ client, repo, prNumber: pr.number })
+    const recovered = published.filter((it) => !tags.has(it))
+
+    for (const it of recovered) {
+      tags.add(it)
     }
+
+    await tag(recovered)
   }
 
   if (tags.size === 0) {
@@ -100,9 +115,6 @@ export async function publish() {
 
   const publishedPackages = [...tags].join(',')
   core.notice(`Published the following versions: ${publishedPackages}`)
-
-  core.info(`Adding tags to commit ${sha}`)
-  await createTags({ client, repo, tags: [...tags], sha })
   core.setOutput('published-packages', publishedPackages)
 }
 

@@ -1,5 +1,7 @@
 import * as fs from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import * as core from '@actions/core'
+import retry from 'p-retry'
 
 import { GithubClient } from '../utils/github'
 import { Repo, PackageJson } from '../utils/types'
@@ -22,9 +24,23 @@ type Params = {
 // from npm instead of the summary decouples the published packages from the
 // failed one.
 export async function getPublishedTags({ client, repo, prNumber }: Params): Promise<string[]> {
-  const files = await client.paginate(client.rest.pulls.listFiles, {
-    ...repo,
-    pull_number: prNumber,
+  // The preceding `lerna publish` blocks the process for 30-60s, long enough
+  // for GitHub to close octokit's idle keep-alive socket; the first request
+  // after it fails with `SocketError: other side closed`. Retry like
+  // `createTags` does, so a dead socket costs a round trip instead of the run.
+  const listFiles = () =>
+    client.paginate(client.rest.pulls.listFiles, {
+      ...repo,
+      pull_number: prNumber,
+    })
+
+  const files = await retry(listFiles, {
+    retries: 5,
+    onFailedAttempt: (error) => {
+      core.warning(
+        `Failed to list files of PR #${prNumber}: ${error.message}. There are ${error.retriesLeft} retries left`
+      )
+    },
   })
 
   const manifests = files

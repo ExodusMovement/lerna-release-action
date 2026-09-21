@@ -60,3 +60,16 @@ test('tags only non-private packages whose version is live on npm', async () => 
     expect.anything()
   )
 })
+
+test('retries the pull request file lookup on a transient failure', async () => {
+  const client = makeClient(['packages/errors/package.json'])
+  jest
+    .mocked(client.paginate)
+    .mockRejectedValueOnce(new Error('other side closed'))
+    .mockResolvedValueOnce([{ filename: 'packages/errors/package.json' }])
+
+  const tags = await getPublishedTags({ client, repo, prNumber: 42 })
+
+  expect(tags).toEqual(['@exodus/errors@3.7.1'])
+  expect(client.paginate).toHaveBeenCalledTimes(2)
+})

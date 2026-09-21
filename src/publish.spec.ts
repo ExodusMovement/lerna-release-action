@@ -289,6 +289,27 @@ describe('publish', () => {
     )
   })
 
+  test('tags the summary packages even when recovery from npm fails', async () => {
+    jest.mocked(spawnSync).mockReturnValue({
+      stdout: '',
+      stderr: '',
+      status: 4,
+    } as never)
+
+    // lerna published one package, then aborted and wrote its summary.
+    jest.mocked(extractTags).mockReturnValue(['@exodus/pay-schemas@2.8.0'])
+    jest.mocked(getPublishedTags).mockRejectedValue(new Error('other side closed'))
+
+    await expect(publish()).rejects.toThrow('other side closed')
+
+    expect(createTags).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ['@exodus/pay-schemas@2.8.0'],
+        sha: commitSha,
+      })
+    )
+  })
+
   test('publishes if all rulesets are applied when triggered through workflow dispatch', async () => {
     Object.defineProperty(github, 'context', {
       value: {

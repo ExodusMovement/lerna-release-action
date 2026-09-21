@@ -30341,6 +30341,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getPublishedTags = void 0;
 const fs = __nccwpck_require__(7561);
 const node_child_process_1 = __nccwpck_require__(7718);
+const core = __nccwpck_require__(2186);
+const p_retry_1 = __nccwpck_require__(2548);
 // Recovers the `name@version` tags for packages that actually reached npm by
 // reading the release PR's changed package.json files and checking each against
 // the registry.
@@ -30353,9 +30355,19 @@ const node_child_process_1 = __nccwpck_require__(7718);
 // from npm instead of the summary decouples the published packages from the
 // failed one.
 async function getPublishedTags({ client, repo, prNumber }) {
-    const files = await client.paginate(client.rest.pulls.listFiles, {
+    // The preceding `lerna publish` blocks the process for 30-60s, long enough
+    // for GitHub to close octokit's idle keep-alive socket; the first request
+    // after it fails with `SocketError: other side closed`. Retry like
+    // `createTags` does, so a dead socket costs a round trip instead of the run.
+    const listFiles = () => client.paginate(client.rest.pulls.listFiles, {
         ...repo,
         pull_number: prNumber,
+    });
+    const files = await (0, p_retry_1.default)(listFiles, {
+        retries: 5,
+        onFailedAttempt: (error) => {
+            core.warning(`Failed to list files of PR #${prNumber}: ${error.message}. There are ${error.retriesLeft} retries left`);
+        },
     });
     const manifests = files
         .map((file) => file.filename)
@@ -32961,6 +32973,15 @@ async function publish() {
     core.debug(lernaOutput);
     core.info('Identifying published packages');
     const tags = new Set((0, extract_tags_1.extractTags)());
+    const tag = async (created) => {
+        if (created.length === 0)
+            return;
+        core.info(`Adding tags to commit ${sha}`);
+        await (0, github_1.createTags)({ client, repo, tags: created, sha });
+    };
+    // Tag what lerna reported before the recovery lookup below, so a failure in
+    // recovery can only cost the recovered tags, never the ones lerna confirmed.
+    await tag([...tags]);
     // On a partial failure lerna aborts before writing its summary file, so the
     // packages it did publish are missing from `extractTags()`. Recover them from
     // npm and tag them anyway — otherwise the missing tags corrupt the next
@@ -32968,9 +32989,12 @@ async function publish() {
     // lookup to); tags can be pushed manually there.
     if (status !== 0 && pr) {
         core.info('Publish failed; recovering published packages from npm');
-        for (const tag of await (0, get_published_tags_1.getPublishedTags)({ client, repo, prNumber: pr.number })) {
-            tags.add(tag);
+        const published = await (0, get_published_tags_1.getPublishedTags)({ client, repo, prNumber: pr.number });
+        const recovered = published.filter((it) => !tags.has(it));
+        for (const it of recovered) {
+            tags.add(it);
         }
+        await tag(recovered);
     }
     if (tags.size === 0) {
         core.notice('No new packages versions found. Tagging aborted.');
@@ -32978,8 +33002,6 @@ async function publish() {
     }
     const publishedPackages = [...tags].join(',');
     core.notice(`Published the following versions: ${publishedPackages}`);
-    core.info(`Adding tags to commit ${sha}`);
-    await (0, github_1.createTags)({ client, repo, tags: [...tags], sha });
     core.setOutput('published-packages', publishedPackages);
 }
 exports.publish = publish;
