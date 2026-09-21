@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { getPublishedTags } from './get-published-tags'
 import { GithubClient } from '../utils/github'
 
+jest.mock('@actions/core', () => ({ warning: jest.fn() }))
 jest.mock('node:fs', () => ({ readFileSync: jest.fn() }))
 jest.mock('node:child_process', () => ({ spawnSync: jest.fn() }))
 
