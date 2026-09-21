@@ -28,11 +28,23 @@ export async function getPublishedTags({ client, repo, prNumber }: Params): Prom
   // for GitHub to close octokit's idle keep-alive socket; the first request
   // after it fails with `SocketError: other side closed`. Retry like
   // `createTags` does, so a dead socket costs a round trip instead of the run.
-  const listFiles = () =>
-    client.paginate(client.rest.pulls.listFiles, {
-      ...repo,
-      pull_number: prNumber,
-    })
+  // Octokit reports a dead socket as a 500, so only 5xx and rate limits are
+  // worth another attempt — a missing PR or a bad token never becomes valid.
+  const listFiles = async () => {
+    try {
+      return await client.paginate(client.rest.pulls.listFiles, {
+        ...repo,
+        pull_number: prNumber,
+      })
+    } catch (error) {
+      const status = (error as { status?: number }).status
+      if (status && status < 500 && status !== 403 && status !== 429) {
+        throw new retry.AbortError(error as Error)
+      }
+
+      throw error
+    }
+  }
 
   const files = await retry(listFiles, {
     retries: 5,

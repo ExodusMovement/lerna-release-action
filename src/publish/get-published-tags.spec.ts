@@ -73,3 +73,13 @@ test('retries the pull request file lookup on a transient failure', async () => 
   expect(tags).toEqual(['@exodus/errors@3.7.1'])
   expect(client.paginate).toHaveBeenCalledTimes(2)
 })
+
+test('gives up immediately on a permanent failure', async () => {
+  const client = makeClient([])
+  jest
+    .mocked(client.paginate)
+    .mockRejectedValue(Object.assign(new Error('Not Found'), { status: 404 }))
+
+  await expect(getPublishedTags({ client, repo, prNumber: 42 })).rejects.toThrow('Not Found')
+  expect(client.paginate).toHaveBeenCalledTimes(1)
+})

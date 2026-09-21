@@ -30359,10 +30359,23 @@ async function getPublishedTags({ client, repo, prNumber }) {
     // for GitHub to close octokit's idle keep-alive socket; the first request
     // after it fails with `SocketError: other side closed`. Retry like
     // `createTags` does, so a dead socket costs a round trip instead of the run.
-    const listFiles = () => client.paginate(client.rest.pulls.listFiles, {
-        ...repo,
-        pull_number: prNumber,
-    });
+    // Octokit reports a dead socket as a 500, so only 5xx and rate limits are
+    // worth another attempt — a missing PR or a bad token never becomes valid.
+    const listFiles = async () => {
+        try {
+            return await client.paginate(client.rest.pulls.listFiles, {
+                ...repo,
+                pull_number: prNumber,
+            });
+        }
+        catch (error) {
+            const status = error.status;
+            if (status && status < 500 && status !== 403 && status !== 429) {
+                throw new p_retry_1.default.AbortError(error);
+            }
+            throw error;
+        }
+    };
     const files = await (0, p_retry_1.default)(listFiles, {
         retries: 5,
         onFailedAttempt: (error) => {
@@ -32920,6 +32933,7 @@ const node_child_process_1 = __nccwpck_require__(7718);
 const git_1 = __nccwpck_require__(8682);
 const working_directory_1 = __nccwpck_require__(8417);
 const package_manager_1 = __nccwpck_require__(2435);
+const errors_1 = __nccwpck_require__(2579);
 async function publish() {
     (0, working_directory_1.applyWorkingDirectory)(core.getInput(constants_1.PublishInput.Path));
     const token = core.getInput(constants_1.PublishInput.GithubToken, { required: true });
@@ -32972,16 +32986,24 @@ async function publish() {
     }
     core.debug(lernaOutput);
     core.info('Identifying published packages');
-    const tags = new Set((0, extract_tags_1.extractTags)());
+    const tags = new Set(readSummaryTags({ recoverable: status !== 0 && Boolean(pr) }));
     const tag = async (created) => {
         if (created.length === 0)
             return;
         core.info(`Adding tags to commit ${sha}`);
         await (0, github_1.createTags)({ client, repo, tags: created, sha });
     };
+    const report = () => {
+        if (tags.size === 0)
+            return;
+        const publishedPackages = [...tags].join(',');
+        core.notice(`Published the following versions: ${publishedPackages}`);
+        core.setOutput('published-packages', publishedPackages);
+    };
     // Tag what lerna reported before the recovery lookup below, so a failure in
     // recovery can only cost the recovered tags, never the ones lerna confirmed.
     await tag([...tags]);
+    report();
     // On a partial failure lerna aborts before writing its summary file, so the
     // packages it did publish are missing from `extractTags()`. Recover them from
     // npm and tag them anyway — otherwise the missing tags corrupt the next
@@ -32995,16 +33017,28 @@ async function publish() {
             tags.add(it);
         }
         await tag(recovered);
+        report();
     }
     if (tags.size === 0) {
         core.notice('No new packages versions found. Tagging aborted.');
-        return;
     }
-    const publishedPackages = [...tags].join(',');
-    core.notice(`Published the following versions: ${publishedPackages}`);
-    core.setOutput('published-packages', publishedPackages);
 }
 exports.publish = publish;
+// A summary lerna wrote but left corrupt or truncated must not shadow the npm
+// recovery below it: without this, a malformed summary on a failed publish
+// loses every tag, the exact outcome the recovery path exists to prevent.
+// A successful publish has nothing to recover from, so its summary must parse.
+function readSummaryTags({ recoverable }) {
+    try {
+        return (0, extract_tags_1.extractTags)();
+    }
+    catch (error) {
+        if (!recoverable)
+            throw error;
+        core.warning(`Failed to read the lerna publish summary, recovering from npm instead: ${(0, errors_1.unwrapErrorMessage)(error, 'unknown error')}`);
+        return [];
+    }
+}
 publish().catch((error) => {
     if (error.stack) {
         core.debug(error.stack);
