@@ -172,6 +172,62 @@ describe('publish', () => {
     }
   )
 
+  test('suppresses the pnpm deps guard after rewinding the tree to the PR head', async () => {
+    jest.mocked(detectPackageManager).mockReturnValue({
+      command: 'pnpm',
+      args: ['install', '--frozen-lockfile', 'false'],
+    })
+
+    await publish()
+
+    expect(spawnSync).toHaveBeenCalledWith(
+      'pnpm',
+      expect.arrayContaining(['exec']),
+      expect.objectContaining({
+        env: expect.objectContaining({ pnpm_config_verify_deps_before_run: 'false' }),
+      })
+    )
+  })
+
+  test('keeps the pnpm deps guard on workflow_dispatch, where the tree is untouched', async () => {
+    Object.defineProperty(github, 'context', {
+      value: {
+        repo,
+        eventName: 'workflow_dispatch',
+        ref: 'refs/heads/master',
+        payload: {},
+        sha: commitSha,
+      },
+    })
+    jest.mocked(detectPackageManager).mockReturnValue({
+      command: 'pnpm',
+      args: ['install', '--frozen-lockfile', 'false'],
+    })
+
+    await publish()
+
+    expect(spawnSync).toHaveBeenCalledWith(
+      'pnpm',
+      expect.arrayContaining(['exec']),
+      expect.objectContaining({ env: process.env })
+    )
+  })
+
+  test('leaves the environment untouched for a non-pnpm workspace', async () => {
+    jest.mocked(detectPackageManager).mockReturnValue({
+      command: 'yarn',
+      args: ['--no-immutable'],
+    })
+
+    await publish()
+
+    expect(spawnSync).toHaveBeenCalledWith(
+      'npx',
+      expect.anything(),
+      expect.objectContaining({ env: process.env })
+    )
+  })
+
   test.each(['npm', 'yarn'] as const)('keeps npx for a %s workspace', async (command) => {
     jest.mocked(detectPackageManager).mockReturnValue({
       command,
