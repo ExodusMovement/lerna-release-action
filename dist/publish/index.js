@@ -32947,11 +32947,22 @@ async function publish() {
         lernaArgs.push('--dist-tag', distTag);
     }
     // Validate the pnpm workspace before Lerna rewrites manifests for publish hooks.
-    const command = (0, package_manager_1.detectPackageManager)()?.command === 'pnpm' ? 'pnpm' : 'npx';
-    const args = command === 'pnpm' ? ['exec', ...lernaArgs] : lernaArgs;
+    const isPnpm = (0, package_manager_1.detectPackageManager)()?.command === 'pnpm';
+    const command = isPnpm ? 'pnpm' : 'npx';
+    const args = isPnpm ? ['exec', ...lernaArgs] : lernaArgs;
+    // `checkoutPr` rewinds the tree underneath the install the consumer workflow
+    // made at the pushed sha, so pnpm's `verifyDepsBeforeRun` guard finds
+    // manifests that no longer match the last install and aborts, because it
+    // cannot prompt in CI. Suppress the guard for this call only. pnpm injects
+    // this same variable into every child it spawns, so publish hooks see the
+    // exact environment they already saw, and the nested-pnpm validation this
+    // call exists to avoid stays avoided. Left on for `workflow_dispatch`, where
+    // nothing rewound the tree and a mismatch is the consumer's to fix.
+    const env = pr && isPnpm ? { ...process.env, pnpm_config_verify_deps_before_run: 'false' } : process.env;
     const { stdout, stderr, status } = (0, node_child_process_1.spawnSync)(command, args, {
         encoding: 'utf8',
         maxBuffer: Number.MAX_SAFE_INTEGER,
+        env,
     });
     const lernaOutput = stdout + stderr;
     if (status !== 0) {
