@@ -63,6 +63,8 @@ describe('publish', () => {
   })
 
   beforeEach(() => {
+    jest.mocked(extractTags).mockReturnValue([])
+    jest.mocked(getPublishedTags).mockResolvedValue([])
     jest.mocked(detectPackageManager).mockReturnValue(undefined)
     when(core.getInput).calledWith('dist-tag').mockReturnValue('')
     jest.mocked(core.getMultilineInput).mockReturnValue([])
@@ -287,6 +289,59 @@ describe('publish', () => {
         tags: ['@exodus/safe-string@1.4.1', '@exodus/errors@3.7.1'],
       })
     )
+  })
+
+  test('tags the summary packages even when recovery from npm fails', async () => {
+    jest.mocked(spawnSync).mockReturnValue({
+      stdout: '',
+      stderr: '',
+      status: 4,
+    } as never)
+
+    // lerna published one package, then aborted and wrote its summary.
+    jest.mocked(extractTags).mockReturnValue(['@exodus/pay-schemas@2.8.0'])
+    jest.mocked(getPublishedTags).mockRejectedValue(new Error('other side closed'))
+
+    await expect(publish()).rejects.toThrow('other side closed')
+
+    expect(createTags).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ['@exodus/pay-schemas@2.8.0'],
+        sha: commitSha,
+      })
+    )
+    expect(core.setOutput).toHaveBeenCalledWith('published-packages', '@exodus/pay-schemas@2.8.0')
+  })
+
+  test('recovers from npm when the summary file cannot be parsed on failure', async () => {
+    jest.mocked(spawnSync).mockReturnValue({
+      stdout: '',
+      stderr: '',
+      status: 4,
+    } as never)
+
+    jest.mocked(extractTags).mockImplementation(() => {
+      throw new Error('Failed to extract tags')
+    })
+    jest.mocked(getPublishedTags).mockResolvedValue(['@exodus/errors@3.7.1'])
+
+    await publish()
+
+    expect(core.warning).toHaveBeenCalledWith(expect.stringMatching(/recovering from npm/))
+    expect(createTags).toHaveBeenCalledWith(
+      expect.objectContaining({ tags: ['@exodus/errors@3.7.1'] })
+    )
+  })
+
+  test('fails on an unparseable summary file when the publish succeeded', async () => {
+    jest.mocked(extractTags).mockImplementation(() => {
+      throw new Error('Failed to extract tags')
+    })
+
+    await expect(publish()).rejects.toThrow('Failed to extract tags')
+
+    expect(getPublishedTags).not.toHaveBeenCalled()
+    expect(createTags).not.toHaveBeenCalled()
   })
 
   test('publishes if all rulesets are applied when triggered through workflow dispatch', async () => {

@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process'
 import { checkoutPr } from './utils/git'
 import { applyWorkingDirectory } from './utils/working-directory'
 import { detectPackageManager } from './utils/package-manager'
+import { unwrapErrorMessage } from './utils/errors'
 
 export async function publish() {
   applyWorkingDirectory(core.getInput(Input.Path))
@@ -79,7 +80,25 @@ export async function publish() {
   core.debug(lernaOutput)
 
   core.info('Identifying published packages')
-  const tags = new Set(extractTags())
+  const tags = new Set(readSummaryTags({ recoverable: status !== 0 && Boolean(pr) }))
+
+  const tag = async (created: string[]) => {
+    if (created.length === 0) return
+    core.info(`Adding tags to commit ${sha}`)
+    await createTags({ client, repo, tags: created, sha })
+  }
+
+  const report = () => {
+    if (tags.size === 0) return
+    const publishedPackages = [...tags].join(',')
+    core.notice(`Published the following versions: ${publishedPackages}`)
+    core.setOutput('published-packages', publishedPackages)
+  }
+
+  // Tag what lerna reported before the recovery lookup below, so a failure in
+  // recovery can only cost the recovered tags, never the ones lerna confirmed.
+  await tag([...tags])
+  report()
 
   // On a partial failure lerna aborts before writing its summary file, so the
   // packages it did publish are missing from `extractTags()`. Recover them from
@@ -88,22 +107,38 @@ export async function publish() {
   // lookup to); tags can be pushed manually there.
   if (status !== 0 && pr) {
     core.info('Publish failed; recovering published packages from npm')
-    for (const tag of await getPublishedTags({ client, repo, prNumber: pr.number })) {
-      tags.add(tag)
+    const published = await getPublishedTags({ client, repo, prNumber: pr.number })
+    const recovered = published.filter((it) => !tags.has(it))
+
+    for (const it of recovered) {
+      tags.add(it)
     }
+
+    await tag(recovered)
+    report()
   }
 
   if (tags.size === 0) {
     core.notice('No new packages versions found. Tagging aborted.')
-    return
   }
+}
 
-  const publishedPackages = [...tags].join(',')
-  core.notice(`Published the following versions: ${publishedPackages}`)
+// A summary lerna wrote but left corrupt or truncated must not shadow the npm
+// recovery below it: without this, a malformed summary on a failed publish
+// loses every tag, the exact outcome the recovery path exists to prevent.
+// A successful publish has nothing to recover from, so its summary must parse.
+function readSummaryTags({ recoverable }: { recoverable: boolean }): string[] {
+  try {
+    return extractTags()
+  } catch (error) {
+    if (!recoverable) throw error
 
-  core.info(`Adding tags to commit ${sha}`)
-  await createTags({ client, repo, tags: [...tags], sha })
-  core.setOutput('published-packages', publishedPackages)
+    core.warning(
+      `Failed to read the lerna publish summary, recovering from npm instead: ${unwrapErrorMessage(error, 'unknown error')}`
+    )
+
+    return []
+  }
 }
 
 publish().catch((error: Error) => {

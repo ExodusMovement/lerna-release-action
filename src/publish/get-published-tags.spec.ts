@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { getPublishedTags } from './get-published-tags'
 import { GithubClient } from '../utils/github'
 
+jest.mock('@actions/core', () => ({ warning: jest.fn() }))
 jest.mock('node:fs', () => ({ readFileSync: jest.fn() }))
 jest.mock('node:child_process', () => ({ spawnSync: jest.fn() }))
 
@@ -59,4 +60,27 @@ test('tags only non-private packages whose version is live on npm', async () => 
     ['view', '@exodus/secret@2.0.0', 'version'],
     expect.anything()
   )
+})
+
+test('retries the pull request file lookup on a transient failure', async () => {
+  const client = makeClient(['packages/errors/package.json'])
+  jest
+    .mocked(client.paginate)
+    .mockRejectedValueOnce(new Error('other side closed'))
+    .mockResolvedValueOnce([{ filename: 'packages/errors/package.json' }])
+
+  const tags = await getPublishedTags({ client, repo, prNumber: 42 })
+
+  expect(tags).toEqual(['@exodus/errors@3.7.1'])
+  expect(client.paginate).toHaveBeenCalledTimes(2)
+})
+
+test('gives up immediately on a permanent failure', async () => {
+  const client = makeClient([])
+  jest
+    .mocked(client.paginate)
+    .mockRejectedValue(Object.assign(new Error('Not Found'), { status: 404 }))
+
+  await expect(getPublishedTags({ client, repo, prNumber: 42 })).rejects.toThrow('Not Found')
+  expect(client.paginate).toHaveBeenCalledTimes(1)
 })
