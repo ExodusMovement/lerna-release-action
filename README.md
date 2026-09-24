@@ -69,30 +69,43 @@ The Version action always labels the release PR with `publish-on-merge` and one 
 ```yaml
 name: Publish
 on:
-  pull_request:
-    types:
-      - closed
+  push:
   workflow_dispatch:
 
 jobs:
   publish:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, format('chore{0} release', ':'))
     runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: ${{ github.event.pull_request.head.sha }}
-    - uses: actions/setup-node@v3
-      with:
-        node-version-file: '.nvmrc'
-    - name: Enable package manager
-      run: corepack enable
-    - name: Install dependencies
-      run: corepack pnpm install --frozen-lockfile
-    - name: Build
-      run: corepack pnpm run build
-    - name: Publish
-      uses: ExodusMovement/lerna-release-action/publish@master
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Resolve release ref
+        id: release-ref
+        uses: ExodusMovement/lerna-release-action/release-ref@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release-ref.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+      - name: Enable package manager
+        run: corepack enable
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+      - name: Build
+        run: corepack pnpm run build
+      - name: Publish
+        uses: ExodusMovement/lerna-release-action/publish@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+On a push of a release commit, `publish` releases the head of the merged release PR, not the pushed commit. This way it does not publish changes that merged after the release PR. `release-ref` resolves that commit before the checkout, so the install and build steps run on the tree that gets published. When `HEAD` is already at the release PR head, `publish` does not check out again.
+
+Without `release-ref`, `publish` checks out the release PR head itself, after the install and build steps. The installed dependencies and the build output then come from the pushed commit. In a pnpm workspace with `verifyDepsBeforeRun`, pnpm can also stop the publish, because the manifests no longer agree with the last install.
 
 When refreshing the lockfile after selective versioning, the action prefers the repository's declared package manager from the root `package.json#packageManager` or `lerna.json#npmClient`. If neither is present, it falls back to lockfile detection.
 
