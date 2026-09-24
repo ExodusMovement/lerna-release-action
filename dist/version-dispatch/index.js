@@ -31159,7 +31159,7 @@ module.exports = Queue;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RELEASE_PR_LABEL = exports.VersionDispatchInput = exports.PublishInput = exports.Input = void 0;
+exports.RELEASE_PR_LABEL = exports.VersionDispatchInput = exports.ReleaseRefInput = exports.PublishInput = exports.Input = void 0;
 var Input;
 (function (Input) {
     Input["Assignee"] = "assignee";
@@ -31184,6 +31184,10 @@ var PublishInput;
     PublishInput["RequiredBranchRulesets"] = "required-branch-rulesets";
     PublishInput["DistTag"] = "dist-tag";
 })(PublishInput = exports.PublishInput || (exports.PublishInput = {}));
+var ReleaseRefInput;
+(function (ReleaseRefInput) {
+    ReleaseRefInput["GithubToken"] = "github-token";
+})(ReleaseRefInput = exports.ReleaseRefInput || (exports.ReleaseRefInput = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
     VersionDispatchInput["GithubToken"] = "github-token";

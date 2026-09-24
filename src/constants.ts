@@ -22,6 +22,10 @@ export enum PublishInput {
   DistTag = 'dist-tag',
 }
 
+export enum ReleaseRefInput {
+  GithubToken = 'github-token',
+}
+
 export enum VersionDispatchInput {
   GithubToken = 'github-token',
   Path = 'path',

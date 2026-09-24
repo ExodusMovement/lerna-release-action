@@ -30307,128 +30307,6 @@ exports.RELEASE_PR_LABEL = 'publish-on-merge';
 
 /***/ }),
 
-/***/ 4672:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.extractTags = void 0;
-const fs = __nccwpck_require__(7561);
-const core = __nccwpck_require__(2186);
-const errors_1 = __nccwpck_require__(2579);
-const summaryFilePath = './lerna-publish-summary.json';
-function extractTags() {
-    if (!fs.existsSync(summaryFilePath)) {
-        return [];
-    }
-    try {
-        const summary = JSON.parse(fs.readFileSync(summaryFilePath, { encoding: 'utf8' }));
-        return summary.map(({ packageName, version }) => [packageName, version].join('@'));
-    }
-    catch (e) {
-        core.error(`Unable to parse tags: ${(0, errors_1.unwrapErrorMessage)(e, 'unknown error')}`);
-        throw new Error('Failed to extract tags');
-    }
-}
-exports.extractTags = extractTags;
-
-
-/***/ }),
-
-/***/ 2999:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getPublishedTags = void 0;
-const fs = __nccwpck_require__(7561);
-const node_child_process_1 = __nccwpck_require__(7718);
-const core = __nccwpck_require__(2186);
-const p_retry_1 = __nccwpck_require__(2548);
-// Recovers the `name@version` tags for packages that actually reached npm by
-// reading the release PR's changed package.json files and checking each against
-// the registry.
-//
-// `lerna publish` aborts on the first package it can't publish (e.g. a new
-// package the bot lacks access to) and exits before writing its summary file,
-// so the packages it *did* publish would otherwise go untagged. Missing tags
-// drift git from npm and make the next release regenerate already-shipped
-// changelog entries — sometimes as a false-positive breaking change. Tagging
-// from npm instead of the summary decouples the published packages from the
-// failed one.
-async function getPublishedTags({ client, repo, prNumber }) {
-    // The preceding `lerna publish` blocks the process for 30-60s, long enough
-    // for GitHub to close octokit's idle keep-alive socket; the first request
-    // after it fails with `SocketError: other side closed`. Retry like
-    // `createTags` does, so a dead socket costs a round trip instead of the run.
-    // Octokit reports a dead socket as a 500, so only 5xx and rate limits are
-    // worth another attempt — a missing PR or a bad token never becomes valid.
-    const listFiles = async () => {
-        try {
-            return await client.paginate(client.rest.pulls.listFiles, {
-                ...repo,
-                pull_number: prNumber,
-            });
-        }
-        catch (error) {
-            const status = error.status;
-            if (status && status < 500 && status !== 403 && status !== 429) {
-                throw new p_retry_1.default.AbortError(error);
-            }
-            throw error;
-        }
-    };
-    const files = await (0, p_retry_1.default)(listFiles, {
-        retries: 5,
-        onFailedAttempt: (error) => {
-            core.warning(`Failed to list files of PR #${prNumber}: ${error.message}. There are ${error.retriesLeft} retries left`);
-        },
-    });
-    const manifests = files
-        .map((file) => file.filename)
-        .filter((filename) => filename.endsWith('package.json'));
-    const tags = [];
-    for (const manifest of manifests) {
-        const pkg = readManifest(manifest);
-        if (!pkg?.name || !pkg.version || pkg.private)
-            continue;
-        if (isPublished(pkg.name, pkg.version)) {
-            tags.push(`${pkg.name}@${pkg.version}`);
-        }
-    }
-    return tags;
-}
-exports.getPublishedTags = getPublishedTags;
-function readManifest(path) {
-    try {
-        return JSON.parse(fs.readFileSync(path, { encoding: 'utf8' }));
-    }
-    catch {
-        return undefined;
-    }
-}
-// One `npm view` per changed package — fine for the handful a release touches.
-// npm exits 0 and prints the version when it's live; an empty stdout (existing
-// package, missing version) or a 404 (never published) means it's not. Retry on
-// a non-zero exit to ride out transient registry errors; a genuine 404 just
-// costs 3 quick calls (and only for the failed package).
-function isPublished(name, version) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-        const { stdout, status } = (0, node_child_process_1.spawnSync)('npm', ['view', `${name}@${version}`, 'version'], {
-            encoding: 'utf8',
-            maxBuffer: Number.MAX_SAFE_INTEGER,
-        });
-        if (status === 0)
-            return stdout.trim() === version;
-    }
-    return false;
-}
-
-
-/***/ }),
-
 /***/ 2579:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -30442,134 +30320,6 @@ const unwrapErrorMessage = (error, defaultMessage) => {
     return defaultMessage;
 };
 exports.unwrapErrorMessage = unwrapErrorMessage;
-
-
-/***/ }),
-
-/***/ 8682:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.checkoutPr = exports.getChangedFiles = exports.configureUser = exports.resetCommits = exports.cleanup = exports.checkout = exports.getStatusShort = exports.getCommitMessage = exports.getCommitSha = exports.deleteTags = exports.getTags = exports.switchToBranch = exports.commit = exports.add = void 0;
-const process_1 = __nccwpck_require__(9239);
-const objects_1 = __nccwpck_require__(8151);
-const assert = __nccwpck_require__(8061);
-const core = __nccwpck_require__(2186);
-const PATH_CHARACTERS = /^[\w./-]+$/;
-function add(pathSpecs) {
-    assert(pathSpecs.every((it) => !it.startsWith('-') && PATH_CHARACTERS.test(it)), 'Options are not allowed. Please supply paths to the files you want to add only.');
-    (0, process_1.spawnSync)('git', ['add', ...pathSpecs]);
-}
-exports.add = add;
-const commitFlags = ['amend', 'all', 'noEdit'];
-function commit({ message, body, flags }) {
-    const args = ['commit', ...(0, objects_1.flagsAsArguments)(flags, commitFlags)];
-    if (message) {
-        args.push('-m', `"${message}"`);
-    }
-    if (body) {
-        args.push('-m', `"${body}"`);
-    }
-    (0, process_1.spawnSync)('git', args);
-}
-exports.commit = commit;
-function switchToBranch(branch) {
-    (0, process_1.spawnSync)('git', ['switch', '--create', branch]);
-}
-exports.switchToBranch = switchToBranch;
-function getTags(commit) {
-    const tags = (0, process_1.spawnSync)('git', ['tag', '--contains', commit]);
-    return tags.trim().split('\n');
-}
-exports.getTags = getTags;
-function deleteTags(tags) {
-    tags.forEach((tag) => (0, process_1.spawnSync)('git', ['tag', '-d', tag]));
-}
-exports.deleteTags = deleteTags;
-function getCommitSha() {
-    const stdout = (0, process_1.spawnSync)('git', ['rev-parse', 'HEAD']);
-    return stdout.toString().replaceAll('\n', '').trim();
-}
-exports.getCommitSha = getCommitSha;
-function getCommitMessage(commit) {
-    const stdout = (0, process_1.spawnSync)('git', ['show', '-s', '--format=%s', commit]);
-    return stdout.trim();
-}
-exports.getCommitMessage = getCommitMessage;
-function getStatusShort() {
-    return (0, process_1.spawnSync)('git', ['status', '--short']).trim();
-}
-exports.getStatusShort = getStatusShort;
-function checkout(ref) {
-    (0, process_1.spawnSync)('git', ['checkout', ref]);
-}
-exports.checkout = checkout;
-function cleanup() {
-    try {
-        (0, process_1.spawnSync)('git', ['stash', '-u']);
-        (0, process_1.spawnSync)('git', ['stash', 'drop']);
-    }
-    catch { }
-}
-exports.cleanup = cleanup;
-const resetFlags = ['mixed'];
-function resetCommits({ flags, count = 1 }) {
-    (0, process_1.spawnSync)('git', ['reset', ...(0, objects_1.flagsAsArguments)(flags, resetFlags), `HEAD~${count}`]);
-}
-exports.resetCommits = resetCommits;
-function configureUser({ name, email }) {
-    (0, process_1.spawnSync)('git', ['config', 'user.name', name]);
-    (0, process_1.spawnSync)('git', ['config', 'user.email', email]);
-}
-exports.configureUser = configureUser;
-// Lists files added or modified between two commits. Deletions are excluded
-// (`--diff-filter=d`) since the release flow only ever creates or updates files.
-// `--no-relative` forces repo-root-relative paths regardless of the consumer's
-// `diff.relative` git config, so callers running from a subdirectory still get
-// paths the GitHub API and a repo-root file read can resolve.
-function getChangedFiles(base, head) {
-    const stdout = (0, process_1.spawnSync)('git', [
-        'diff',
-        '--no-relative',
-        '--name-only',
-        '-z',
-        '--diff-filter=d',
-        base,
-        head,
-    ]);
-    // `-z` yields NUL-separated, verbatim pathnames.
-    return stdout.split('\0').filter((path) => path !== '');
-}
-exports.getChangedFiles = getChangedFiles;
-async function checkoutPr({ pr }) {
-    // The consumer workflow can check out the PR head itself (see the
-    // `release-ref` action), so that its install and build steps run on the tree
-    // that gets published. Moving the tree again would then gain nothing.
-    if (getCommitSha() === pr.head.sha) {
-        core.info(`HEAD is already at ${pr.head.sha}. Skipping the checkout.`);
-        return;
-    }
-    core.info(`Pulling +refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`);
-    // Fetch PR head ref which is available even if the branch was deleted.
-    // Shallow (--depth=1): publishing only needs the tree at the PR head sha —
-    // `lerna publish from-package` reads on-disk package.json versions and does
-    // not walk history, and tags are created via the GitHub API on the push sha,
-    // not via local git. Avoids pulling connecting history into the shallow
-    // checkout the consumer workflow starts from.
-    const stdout = (0, process_1.spawnSync)('git', [
-        'fetch',
-        '--depth=1',
-        'origin',
-        `+refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`,
-    ]);
-    core.debug(stdout);
-    const branchName = `pr-${pr.number}`;
-    (0, process_1.spawnSync)('git', ['checkout', '-B', branchName, pr.head.sha]);
-    core.info(`HEAD is ${getCommitSha()}`);
-}
-exports.checkoutPr = checkoutPr;
 
 
 /***/ }),
@@ -30786,211 +30536,6 @@ exports.getReleasePr = getReleasePr;
 
 /***/ }),
 
-/***/ 8151:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.flagsAsArguments = void 0;
-const strings_1 = __nccwpck_require__(8927);
-const assert = __nccwpck_require__(8061);
-function flagsAsArguments(flags, whitelistedFlags) {
-    return Object.entries(flags ?? {}).reduce((all, [flag, enabled]) => {
-        assert(whitelistedFlags.includes(flag), `Only the following flags are allowed: ${whitelistedFlags.join(', ')}`);
-        if (enabled) {
-            all.push(`--${(0, strings_1.toKebabCase)(flag)}`);
-        }
-        return all;
-    }, []);
-}
-exports.flagsAsArguments = flagsAsArguments;
-
-
-/***/ }),
-
-/***/ 2435:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.updateLockfile = exports.detectPackageManager = void 0;
-const fs = __nccwpck_require__(7147);
-const core = __nccwpck_require__(2186);
-const process_1 = __nccwpck_require__(9239);
-const packageManagers = {
-    yarn: { lockfile: 'yarn.lock', command: 'yarn', args: ['--no-immutable'] },
-    pnpm: {
-        lockfile: 'pnpm-lock.yaml',
-        command: 'pnpm',
-        args: ['install', '--frozen-lockfile', 'false'],
-    },
-    npm: { lockfile: 'package-lock.json', command: 'npm', args: ['install'] },
-};
-const lockfileCommands = {
-    'yarn.lock': { command: 'yarn', args: ['--no-immutable'] },
-    'pnpm-lock.yaml': { command: 'pnpm', args: ['install', '--frozen-lockfile', 'false'] },
-    'package-lock.json': { command: 'npm', args: ['install'] },
-};
-function readJson(relativePath, filesystem) {
-    try {
-        return JSON.parse(filesystem.readFileSync(relativePath, 'utf8'));
-    }
-    catch (error) {
-        if (error.code !== 'ENOENT') {
-            // Ignore malformed JSON and non-ENOENT read failures to preserve prior behavior.
-        }
-    }
-}
-function parsePackageManager(packageManager) {
-    return packageManager?.match(/^(pnpm|yarn|npm)(?:@|$)/)?.[1];
-}
-function detectPackageManager(filesystem = fs) {
-    const rootPackageJson = readJson('package.json', filesystem);
-    const lernaJson = readJson('lerna.json', filesystem);
-    const configuredPackageManager = parsePackageManager(rootPackageJson?.packageManager) ?? lernaJson?.npmClient;
-    if (configuredPackageManager) {
-        return packageManagers[configuredPackageManager];
-    }
-    for (const [lockfile, { command, args }] of Object.entries(lockfileCommands)) {
-        if (filesystem.existsSync(lockfile)) {
-            return { command, args };
-        }
-    }
-}
-exports.detectPackageManager = detectPackageManager;
-function updateLockfile({ filesystem = fs } = {}) {
-    const packageManager = detectPackageManager(filesystem);
-    if (!packageManager) {
-        throw new Error('Unable to determine package manager: expected packageManager/npmClient or a supported lockfile.');
-    }
-    core.info(`Refreshing lockfile with ${packageManager.command} ${packageManager.args.join(' ')}`);
-    (0, process_1.spawnSync)(packageManager.command, [...packageManager.args]);
-}
-exports.updateLockfile = updateLockfile;
-
-
-/***/ }),
-
-/***/ 9239:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.spawnSync = void 0;
-const child_process_1 = __nccwpck_require__(2081);
-const spawnSync = (command, args, options = {}) => {
-    const { stdout, stderr, status } = (0, child_process_1.spawnSync)(command, args, {
-        encoding: 'utf8',
-        ...options,
-        shell: false,
-    });
-    if (status !== 0) {
-        throw new Error(stderr);
-    }
-    return stdout;
-};
-exports.spawnSync = spawnSync;
-
-
-/***/ }),
-
-/***/ 8927:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.pluralize = exports.splitCsv = exports.truncate = exports.toKebabCase = void 0;
-function toKebabCase(text) {
-    return text.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
-}
-exports.toKebabCase = toKebabCase;
-const ellipsis = '...';
-function truncate(text, maxLen) {
-    if (text.length < maxLen) {
-        return text;
-    }
-    const { indexes } = text.split(/[\s,.:]/).reduce(({ indexes, cursor }, word) => {
-        const index = text.indexOf(word, cursor);
-        indexes.push([index, word]);
-        return { indexes, cursor: index + word.length };
-    }, { indexes: [], cursor: 0 });
-    const lastValidIndex = indexes.findIndex(([index, word]) => index + word.length + ellipsis.length >= maxLen) - 1;
-    if (lastValidIndex === -1) {
-        return ellipsis.slice(0, maxLen);
-    }
-    const [index, word] = indexes[lastValidIndex]; // eslint-disable-line @typescript-eslint/no-non-null-assertion
-    const splitAt = index + word.length;
-    return `${text.slice(0, splitAt)}${ellipsis}`;
-}
-exports.truncate = truncate;
-function splitCsv(text) {
-    return text
-        .split(',')
-        .map((entry) => entry.trim())
-        .filter(Boolean);
-}
-exports.splitCsv = splitCsv;
-function pluralize(word, count) {
-    if (count === 1)
-        return word;
-    return `${word}s`;
-}
-exports.pluralize = pluralize;
-
-
-/***/ }),
-
-/***/ 8417:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.toWorkspaceRelativePaths = exports.applyWorkingDirectory = void 0;
-const node_path_1 = __nccwpck_require__(9411);
-const core = __nccwpck_require__(2186);
-const process_1 = __nccwpck_require__(9239);
-/**
- * Move into the consumer-supplied working directory and report where the
- * resulting cwd sits inside the git repository.
- *
- * When `workingDirectory` is empty the cwd is left untouched and reported as
- * the repo root with an empty prefix, so every caller keeps its previous
- * behavior byte-for-byte. The prefix is derived from `git rev-parse
- * --show-toplevel` rather than assumed, so it is correct whether the
- * directory is the repo root itself (a nested checkout) or a subdirectory of
- * a larger repo.
- */
-function applyWorkingDirectory(workingDirectory) {
-    if (!workingDirectory) {
-        return { repoRoot: process.cwd(), repoRelativePrefix: '' };
-    }
-    core.info(`Changing working directory to ${workingDirectory}`);
-    process.chdir(workingDirectory);
-    const repoRoot = (0, process_1.spawnSync)('git', ['rev-parse', '--show-toplevel']).trim();
-    return { repoRoot, repoRelativePrefix: (0, node_path_1.relative)(repoRoot, process.cwd()) };
-}
-exports.applyWorkingDirectory = applyWorkingDirectory;
-/**
- * Translate repo-root-relative paths (as returned by the GitHub API) into
- * paths relative to the current working directory, dropping any that fall
- * outside it. With an empty prefix the paths are returned unchanged.
- */
-function toWorkspaceRelativePaths(paths, repoRelativePrefix) {
-    if (!repoRelativePrefix)
-        return paths;
-    const prefix = repoRelativePrefix.endsWith('/') ? repoRelativePrefix : `${repoRelativePrefix}/`;
-    return paths.filter((path) => path.startsWith(prefix)).map((path) => path.slice(prefix.length));
-}
-exports.toWorkspaceRelativePaths = toWorkspaceRelativePaths;
-
-
-/***/ }),
-
 /***/ 9491:
 /***/ ((module) => {
 
@@ -31012,14 +30557,6 @@ module.exports = require("async_hooks");
 
 "use strict";
 module.exports = require("buffer");
-
-/***/ }),
-
-/***/ 2081:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("child_process");
 
 /***/ }),
 
@@ -31095,35 +30632,11 @@ module.exports = require("net");
 
 /***/ }),
 
-/***/ 8061:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("node:assert");
-
-/***/ }),
-
-/***/ 7718:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("node:child_process");
-
-/***/ }),
-
 /***/ 5673:
 /***/ ((module) => {
 
 "use strict";
 module.exports = require("node:events");
-
-/***/ }),
-
-/***/ 7561:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("node:fs");
 
 /***/ }),
 
@@ -32933,124 +32446,28 @@ var __webpack_exports__ = {};
 var exports = __webpack_exports__;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.publish = void 0;
+exports.releaseRef = void 0;
 const core = __nccwpck_require__(2186);
-const constants_1 = __nccwpck_require__(9042);
 const github = __nccwpck_require__(5438);
+const constants_1 = __nccwpck_require__(9042);
 const github_1 = __nccwpck_require__(1225);
-const extract_tags_1 = __nccwpck_require__(4672);
-const get_published_tags_1 = __nccwpck_require__(2999);
-const node_child_process_1 = __nccwpck_require__(7718);
-const git_1 = __nccwpck_require__(8682);
-const working_directory_1 = __nccwpck_require__(8417);
-const package_manager_1 = __nccwpck_require__(2435);
-const errors_1 = __nccwpck_require__(2579);
-async function publish() {
-    (0, working_directory_1.applyWorkingDirectory)(core.getInput(constants_1.PublishInput.Path));
-    const token = core.getInput(constants_1.PublishInput.GithubToken, { required: true });
-    const requiredRulesets = core.getMultilineInput(constants_1.PublishInput.RequiredBranchRulesets);
+async function releaseRef() {
+    const token = core.getInput(constants_1.ReleaseRefInput.GithubToken, { required: true });
     const client = github.getOctokit(token);
-    const distTag = core.getInput(constants_1.PublishInput.DistTag);
     const { repo, eventName, sha } = github.context;
-    if (!['workflow_dispatch', 'push'].includes(eventName)) {
-        core.info('Skipping action as it was neither triggered through push nor workflow_dispatch.');
-        return;
-    }
+    // Same lookup as `publish`, so both agree on the commit to release.
     const pr = eventName === 'push' ? await (0, github_1.getReleasePr)({ client, repo, sha }) : undefined;
-    if (eventName === 'push' && !pr) {
-        core.info('Skipping action as the pushed commit is not a release commit.');
-        return;
-    }
-    if (requiredRulesets.length > 0) {
-        const publishBranch = pr?.base.ref ?? github.context.ref.replace(/^refs\/heads\//, '');
-        const { data: rules } = await client.rest.repos.getBranchRules({
-            ...repo,
-            branch: publishBranch,
-        });
-        const ids = new Set(rules.map((it) => String(it.ruleset_id)));
-        const missing = requiredRulesets.filter((it) => !ids.has(it));
-        if (missing.length > 0) {
-            core.setFailed(`Publishing from "${publishBranch}" is only possible if it is protected by the following rulesets: ${missing.join(', ')}`);
-            return;
-        }
-    }
     if (pr) {
-        core.info(`Checking out ${pr.html_url} to avoid publishing more recent changes.`);
-        await (0, git_1.checkoutPr)({ pr, client });
+        core.info(`${sha} is the merge of ${pr.html_url}. Release ${pr.head.sha}.`);
     }
-    core.info('Publishing yet unpublished packages');
-    const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private', '--summary-file'];
-    if (distTag) {
-        lernaArgs.push('--dist-tag', distTag);
+    else {
+        core.info(`${sha} is not the merge of a release PR. Release it as is.`);
     }
-    // Validate the pnpm workspace before Lerna rewrites manifests for publish hooks.
-    const command = (0, package_manager_1.detectPackageManager)()?.command === 'pnpm' ? 'pnpm' : 'npx';
-    const args = command === 'pnpm' ? ['exec', ...lernaArgs] : lernaArgs;
-    const { stdout, stderr, status } = (0, node_child_process_1.spawnSync)(command, args, {
-        encoding: 'utf8',
-        maxBuffer: Number.MAX_SAFE_INTEGER,
-    });
-    const lernaOutput = stdout + stderr;
-    if (status !== 0) {
-        core.setFailed('Failed to publish some packages');
-        core.error(lernaOutput);
-    }
-    core.debug(lernaOutput);
-    core.info('Identifying published packages');
-    const tags = new Set(readSummaryTags({ recoverable: status !== 0 && Boolean(pr) }));
-    const tag = async (created) => {
-        if (created.length === 0)
-            return;
-        core.info(`Adding tags to commit ${sha}`);
-        await (0, github_1.createTags)({ client, repo, tags: created, sha });
-    };
-    const report = () => {
-        if (tags.size === 0)
-            return;
-        const publishedPackages = [...tags].join(',');
-        core.notice(`Published the following versions: ${publishedPackages}`);
-        core.setOutput('published-packages', publishedPackages);
-    };
-    // Tag what lerna reported before the recovery lookup below, so a failure in
-    // recovery can only cost the recovered tags, never the ones lerna confirmed.
-    await tag([...tags]);
-    report();
-    // On a partial failure lerna aborts before writing its summary file, so the
-    // packages it did publish are missing from `extractTags()`. Recover them from
-    // npm and tag them anyway — otherwise the missing tags corrupt the next
-    // release's changelog. Skipped on workflow_dispatch (no PR to scope the
-    // lookup to); tags can be pushed manually there.
-    if (status !== 0 && pr) {
-        core.info('Publish failed; recovering published packages from npm');
-        const published = await (0, get_published_tags_1.getPublishedTags)({ client, repo, prNumber: pr.number });
-        const recovered = published.filter((it) => !tags.has(it));
-        for (const it of recovered) {
-            tags.add(it);
-        }
-        await tag(recovered);
-        report();
-    }
-    if (tags.size === 0) {
-        core.notice('No new packages versions found. Tagging aborted.');
-    }
+    core.setOutput('sha', pr?.head.sha ?? sha);
+    core.setOutput('pr-number', pr ? String(pr.number) : '');
 }
-exports.publish = publish;
-// A summary lerna wrote but left corrupt or truncated must not shadow the npm
-// recovery below it: without this, a malformed summary on a failed publish
-// loses every tag, the exact outcome the recovery path exists to prevent.
-// A successful publish has nothing to recover from, so its summary must parse.
-function readSummaryTags({ recoverable }) {
-    try {
-        return (0, extract_tags_1.extractTags)();
-    }
-    catch (error) {
-        if (!recoverable)
-            throw error;
-        core.warning(`Failed to read the lerna publish summary, recovering from npm instead: ${(0, errors_1.unwrapErrorMessage)(error, 'unknown error')}`);
-        return [];
-    }
-}
-publish().catch((error) => {
+exports.releaseRef = releaseRef;
+releaseRef().catch((error) => {
     if (error.stack) {
         core.debug(error.stack);
     }

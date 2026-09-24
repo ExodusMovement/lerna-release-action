@@ -137,6 +137,14 @@ type CheckoutPrParams = {
 }
 
 export async function checkoutPr({ pr }: CheckoutPrParams) {
+  // The consumer workflow can check out the PR head itself (see the
+  // `release-ref` action), so that its install and build steps run on the tree
+  // that gets published. Moving the tree again would then gain nothing.
+  if (getCommitSha() === pr.head.sha) {
+    core.info(`HEAD is already at ${pr.head.sha}. Skipping the checkout.`)
+    return
+  }
+
   core.info(`Pulling +refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`)
   // Fetch PR head ref which is available even if the branch was deleted.
   // Shallow (--depth=1): publishing only needs the tree at the PR head sha —

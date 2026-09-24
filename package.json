@@ -23,10 +23,11 @@
     "lint:fix": "yarn lint:actions --fix && yarn lint:cli --fix",
     "format": "prettier --write \"**/*.{json,md,yaml}\"",
     "format:check": "prettier --check \"**/*.{json,md,yaml}\"",
-    "build": "yarn run build:version && yarn run build:publish && yarn build:version-dispatch",
+    "build": "yarn run build:version && yarn run build:publish && yarn build:version-dispatch && yarn build:release-ref",
     "build:version": "ncc build src/version.ts --source-map -o dist/version",
     "build:version-dispatch": "ncc build src/version-dispatch.ts --source-map -o dist/version-dispatch",
-    "build:publish": "ncc build src/publish.ts --source-map -o dist/publish"
+    "build:publish": "ncc build src/publish.ts --source-map -o dist/publish",
+    "build:release-ref": "ncc build src/release-ref.ts --source-map -o dist/release-ref"
   },
   "devDependencies": {
     "@exodus/eslint-config": "^5.22.0",
