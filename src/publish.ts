@@ -7,7 +7,7 @@ import { getPublishedTags } from './publish/get-published-tags'
 import { spawnSync } from 'node:child_process'
 import { checkoutPr } from './utils/git'
 import { applyWorkingDirectory } from './utils/working-directory'
-import { detectPackageManager } from './utils/package-manager'
+import { detectPackageManager, installPnpmDependencies } from './utils/package-manager'
 import { unwrapErrorMessage } from './utils/errors'
 
 export async function publish() {
@@ -54,6 +54,12 @@ export async function publish() {
     await checkoutPr({ pr, client })
   }
 
+  const isPnpm = detectPackageManager()?.command === 'pnpm'
+
+  if (pr && isPnpm) {
+    installPnpmDependencies()
+  }
+
   core.info('Publishing yet unpublished packages')
 
   const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private', '--summary-file']
@@ -63,8 +69,8 @@ export async function publish() {
   }
 
   // Validate the pnpm workspace before Lerna rewrites manifests for publish hooks.
-  const command = detectPackageManager()?.command === 'pnpm' ? 'pnpm' : 'npx'
-  const args = command === 'pnpm' ? ['exec', ...lernaArgs] : lernaArgs
+  const command = isPnpm ? 'pnpm' : 'npx'
+  const args = isPnpm ? ['exec', ...lernaArgs] : lernaArgs
   const { stdout, stderr, status } = spawnSync(command, args, {
     encoding: 'utf8',
     maxBuffer: Number.MAX_SAFE_INTEGER,

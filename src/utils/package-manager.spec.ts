@@ -1,5 +1,5 @@
 import { Volume } from 'memfs/lib/volume'
-import { updateLockfile } from './package-manager'
+import { installPnpmDependencies, updateLockfile } from './package-manager'
 import { createFsFromJSON } from './testing'
 import { spawnSync } from 'child_process'
 
@@ -109,6 +109,28 @@ describe('updateLockfile', () => {
       'pnpm',
       ['install', '--frozen-lockfile', 'false'],
       expect.anything()
+    )
+  })
+})
+
+describe('installPnpmDependencies', () => {
+  it('should run a frozen pnpm install that streams its output to the job log', () => {
+    jest.mocked(spawnSync).mockReturnValueOnce({ status: 0 } as never)
+
+    installPnpmDependencies()
+
+    expect(spawnSync).toHaveBeenCalledWith(
+      'pnpm',
+      ['install', '--frozen-lockfile'],
+      expect.objectContaining({ stdio: 'inherit' })
+    )
+  })
+
+  it('should throw when pnpm install fails', () => {
+    jest.mocked(spawnSync).mockReturnValueOnce({ status: 1 } as never)
+
+    expect(() => installPnpmDependencies()).toThrow(
+      'pnpm install --frozen-lockfile failed with exit status 1'
     )
   })
 })

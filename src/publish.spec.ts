@@ -7,10 +7,11 @@ import { when } from 'jest-when'
 import { checkoutPr } from './utils/git'
 import { extractTags } from './publish/extract-tags'
 import { getPublishedTags } from './publish/get-published-tags'
-import { detectPackageManager } from './utils/package-manager'
+import { detectPackageManager, installPnpmDependencies } from './utils/package-manager'
 
 jest.mock('./utils/package-manager', () => ({
   detectPackageManager: jest.fn(),
+  installPnpmDependencies: jest.fn(),
 }))
 
 jest.mock('node:child_process', () => ({
@@ -187,6 +188,68 @@ describe('publish', () => {
       ['lerna', 'publish', 'from-package', '--yes', '--no-private', '--summary-file'],
       expect.objectContaining({ encoding: 'utf8' })
     )
+    expect(installPnpmDependencies).not.toHaveBeenCalled()
+  })
+
+  test('reinstalls pnpm dependencies after checking out the release PR and before running Lerna', async () => {
+    jest.mocked(detectPackageManager).mockReturnValue({
+      command: 'pnpm',
+      args: ['install', '--frozen-lockfile', 'false'],
+    })
+
+    const steps: string[] = []
+    jest.mocked(checkoutPr).mockImplementationOnce(async () => {
+      steps.push('checkout')
+    })
+    jest.mocked(installPnpmDependencies).mockImplementationOnce(() => {
+      steps.push('install')
+    })
+    jest.mocked(spawnSync).mockImplementationOnce(() => {
+      steps.push('lerna')
+      return { status: 0, stdout: '', stderr: '' } as never
+    })
+
+    await publish()
+
+    expect(steps).toEqual(['checkout', 'install', 'lerna'])
+  })
+
+  test('does not reinstall pnpm dependencies on workflow_dispatch', async () => {
+    Object.defineProperty(github, 'context', {
+      value: {
+        repo,
+        eventName: 'workflow_dispatch',
+        ref: 'refs/heads/master',
+        payload: {},
+        sha: commitSha,
+      },
+    })
+    jest.mocked(detectPackageManager).mockReturnValue({
+      command: 'pnpm',
+      args: ['install', '--frozen-lockfile', 'false'],
+    })
+
+    await publish()
+
+    expect(installPnpmDependencies).not.toHaveBeenCalled()
+    expect(spawnSync).toHaveBeenCalledWith('pnpm', expect.any(Array), expect.anything())
+  })
+
+  test('fails before running Lerna when reinstalling pnpm dependencies fails', async () => {
+    jest.mocked(detectPackageManager).mockReturnValue({
+      command: 'pnpm',
+      args: ['install', '--frozen-lockfile', 'false'],
+    })
+    jest.mocked(installPnpmDependencies).mockImplementationOnce(() => {
+      throw new Error('pnpm install --frozen-lockfile failed with exit status 1')
+    })
+
+    await expect(publish()).rejects.toThrow(
+      'pnpm install --frozen-lockfile failed with exit status 1'
+    )
+
+    expect(spawnSync).not.toHaveBeenCalled()
+    expect(createTags).not.toHaveBeenCalled()
   })
 
   test('publishes if all rulesets are applied', async () => {

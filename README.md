@@ -96,7 +96,7 @@ jobs:
 
 When refreshing the lockfile after selective versioning, the action prefers the repository's declared package manager from the root `package.json#packageManager` or `lerna.json#npmClient`. If neither is present, it falls back to lockfile detection.
 
-Publishing uses the same detection and runs Lerna through `pnpm exec` in pnpm workspaces, keeping `npx` for other workspaces. This lets pnpm validate installed dependencies before Lerna rewrites workspace references for packing. Publish hooks then inherit pnpm's validated execution context instead of checking the temporary manifests against the original lockfile. Dependency verification and publish hooks remain enabled.
+Publishing uses the same detection and runs Lerna through `pnpm exec` in pnpm workspaces, keeping `npx` for other workspaces. This lets pnpm validate installed dependencies before Lerna rewrites workspace references for packing. Publish hooks then inherit pnpm's validated execution context instead of checking the temporary manifests against the original lockfile. Dependency verification and publish hooks remain enabled. On push events the release PR head is checked out first, so in pnpm workspaces the action then runs `pnpm install --frozen-lockfile` to keep the installed dependencies in sync with it; an out-of-date lockfile fails the run.
 
 ### Version dispatch workflow
 

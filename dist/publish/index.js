@@ -30804,8 +30804,9 @@ exports.flagsAsArguments = flagsAsArguments;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.updateLockfile = exports.detectPackageManager = void 0;
+exports.installPnpmDependencies = exports.updateLockfile = exports.detectPackageManager = void 0;
 const fs = __nccwpck_require__(7147);
+const child_process_1 = __nccwpck_require__(2081);
 const core = __nccwpck_require__(2186);
 const process_1 = __nccwpck_require__(9239);
 const packageManagers = {
@@ -30858,6 +30859,14 @@ function updateLockfile({ filesystem = fs } = {}) {
     (0, process_1.spawnSync)(packageManager.command, [...packageManager.args]);
 }
 exports.updateLockfile = updateLockfile;
+function installPnpmDependencies() {
+    core.info('Installing dependencies with pnpm install --frozen-lockfile');
+    const { status } = (0, child_process_1.spawnSync)('pnpm', ['install', '--frozen-lockfile'], { stdio: 'inherit' });
+    if (status !== 0) {
+        throw new Error(`pnpm install --frozen-lockfile failed with exit status ${status}`);
+    }
+}
+exports.installPnpmDependencies = installPnpmDependencies;
 
 
 /***/ }),
@@ -32967,14 +32976,18 @@ async function publish() {
         core.info(`Checking out ${pr.html_url} to avoid publishing more recent changes.`);
         await (0, git_1.checkoutPr)({ pr, client });
     }
+    const isPnpm = (0, package_manager_1.detectPackageManager)()?.command === 'pnpm';
+    if (pr && isPnpm) {
+        (0, package_manager_1.installPnpmDependencies)();
+    }
     core.info('Publishing yet unpublished packages');
     const lernaArgs = ['lerna', 'publish', 'from-package', '--yes', '--no-private', '--summary-file'];
     if (distTag) {
         lernaArgs.push('--dist-tag', distTag);
     }
     // Validate the pnpm workspace before Lerna rewrites manifests for publish hooks.
-    const command = (0, package_manager_1.detectPackageManager)()?.command === 'pnpm' ? 'pnpm' : 'npx';
-    const args = command === 'pnpm' ? ['exec', ...lernaArgs] : lernaArgs;
+    const command = isPnpm ? 'pnpm' : 'npx';
+    const args = isPnpm ? ['exec', ...lernaArgs] : lernaArgs;
     const { stdout, stderr, status } = (0, node_child_process_1.spawnSync)(command, args, {
         encoding: 'utf8',
         maxBuffer: Number.MAX_SAFE_INTEGER,

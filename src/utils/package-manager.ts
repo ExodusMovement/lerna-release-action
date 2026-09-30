@@ -1,4 +1,5 @@
 import * as fs from 'fs'
+import { spawnSync as nodeSpawnSync } from 'child_process'
 import * as core from '@actions/core'
 import { Filesystem } from './types'
 import { spawnSync } from './process'
@@ -66,4 +67,13 @@ export function updateLockfile({ filesystem = fs }: UpdateLockfileParams = {}) {
 
   core.info(`Refreshing lockfile with ${packageManager.command} ${packageManager.args.join(' ')}`)
   spawnSync(packageManager.command, [...packageManager.args])
+}
+
+export function installPnpmDependencies() {
+  core.info('Installing dependencies with pnpm install --frozen-lockfile')
+  const { status } = nodeSpawnSync('pnpm', ['install', '--frozen-lockfile'], { stdio: 'inherit' })
+
+  if (status !== 0) {
+    throw new Error(`pnpm install --frozen-lockfile failed with exit status ${status}`)
+  }
 }

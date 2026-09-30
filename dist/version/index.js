@@ -85615,8 +85615,9 @@ exports.flagsAsArguments = flagsAsArguments;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.updateLockfile = exports.detectPackageManager = void 0;
+exports.installPnpmDependencies = exports.updateLockfile = exports.detectPackageManager = void 0;
 const fs = __nccwpck_require__(57147);
+const child_process_1 = __nccwpck_require__(32081);
 const core = __nccwpck_require__(42186);
 const process_1 = __nccwpck_require__(69239);
 const packageManagers = {
@@ -85669,6 +85670,14 @@ function updateLockfile({ filesystem = fs } = {}) {
     (0, process_1.spawnSync)(packageManager.command, [...packageManager.args]);
 }
 exports.updateLockfile = updateLockfile;
+function installPnpmDependencies() {
+    core.info('Installing dependencies with pnpm install --frozen-lockfile');
+    const { status } = (0, child_process_1.spawnSync)('pnpm', ['install', '--frozen-lockfile'], { stdio: 'inherit' });
+    if (status !== 0) {
+        throw new Error(`pnpm install --frozen-lockfile failed with exit status ${status}`);
+    }
+}
+exports.installPnpmDependencies = installPnpmDependencies;
 
 
 /***/ }),
