@@ -1,5 +1,6 @@
 import * as process from './process'
-import { add, commit, getChangedFiles, resetCommits } from './git'
+import { add, checkoutPr, commit, getChangedFiles, resetCommits } from './git'
+import { GithubClient } from './github'
 
 describe('add', () => {
   it('should allow valid paths', () => {
@@ -96,6 +97,38 @@ describe('getChangedFiles', () => {
     const spy = jest.spyOn(process, 'spawnSync').mockReturnValue('')
     try {
       expect(getChangedFiles('base-sha', 'head-sha')).toEqual([])
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
+describe('checkoutPr', () => {
+  const pr = { number: 7, head: { sha: 'head-sha' } }
+  const client = {} as GithubClient
+
+  it('fetches and checks out the PR head when HEAD is elsewhere', async () => {
+    const spy = jest.spyOn(process, 'spawnSync').mockReturnValue('base-sha\n')
+    try {
+      await checkoutPr({ pr, client })
+      expect(spy).toHaveBeenCalledWith('git', [
+        'fetch',
+        '--depth=1',
+        'origin',
+        '+refs/pull/7/head:refs/remotes/origin/pr/7',
+      ])
+      expect(spy).toHaveBeenCalledWith('git', ['checkout', '-B', 'pr-7', 'head-sha'])
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('leaves the tree alone when HEAD is already at the PR head', async () => {
+    const spy = jest.spyOn(process, 'spawnSync').mockReturnValue('head-sha\n')
+    try {
+      await checkoutPr({ pr, client })
+      expect(spy).toHaveBeenCalledTimes(1)
+      expect(spy).toHaveBeenCalledWith('git', ['rev-parse', 'HEAD'])
     } finally {
       spy.mockRestore()
     }

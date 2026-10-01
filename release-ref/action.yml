@@ -1,0 +1,25 @@
+name: 'Lerna release action: Release Ref'
+description: >
+  Resolve the commit that the publish action releases, so the workflow can
+  check it out before it installs and builds. On a push of a release commit,
+  this is the head of the merged release PR. Otherwise, it is the commit
+  that triggered the workflow.
+
+inputs:
+  github-token:
+    description: 'Token used to look up the release PR. Needs pull-requests: read.'
+    required: true
+
+outputs:
+  sha:
+    description: 'Commit to check out: the release PR head on a push of a release commit, otherwise github.sha.'
+  pr-number:
+    description: 'Number of the release PR, or an empty string when there is none.'
+
+runs:
+  using: 'node20'
+  main: '../dist/release-ref/index.js'
+author: 'ExodusMovement'
+branding:
+  icon: 'git-commit'
+  color: 'purple'

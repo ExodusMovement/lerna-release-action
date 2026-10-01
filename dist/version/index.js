@@ -85125,7 +85125,7 @@ try {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RELEASE_PR_LABEL = exports.VersionDispatchInput = exports.PublishInput = exports.Input = void 0;
+exports.RELEASE_PR_LABEL = exports.VersionDispatchInput = exports.ReleaseRefInput = exports.PublishInput = exports.Input = void 0;
 var Input;
 (function (Input) {
     Input["Assignee"] = "assignee";
@@ -85150,6 +85150,10 @@ var PublishInput;
     PublishInput["RequiredBranchRulesets"] = "required-branch-rulesets";
     PublishInput["DistTag"] = "dist-tag";
 })(PublishInput = exports.PublishInput || (exports.PublishInput = {}));
+var ReleaseRefInput;
+(function (ReleaseRefInput) {
+    ReleaseRefInput["GithubToken"] = "github-token";
+})(ReleaseRefInput = exports.ReleaseRefInput || (exports.ReleaseRefInput = {}));
 var VersionDispatchInput;
 (function (VersionDispatchInput) {
     VersionDispatchInput["GithubToken"] = "github-token";
@@ -85351,6 +85355,13 @@ function getChangedFiles(base, head) {
 }
 exports.getChangedFiles = getChangedFiles;
 async function checkoutPr({ pr }) {
+    // The consumer workflow can check out the PR head itself (see the
+    // `release-ref` action), so that its install and build steps run on the tree
+    // that gets published. Moving the tree again would then gain nothing.
+    if (getCommitSha() === pr.head.sha) {
+        core.info(`HEAD is already at ${pr.head.sha}. Skipping the checkout.`);
+        return;
+    }
     core.info(`Pulling +refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`);
     // Fetch PR head ref which is available even if the branch was deleted.
     // Shallow (--depth=1): publishing only needs the tree at the PR head sha —
