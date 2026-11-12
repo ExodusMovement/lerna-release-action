@@ -7262,6 +7262,382 @@ module.exports = pLimit;
 
 /***/ }),
 
+/***/ 2548:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const retry = __nccwpck_require__(8465);
+
+const networkErrorMsgs = [
+	'Failed to fetch', // Chrome
+	'NetworkError when attempting to fetch resource.', // Firefox
+	'The Internet connection appears to be offline.', // Safari
+	'Network request failed' // `cross-fetch`
+];
+
+class AbortError extends Error {
+	constructor(message) {
+		super();
+
+		if (message instanceof Error) {
+			this.originalError = message;
+			({message} = message);
+		} else {
+			this.originalError = new Error(message);
+			this.originalError.stack = this.stack;
+		}
+
+		this.name = 'AbortError';
+		this.message = message;
+	}
+}
+
+const decorateErrorWithCounts = (error, attemptNumber, options) => {
+	// Minus 1 from attemptNumber because the first attempt does not count as a retry
+	const retriesLeft = options.retries - (attemptNumber - 1);
+
+	error.attemptNumber = attemptNumber;
+	error.retriesLeft = retriesLeft;
+	return error;
+};
+
+const isNetworkError = errorMessage => networkErrorMsgs.includes(errorMessage);
+
+const pRetry = (input, options) => new Promise((resolve, reject) => {
+	options = {
+		onFailedAttempt: () => {},
+		retries: 10,
+		...options
+	};
+
+	const operation = retry.operation(options);
+
+	operation.attempt(async attemptNumber => {
+		try {
+			resolve(await input(attemptNumber));
+		} catch (error) {
+			if (!(error instanceof Error)) {
+				reject(new TypeError(`Non-error was thrown: "${error}". You should only throw errors.`));
+				return;
+			}
+
+			if (error instanceof AbortError) {
+				operation.stop();
+				reject(error.originalError);
+			} else if (error instanceof TypeError && !isNetworkError(error.message)) {
+				operation.stop();
+				reject(error);
+			} else {
+				decorateErrorWithCounts(error, attemptNumber, options);
+
+				try {
+					await options.onFailedAttempt(error);
+				} catch (error) {
+					reject(error);
+					return;
+				}
+
+				if (!operation.retry(error)) {
+					reject(operation.mainError());
+				}
+			}
+		}
+	});
+});
+
+module.exports = pRetry;
+// TODO: remove this in the next major version
+module.exports["default"] = pRetry;
+
+module.exports.AbortError = AbortError;
+
+
+/***/ }),
+
+/***/ 8465:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+module.exports = __nccwpck_require__(1775);
+
+/***/ }),
+
+/***/ 1775:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+var RetryOperation = __nccwpck_require__(126);
+
+exports.operation = function(options) {
+  var timeouts = exports.timeouts(options);
+  return new RetryOperation(timeouts, {
+      forever: options && (options.forever || options.retries === Infinity),
+      unref: options && options.unref,
+      maxRetryTime: options && options.maxRetryTime
+  });
+};
+
+exports.timeouts = function(options) {
+  if (options instanceof Array) {
+    return [].concat(options);
+  }
+
+  var opts = {
+    retries: 10,
+    factor: 2,
+    minTimeout: 1 * 1000,
+    maxTimeout: Infinity,
+    randomize: false
+  };
+  for (var key in options) {
+    opts[key] = options[key];
+  }
+
+  if (opts.minTimeout > opts.maxTimeout) {
+    throw new Error('minTimeout is greater than maxTimeout');
+  }
+
+  var timeouts = [];
+  for (var i = 0; i < opts.retries; i++) {
+    timeouts.push(this.createTimeout(i, opts));
+  }
+
+  if (options && options.forever && !timeouts.length) {
+    timeouts.push(this.createTimeout(i, opts));
+  }
+
+  // sort the array numerically ascending
+  timeouts.sort(function(a,b) {
+    return a - b;
+  });
+
+  return timeouts;
+};
+
+exports.createTimeout = function(attempt, opts) {
+  var random = (opts.randomize)
+    ? (Math.random() + 1)
+    : 1;
+
+  var timeout = Math.round(random * Math.max(opts.minTimeout, 1) * Math.pow(opts.factor, attempt));
+  timeout = Math.min(timeout, opts.maxTimeout);
+
+  return timeout;
+};
+
+exports.wrap = function(obj, options, methods) {
+  if (options instanceof Array) {
+    methods = options;
+    options = null;
+  }
+
+  if (!methods) {
+    methods = [];
+    for (var key in obj) {
+      if (typeof obj[key] === 'function') {
+        methods.push(key);
+      }
+    }
+  }
+
+  for (var i = 0; i < methods.length; i++) {
+    var method   = methods[i];
+    var original = obj[method];
+
+    obj[method] = function retryWrapper(original) {
+      var op       = exports.operation(options);
+      var args     = Array.prototype.slice.call(arguments, 1);
+      var callback = args.pop();
+
+      args.push(function(err) {
+        if (op.retry(err)) {
+          return;
+        }
+        if (err) {
+          arguments[0] = op.mainError();
+        }
+        callback.apply(this, arguments);
+      });
+
+      op.attempt(function() {
+        original.apply(obj, args);
+      });
+    }.bind(obj, original);
+    obj[method].options = options;
+  }
+};
+
+
+/***/ }),
+
+/***/ 126:
+/***/ ((module) => {
+
+function RetryOperation(timeouts, options) {
+  // Compatibility for the old (timeouts, retryForever) signature
+  if (typeof options === 'boolean') {
+    options = { forever: options };
+  }
+
+  this._originalTimeouts = JSON.parse(JSON.stringify(timeouts));
+  this._timeouts = timeouts;
+  this._options = options || {};
+  this._maxRetryTime = options && options.maxRetryTime || Infinity;
+  this._fn = null;
+  this._errors = [];
+  this._attempts = 1;
+  this._operationTimeout = null;
+  this._operationTimeoutCb = null;
+  this._timeout = null;
+  this._operationStart = null;
+  this._timer = null;
+
+  if (this._options.forever) {
+    this._cachedTimeouts = this._timeouts.slice(0);
+  }
+}
+module.exports = RetryOperation;
+
+RetryOperation.prototype.reset = function() {
+  this._attempts = 1;
+  this._timeouts = this._originalTimeouts.slice(0);
+}
+
+RetryOperation.prototype.stop = function() {
+  if (this._timeout) {
+    clearTimeout(this._timeout);
+  }
+  if (this._timer) {
+    clearTimeout(this._timer);
+  }
+
+  this._timeouts       = [];
+  this._cachedTimeouts = null;
+};
+
+RetryOperation.prototype.retry = function(err) {
+  if (this._timeout) {
+    clearTimeout(this._timeout);
+  }
+
+  if (!err) {
+    return false;
+  }
+  var currentTime = new Date().getTime();
+  if (err && currentTime - this._operationStart >= this._maxRetryTime) {
+    this._errors.push(err);
+    this._errors.unshift(new Error('RetryOperation timeout occurred'));
+    return false;
+  }
+
+  this._errors.push(err);
+
+  var timeout = this._timeouts.shift();
+  if (timeout === undefined) {
+    if (this._cachedTimeouts) {
+      // retry forever, only keep last error
+      this._errors.splice(0, this._errors.length - 1);
+      timeout = this._cachedTimeouts.slice(-1);
+    } else {
+      return false;
+    }
+  }
+
+  var self = this;
+  this._timer = setTimeout(function() {
+    self._attempts++;
+
+    if (self._operationTimeoutCb) {
+      self._timeout = setTimeout(function() {
+        self._operationTimeoutCb(self._attempts);
+      }, self._operationTimeout);
+
+      if (self._options.unref) {
+          self._timeout.unref();
+      }
+    }
+
+    self._fn(self._attempts);
+  }, timeout);
+
+  if (this._options.unref) {
+      this._timer.unref();
+  }
+
+  return true;
+};
+
+RetryOperation.prototype.attempt = function(fn, timeoutOps) {
+  this._fn = fn;
+
+  if (timeoutOps) {
+    if (timeoutOps.timeout) {
+      this._operationTimeout = timeoutOps.timeout;
+    }
+    if (timeoutOps.cb) {
+      this._operationTimeoutCb = timeoutOps.cb;
+    }
+  }
+
+  var self = this;
+  if (this._operationTimeoutCb) {
+    this._timeout = setTimeout(function() {
+      self._operationTimeoutCb();
+    }, self._operationTimeout);
+  }
+
+  this._operationStart = new Date().getTime();
+
+  this._fn(this._attempts);
+};
+
+RetryOperation.prototype.try = function(fn) {
+  console.log('Using RetryOperation.try() is deprecated');
+  this.attempt(fn);
+};
+
+RetryOperation.prototype.start = function(fn) {
+  console.log('Using RetryOperation.start() is deprecated');
+  this.attempt(fn);
+};
+
+RetryOperation.prototype.start = RetryOperation.prototype.try;
+
+RetryOperation.prototype.errors = function() {
+  return this._errors;
+};
+
+RetryOperation.prototype.attempts = function() {
+  return this._attempts;
+};
+
+RetryOperation.prototype.mainError = function() {
+  if (this._errors.length === 0) {
+    return null;
+  }
+
+  var counts = {};
+  var mainError = null;
+  var mainErrorCount = 0;
+
+  for (var i = 0; i < this._errors.length; i++) {
+    var error = this._errors[i];
+    var message = error.message;
+    var count = (counts[message] || 0) + 1;
+
+    counts[message] = count;
+
+    if (count >= mainErrorCount) {
+      mainError = error;
+      mainErrorCount = count;
+    }
+  }
+
+  return mainError;
+};
+
+
+/***/ }),
+
 /***/ 8088:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -31238,6 +31614,235 @@ exports.parseMessage = parseMessage;
 
 /***/ }),
 
+/***/ 2579:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.unwrapErrorMessage = void 0;
+const unwrapErrorMessage = (error, defaultMessage) => {
+    if (error instanceof Error)
+        return error.message;
+    return defaultMessage;
+};
+exports.unwrapErrorMessage = unwrapErrorMessage;
+
+
+/***/ }),
+
+/***/ 1225:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createSignedCommit = exports.createPullRequest = void 0;
+const core = __nccwpck_require__(2186);
+const p_retry_1 = __nccwpck_require__(2548);
+const promises_1 = __nccwpck_require__(3977);
+const node_path_1 = __nccwpck_require__(9411);
+const errors_1 = __nccwpck_require__(2579);
+const constants_1 = __nccwpck_require__(9042);
+async function createPullRequest({ client, repo, title, base, head, body, labels, assignees, autoMerge, draft, reviewers, }) {
+    core.debug(`Creating pull request in ${repo.owner}/${repo.owner} with base branch ${base}`);
+    const response = await client.rest.pulls.create({
+        ...repo,
+        title,
+        head,
+        base,
+        body,
+        draft,
+    });
+    const promises = [];
+    if (labels) {
+        promises.push(client.rest.issues.addLabels({
+            ...repo,
+            issue_number: response.data.number,
+            labels,
+        }));
+    }
+    if (assignees) {
+        promises.push(client.rest.issues
+            .addAssignees({
+            ...repo,
+            issue_number: response.data.number,
+            assignees,
+        })
+            .catch((error) => {
+            core.warning(`Failed to assign users: ${(0, errors_1.unwrapErrorMessage)(error, 'for unknown reasons')}`);
+        }));
+    }
+    if (reviewers) {
+        promises.push(client.rest.pulls
+            .requestReviewers({
+            ...repo,
+            pull_number: response.data.number,
+            reviewers,
+        })
+            .catch((error) => {
+            core.warning(`Failed to request reviewers: ${(0, errors_1.unwrapErrorMessage)(error, 'for unknown reasons')}`);
+        }));
+    }
+    if (autoMerge) {
+        const autoMergePromise = client
+            .graphql(
+        /* GraphQL */ `
+          mutation EnableAutoMerge($pullRequestId: ID!) {
+            enablePullRequestAutoMerge(
+              input: { pullRequestId: $pullRequestId, mergeMethod: SQUASH }
+            ) {
+              pullRequest {
+                autoMergeRequest {
+                  enabledAt
+                }
+              }
+            }
+          }
+        `, {
+            pullRequestId: response.data.node_id,
+        })
+            .then(({ enablePullRequestAutoMerge: { pullRequest } }) => core.debug(`Auto-merge enabled at ${pullRequest.autoMergeRequest.enabledAt}`))
+            .catch((error) => {
+            core.warning(`Failed to enable auto-merge: ${(0, errors_1.unwrapErrorMessage)(error, 'for unknown reasons')}`);
+        });
+        promises.push(autoMergePromise);
+    }
+    await Promise.all(promises);
+    return response.data;
+}
+exports.createPullRequest = createPullRequest;
+async function createRef({ client, ref, sha, repo }) {
+    try {
+        await client.rest.git.createRef({
+            ...repo,
+            ref,
+            sha,
+        });
+    }
+    catch (e) {
+        if (e instanceof Error && e.message.includes('Reference already exists')) {
+            return;
+        }
+        throw e;
+    }
+}
+// Creates the release branch and commits the changed files onto it via the
+// GraphQL `createCommitOnBranch` mutation, producing a commit signed with
+// GitHub's GPG key (shown as "Verified"). The commit author is the identity of
+// the authenticated token; the committer is GitHub itself. File contents are
+// read from the working tree, which matches the local HEAD after the amend.
+async function createSignedCommit({ client, repo, branch, expectedHeadOid, headline, body, additions, repoRoot = '', }) {
+    await createRef({ client, repo, ref: `refs/heads/${branch}`, sha: expectedHeadOid });
+    const fileAdditions = await Promise.all(additions.map(async (path) => {
+        const contents = await (0, promises_1.readFile)(repoRoot ? (0, node_path_1.resolve)(repoRoot, path) : path, {
+            encoding: 'base64',
+        });
+        return { path, contents };
+    }));
+    const { createCommitOnBranch } = await client.graphql(
+    /* GraphQL */ `
+      mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
+        createCommitOnBranch(input: $input) {
+          commit {
+            oid
+          }
+        }
+      }
+    `, {
+        input: {
+            branch: {
+                repositoryNameWithOwner: `${repo.owner}/${repo.repo}`,
+                branchName: branch,
+            },
+            message: { headline, body },
+            expectedHeadOid,
+            fileChanges: {
+                additions: fileAdditions,
+            },
+        },
+    });
+    return createCommitOnBranch.commit.oid;
+}
+exports.createSignedCommit = createSignedCommit;
+async function createTags({ client, repo, sha, tags }) {
+    await Promise.all(tags.map((tag) => {
+        const ref = `refs/tags/${tag.replace(/\r/, '')}`;
+        const createTag = () => createRef({
+            client,
+            repo,
+            sha,
+            ref,
+        });
+        return (0, p_retry_1.default)(createTag, {
+            retries: 5,
+            onFailedAttempt: (error) => {
+                core.warning(`Failed to create ref ${ref}: ${error.message}. There are ${error.retriesLeft} retries left`);
+            },
+        });
+    }));
+}
+exports.createTags = createTags;
+const SEARCH_PULL_REQUESTS_QUERY = /* GraphQL */ `
+  query SearchPullRequests($search: String!) {
+    search(query: $search, type: ISSUE, first: 100) {
+      edges {
+        node {
+          ... on PullRequest {
+            number
+            title
+            url
+            labels(first: 100) {
+              nodes {
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+async function getPullRequestsForLabels({ client, labels, repo, state = 'open', }) {
+    const labelQuery = labels.map((label) => `label:${label}`).join(' ');
+    const search = `repo:${repo.owner}/${repo.repo} is:pr state:${state} ${labelQuery}`;
+    const response = await client.graphql(SEARCH_PULL_REQUESTS_QUERY, { search });
+    return response.search.edges.map((edge) => edge.node);
+}
+exports.getPullRequestsForLabels = getPullRequestsForLabels;
+async function closePullRequest({ client, number, repo }) {
+    await client.rest.pulls.update({
+        ...repo,
+        pull_number: number,
+        state: 'closed',
+    });
+}
+exports.closePullRequest = closePullRequest;
+async function commentOnIssue({ client, number, repo, body }) {
+    await client.rest.issues.createComment({
+        ...repo,
+        issue_number: number,
+        body,
+    });
+}
+exports.commentOnIssue = commentOnIssue;
+async function getDefaultBranch({ client, repo }) {
+    const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
+    return defaultBranch;
+}
+exports.getDefaultBranch = getDefaultBranch;
+async function getReleasePr({ client, repo, sha }) {
+    const { data } = await client.rest.repos.listPullRequestsAssociatedWithCommit({
+        ...repo,
+        commit_sha: sha,
+    });
+    return data.find((pr) => pr.merged_at && pr.labels.some(({ name }) => name === constants_1.RELEASE_PR_LABEL));
+}
+exports.getReleasePr = getReleasePr;
+
+
+/***/ }),
+
 /***/ 9239:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -31705,6 +32310,14 @@ module.exports = require("net");
 
 "use strict";
 module.exports = require("node:events");
+
+/***/ }),
+
+/***/ 3977:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:fs/promises");
 
 /***/ }),
 
@@ -42248,6 +42861,7 @@ const bumps_1 = __nccwpck_require__(9317);
 const files_to_packages_1 = __nccwpck_require__(6516);
 const preview_1 = __nccwpck_require__(7993);
 const released_1 = __nccwpck_require__(8320);
+const github_1 = __nccwpck_require__(1225);
 const working_directory_1 = __nccwpck_require__(8417);
 const GET_COMMIT_CONCURRENCY = 10;
 if (require.main === require.cache[eval('__filename')]) {
@@ -42315,6 +42929,10 @@ async function versionDispatch({ filesystem = fs, isReleased } = {}) {
     }
     else if (payload.pull_request) {
         pr = payload.pull_request;
+        if (isNoopEvent({ payload, excludedLabels })) {
+            core.info(`Nothing to do for a ${String(payload.action)} event that cannot change the result`);
+            return null;
+        }
     }
     else {
         core.warning('Action triggered by non-PR event and no `pr-number` was supplied.');
@@ -42344,7 +42962,10 @@ async function versionDispatch({ filesystem = fs, isReleased } = {}) {
             await (0, preview_1.clearVersionPreview)({ client, repo, prNumber: pr.number });
         return null;
     }
-    const { data: { default_branch: defaultBranch }, } = await client.rest.repos.get(repo);
+    const payloadDefaultBranch = payload.repository?.default_branch;
+    const defaultBranch = typeof payloadDefaultBranch === 'string'
+        ? payloadDefaultBranch
+        : await (0, github_1.getDefaultBranch)({ client, repo });
     if (pr.base?.ref && pr.base.ref !== defaultBranch) {
         core.notice(`Skipped versioning for PR not targeting ${defaultBranch}`);
         if (isPreview)
@@ -42377,13 +42998,15 @@ async function versionDispatch({ filesystem = fs, isReleased } = {}) {
     // must be cut manually. Exclude such packages from the auto-dispatch, but
     // still surface them in the preview so reviewers know a manual release is
     // pending.
+    const bumpedNames = Object.keys(bumps);
+    const releasedFlags = await Promise.all(bumpedNames.map((name) => hasBeenReleased(name)));
     const unreleased = new Set();
-    for (const name of Object.keys(bumps)) {
-        if (!(await hasBeenReleased(name))) {
-            core.info(`skip ${name}: never released — first release must be cut manually`);
-            unreleased.add(name);
-        }
-    }
+    bumpedNames.forEach((name, index) => {
+        if (releasedFlags[index])
+            return;
+        core.info(`skip ${name}: never released — first release must be cut manually`);
+        unreleased.add(name);
+    });
     const releasableBumps = {};
     for (const [name, bump] of Object.entries(bumps)) {
         if (!unreleased.has(name))
@@ -42436,6 +43059,25 @@ async function versionDispatch({ filesystem = fs, isReleased } = {}) {
     return releasableBumps;
 }
 exports.versionDispatch = versionDispatch;
+/**
+ * Events that cannot change the outcome: a label the action does not read
+ * being added or removed, or an edit that touched neither the title nor the
+ * base branch. Checked before any API call. An excluded label still runs, so
+ * adding `skip-release` clears the preview and removing it restores one.
+ */
+function isNoopEvent({ payload, excludedLabels, }) {
+    if (payload.action === 'labeled' || payload.action === 'unlabeled') {
+        const name = payload.label?.name;
+        return typeof name === 'string' && !excludedLabels.has(name);
+    }
+    if (payload.action === 'edited') {
+        const changes = payload.changes;
+        if (!changes || typeof changes !== 'object')
+            return true;
+        return !('title' in changes) && !('base' in changes);
+    }
+    return false;
+}
 /**
  * Walk a PR's individual commits and build a `{ pkg: bump }` map.
  *
