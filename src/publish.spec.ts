@@ -255,6 +255,43 @@ describe('publish', () => {
     )
   })
 
+  test('collects the packages lerna logged as published when it fails before the summary', async () => {
+    when(client.rest.repos.getBranchRules)
+      .calledWith({
+        ...repo,
+        branch: 'master',
+      })
+      .mockResolvedValue({
+        data: [{ ruleset_id: 42 }, { ruleset_id: 73 }],
+      } as any)
+
+    when(core.getMultilineInput)
+      .calledWith('required-branch-rulesets')
+      .mockReturnValue(['42', '73'])
+
+    jest.mocked(spawnSync).mockReturnValue({
+      stdout: 'lerna info publish Publishing packages to npm...\n',
+      stderr:
+        'lerna success published @exodus/solana-pay 2.3.3\n' +
+        'lerna WARN notice Package failed to publish: @exodus/bitcoinjs-lib-zcash\n' +
+        'lerna success published @exodus/solana-lib 3.27.2\n',
+      status: 1,
+    } as never)
+
+    await publish()
+
+    expect(core.setFailed).toHaveBeenCalled()
+    expect(createTags).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ['@exodus/solana-pay@2.3.3', '@exodus/solana-lib@3.27.2'],
+      })
+    )
+    expect(core.setOutput).toHaveBeenCalledWith(
+      'published-packages',
+      '@exodus/solana-pay@2.3.3,@exodus/solana-lib@3.27.2'
+    )
+  })
+
   test('recovers published packages from npm when summary is empty on failure', async () => {
     when(client.rest.repos.getBranchRules)
       .calledWith({

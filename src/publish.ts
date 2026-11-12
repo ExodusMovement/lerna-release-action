@@ -81,6 +81,11 @@ export async function publish() {
 
   core.info('Identifying published packages')
   const tags = new Set(readSummaryTags({ recoverable: status !== 0 && Boolean(pr) }))
+  for (const [, name, version] of lernaOutput.matchAll(
+    /^lerna success published (\S+) (\S+)\s*$/gm
+  )) {
+    tags.add(`${name}@${version}`)
+  }
 
   const tag = async (created: string[]) => {
     if (created.length === 0) return
