@@ -376,7 +376,7 @@ describe('versionDispatch', () => {
         user: { login: 'brucewayne' },
         base: { ref },
       },
-      repository: { default_branch: ref },
+      repository: { name: repo.repo, owner: { login: repo.owner }, default_branch: ref },
     }
     setupPaginate([{ sha: 'aaa1111', commit: { message: 'feat(atoms): shiny' } }], {
       aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
