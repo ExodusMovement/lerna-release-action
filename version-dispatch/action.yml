@@ -10,7 +10,7 @@ description: >
 
 inputs:
   github-token:
-    description: 'Token used to create a PR'
+    description: 'Token with `actions: write` to dispatch the version workflow and `pull-requests: write` to manage the preview comment.'
     required: true
   path:
     description: 'Working directory to run in, relative to the checkout root. Set this when the lerna workspace lives in a subdirectory of the repository. Defaults to the checkout root.'
