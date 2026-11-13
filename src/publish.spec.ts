@@ -297,6 +297,7 @@ describe('publish', () => {
       stdout: '',
       stderr:
         'lerna success published @exodus/solana-pay 2.3.3\n' +
+        'lerna success published @exodus/lodash 4.18.1-exodus-hermes.0\n' +
         'lerna success published 1 package\n' +
         'lerna success published 6 packages\n',
       status: 0,
@@ -307,9 +308,14 @@ describe('publish', () => {
 
     expect(core.setFailed).not.toHaveBeenCalled()
     expect(createTags).toHaveBeenCalledWith(
-      expect.objectContaining({ tags: ['@exodus/solana-pay@2.3.3'] })
+      expect.objectContaining({
+        tags: ['@exodus/solana-pay@2.3.3', '@exodus/lodash@4.18.1-exodus-hermes.0'],
+      })
     )
-    expect(core.setOutput).toHaveBeenCalledWith('published-packages', '@exodus/solana-pay@2.3.3')
+    expect(core.setOutput).toHaveBeenCalledWith(
+      'published-packages',
+      '@exodus/solana-pay@2.3.3,@exodus/lodash@4.18.1-exodus-hermes.0'
+    )
   })
 
   test('recovers published packages from npm when summary is empty on failure', async () => {
