@@ -292,6 +292,26 @@ describe('publish', () => {
     )
   })
 
+  test('ignores the "published N packages" summary line of a successful run', async () => {
+    jest.mocked(spawnSync).mockReturnValue({
+      stdout: '',
+      stderr:
+        'lerna success published @exodus/solana-pay 2.3.3\n' +
+        'lerna success published 1 package\n' +
+        'lerna success published 6 packages\n',
+      status: 0,
+    } as never)
+    jest.mocked(extractTags).mockReturnValue(['@exodus/solana-pay@2.3.3'])
+
+    await publish()
+
+    expect(core.setFailed).not.toHaveBeenCalled()
+    expect(createTags).toHaveBeenCalledWith(
+      expect.objectContaining({ tags: ['@exodus/solana-pay@2.3.3'] })
+    )
+    expect(core.setOutput).toHaveBeenCalledWith('published-packages', '@exodus/solana-pay@2.3.3')
+  })
+
   test('recovers published packages from npm when summary is empty on failure', async () => {
     when(client.rest.repos.getBranchRules)
       .calledWith({
