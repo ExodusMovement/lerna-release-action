@@ -32990,7 +32990,7 @@ async function publish() {
         encoding: 'utf8',
         maxBuffer: Number.MAX_SAFE_INTEGER,
     });
-    const lernaOutput = stdout + stderr;
+    const lernaOutput = `${stdout}\n${stderr}`;
     if (status !== 0) {
         core.setFailed('Failed to publish some packages');
         core.error(lernaOutput);

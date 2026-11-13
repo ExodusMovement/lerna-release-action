@@ -318,6 +318,22 @@ describe('publish', () => {
     )
   })
 
+  test('collects a success line that follows stdout without a trailing newline', async () => {
+    jest.mocked(spawnSync).mockReturnValue({
+      stdout: 'lerna info publish Publishing packages to npm...',
+      stderr: 'lerna success published @exodus/solana-pay 2.3.3\n',
+      status: 0,
+    } as never)
+
+    await publish()
+
+    expect(core.setFailed).not.toHaveBeenCalled()
+    expect(createTags).toHaveBeenCalledWith(
+      expect.objectContaining({ tags: ['@exodus/solana-pay@2.3.3'] })
+    )
+    expect(core.setOutput).toHaveBeenCalledWith('published-packages', '@exodus/solana-pay@2.3.3')
+  })
+
   test('recovers published packages from npm when summary is empty on failure', async () => {
     when(client.rest.repos.getBranchRules)
       .calledWith({
