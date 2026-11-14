@@ -70,7 +70,7 @@ export async function publish() {
     maxBuffer: Number.MAX_SAFE_INTEGER,
   })
 
-  const lernaOutput = stdout + stderr
+  const lernaOutput = `${stdout}\n${stderr}`
 
   if (status !== 0) {
     core.setFailed('Failed to publish some packages')
@@ -81,6 +81,11 @@ export async function publish() {
 
   core.info('Identifying published packages')
   const tags = new Set(readSummaryTags({ recoverable: status !== 0 && Boolean(pr) }))
+  for (const [, name, version] of lernaOutput.matchAll(
+    /^lerna success published (\S+) (\d+\.\d+\.\d+\S*)\s*$/gm
+  )) {
+    tags.add(`${name}@${version}`)
+  }
 
   const tag = async (created: string[]) => {
     if (created.length === 0) return

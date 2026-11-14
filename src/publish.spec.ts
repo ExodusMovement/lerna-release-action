@@ -255,6 +255,85 @@ describe('publish', () => {
     )
   })
 
+  test('collects the packages lerna logged as published when it fails before the summary', async () => {
+    when(client.rest.repos.getBranchRules)
+      .calledWith({
+        ...repo,
+        branch: 'master',
+      })
+      .mockResolvedValue({
+        data: [{ ruleset_id: 42 }, { ruleset_id: 73 }],
+      } as any)
+
+    when(core.getMultilineInput)
+      .calledWith('required-branch-rulesets')
+      .mockReturnValue(['42', '73'])
+
+    jest.mocked(spawnSync).mockReturnValue({
+      stdout: 'lerna info publish Publishing packages to npm...\n',
+      stderr:
+        'lerna success published @exodus/solana-pay 2.3.3\n' +
+        'lerna WARN notice Package failed to publish: @exodus/bitcoinjs-lib-zcash\n' +
+        'lerna success published @exodus/solana-lib 3.27.2\n',
+      status: 1,
+    } as never)
+
+    await publish()
+
+    expect(core.setFailed).toHaveBeenCalled()
+    expect(createTags).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ['@exodus/solana-pay@2.3.3', '@exodus/solana-lib@3.27.2'],
+      })
+    )
+    expect(core.setOutput).toHaveBeenCalledWith(
+      'published-packages',
+      '@exodus/solana-pay@2.3.3,@exodus/solana-lib@3.27.2'
+    )
+  })
+
+  test('ignores the "published N packages" summary line of a successful run', async () => {
+    jest.mocked(spawnSync).mockReturnValue({
+      stdout: '',
+      stderr:
+        'lerna success published @exodus/solana-pay 2.3.3\n' +
+        'lerna success published @exodus/lodash 4.18.1-exodus-hermes.0\n' +
+        'lerna success published 1 package\n' +
+        'lerna success published 6 packages\n',
+      status: 0,
+    } as never)
+    jest.mocked(extractTags).mockReturnValue(['@exodus/solana-pay@2.3.3'])
+
+    await publish()
+
+    expect(core.setFailed).not.toHaveBeenCalled()
+    expect(createTags).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ['@exodus/solana-pay@2.3.3', '@exodus/lodash@4.18.1-exodus-hermes.0'],
+      })
+    )
+    expect(core.setOutput).toHaveBeenCalledWith(
+      'published-packages',
+      '@exodus/solana-pay@2.3.3,@exodus/lodash@4.18.1-exodus-hermes.0'
+    )
+  })
+
+  test('collects a success line that follows stdout without a trailing newline', async () => {
+    jest.mocked(spawnSync).mockReturnValue({
+      stdout: 'lerna info publish Publishing packages to npm...',
+      stderr: 'lerna success published @exodus/solana-pay 2.3.3\n',
+      status: 0,
+    } as never)
+
+    await publish()
+
+    expect(core.setFailed).not.toHaveBeenCalled()
+    expect(createTags).toHaveBeenCalledWith(
+      expect.objectContaining({ tags: ['@exodus/solana-pay@2.3.3'] })
+    )
+    expect(core.setOutput).toHaveBeenCalledWith('published-packages', '@exodus/solana-pay@2.3.3')
+  })
+
   test('recovers published packages from npm when summary is empty on failure', async () => {
     when(client.rest.repos.getBranchRules)
       .calledWith({

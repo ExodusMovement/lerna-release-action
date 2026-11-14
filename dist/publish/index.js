@@ -32990,7 +32990,7 @@ async function publish() {
         encoding: 'utf8',
         maxBuffer: Number.MAX_SAFE_INTEGER,
     });
-    const lernaOutput = stdout + stderr;
+    const lernaOutput = `${stdout}\n${stderr}`;
     if (status !== 0) {
         core.setFailed('Failed to publish some packages');
         core.error(lernaOutput);
@@ -32998,6 +32998,9 @@ async function publish() {
     core.debug(lernaOutput);
     core.info('Identifying published packages');
     const tags = new Set(readSummaryTags({ recoverable: status !== 0 && Boolean(pr) }));
+    for (const [, name, version] of lernaOutput.matchAll(/^lerna success published (\S+) (\d+\.\d+\.\d+\S*)\s*$/gm)) {
+        tags.add(`${name}@${version}`);
+    }
     const tag = async (created) => {
         if (created.length === 0)
             return;
