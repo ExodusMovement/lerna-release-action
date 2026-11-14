@@ -11,6 +11,9 @@ jest.mock('@actions/core', () => ({
   warning: jest.fn(),
 }))
 
+// How octokit reports undici's `SocketError: other side closed`
+const socketClosed = () => Object.assign(new Error('other side closed'), { status: 500 })
+
 describe('createSignedCommit', () => {
   const repo = { owner: 'WayneFoundation', repo: 'batcave' }
 
@@ -105,5 +108,47 @@ describe('createSignedCommit', () => {
         ),
       },
     ])
+  })
+
+  describe('when a request fails', () => {
+    const params = {
+      repo,
+      branch: 'ci/release/123',
+      expectedHeadOid: 'base-sha',
+      headline: 'chore(release): publish',
+      additions: ['a/package.json'],
+    }
+
+    it('retries the ref and the commit after GitHub closed the idle socket', async () => {
+      createRef.mockRejectedValueOnce(socketClosed())
+      graphql.mockRejectedValueOnce(socketClosed())
+
+      await expect(createSignedCommit({ client, ...params })).resolves.toBe('signed-oid')
+
+      expect(createRef).toHaveBeenCalledTimes(2)
+      expect(graphql).toHaveBeenCalledTimes(2)
+    })
+
+    it('treats a ref created by the failed attempt as success', async () => {
+      createRef
+        .mockRejectedValueOnce(socketClosed())
+        .mockRejectedValueOnce(
+          Object.assign(new Error('Reference already exists'), { status: 422 })
+        )
+
+      await expect(createSignedCommit({ client, ...params })).resolves.toBe('signed-oid')
+
+      expect(createRef).toHaveBeenCalledTimes(2)
+      expect(graphql).toHaveBeenCalledTimes(1)
+    })
+
+    it('gives up immediately on a permanent failure', async () => {
+      createRef.mockRejectedValue(Object.assign(new Error('Not Found'), { status: 404 }))
+
+      await expect(createSignedCommit({ client, ...params })).rejects.toThrow('Not Found')
+
+      expect(createRef).toHaveBeenCalledTimes(1)
+      expect(graphql).not.toHaveBeenCalled()
+    })
   })
 })

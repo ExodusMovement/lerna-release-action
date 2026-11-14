@@ -1,9 +1,6 @@
 import * as fs from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import * as core from '@actions/core'
-import retry from 'p-retry'
-
-import { GithubClient } from '../utils/github'
+import { GithubClient, retryRequest } from '../utils/github'
 import { Repo, PackageJson } from '../utils/types'
 
 type Params = {
@@ -28,32 +25,12 @@ export async function getPublishedTags({ client, repo, prNumber }: Params): Prom
   // for GitHub to close octokit's idle keep-alive socket; the first request
   // after it fails with `SocketError: other side closed`. Retry like
   // `createTags` does, so a dead socket costs a round trip instead of the run.
-  // Octokit reports a dead socket as a 500, so only 5xx and rate limits are
-  // worth another attempt — a missing PR or a bad token never becomes valid.
-  const listFiles = async () => {
-    try {
-      return await client.paginate(client.rest.pulls.listFiles, {
-        ...repo,
-        pull_number: prNumber,
-      })
-    } catch (error) {
-      const status = (error as { status?: number }).status
-      if (status && status < 500 && status !== 403 && status !== 429) {
-        throw new retry.AbortError(error as Error)
-      }
-
-      throw error
-    }
-  }
-
-  const files = await retry(listFiles, {
-    retries: 5,
-    onFailedAttempt: (error) => {
-      core.warning(
-        `Failed to list files of PR #${prNumber}: ${error.message}. There are ${error.retriesLeft} retries left`
-      )
-    },
-  })
+  const files = await retryRequest(`list files of PR #${prNumber}`, () =>
+    client.paginate(client.rest.pulls.listFiles, {
+      ...repo,
+      pull_number: prNumber,
+    })
+  )
 
   const manifests = files
     .map((file) => file.filename)

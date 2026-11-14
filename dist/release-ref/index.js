@@ -30330,7 +30330,7 @@ exports.unwrapErrorMessage = unwrapErrorMessage;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createSignedCommit = exports.createPullRequest = void 0;
+exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createSignedCommit = exports.retryRequest = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(2186);
 const p_retry_1 = __nccwpck_require__(2548);
 const promises_1 = __nccwpck_require__(3977);
@@ -30405,6 +30405,29 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
     return response.data;
 }
 exports.createPullRequest = createPullRequest;
+// Octokit reports a dead keep-alive socket as a 500, so only 5xx and rate
+// limits get another attempt; a missing object or a bad token never becomes valid.
+async function retryRequest(description, request) {
+    const attempt = async () => {
+        try {
+            return await request();
+        }
+        catch (error) {
+            const status = error.status;
+            if (status && status < 500 && status !== 403 && status !== 429) {
+                throw new p_retry_1.default.AbortError(error);
+            }
+            throw error;
+        }
+    };
+    return (0, p_retry_1.default)(attempt, {
+        retries: 5,
+        onFailedAttempt: (error) => {
+            core.warning(`Failed to ${description}: ${error.message}. There are ${error.retriesLeft} retries left`);
+        },
+    });
+}
+exports.retryRequest = retryRequest;
 async function createRef({ client, ref, sha, repo }) {
     try {
         await client.rest.git.createRef({
@@ -30426,23 +30449,24 @@ async function createRef({ client, ref, sha, repo }) {
 // the authenticated token; the committer is GitHub itself. File contents are
 // read from the working tree, which matches the local HEAD after the amend.
 async function createSignedCommit({ client, repo, branch, expectedHeadOid, headline, body, additions, repoRoot = '', }) {
-    await createRef({ client, repo, ref: `refs/heads/${branch}`, sha: expectedHeadOid });
+    const ref = `refs/heads/${branch}`;
+    await retryRequest(`create ref ${ref}`, () => createRef({ client, repo, ref, sha: expectedHeadOid }));
     const fileAdditions = await Promise.all(additions.map(async (path) => {
         const contents = await (0, promises_1.readFile)(repoRoot ? (0, node_path_1.resolve)(repoRoot, path) : path, {
             encoding: 'base64',
         });
         return { path, contents };
     }));
-    const { createCommitOnBranch } = await client.graphql(
+    const { createCommitOnBranch } = await retryRequest(`create signed commit on ${branch}`, () => client.graphql(
     /* GraphQL */ `
-      mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
-        createCommitOnBranch(input: $input) {
-          commit {
-            oid
+        mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
+          createCommitOnBranch(input: $input) {
+            commit {
+              oid
+            }
           }
         }
-      }
-    `, {
+      `, {
         input: {
             branch: {
                 repositoryNameWithOwner: `${repo.owner}/${repo.repo}`,
@@ -30454,7 +30478,7 @@ async function createSignedCommit({ client, repo, branch, expectedHeadOid, headl
                 additions: fileAdditions,
             },
         },
-    });
+    }));
     return createCommitOnBranch.commit.oid;
 }
 exports.createSignedCommit = createSignedCommit;

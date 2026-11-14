@@ -137,6 +137,32 @@ export async function createPullRequest({
   return response.data
 }
 
+// Octokit reports a dead keep-alive socket as a 500, so only 5xx and rate
+// limits get another attempt; a missing object or a bad token never becomes valid.
+export async function retryRequest<T>(description: string, request: () => Promise<T>): Promise<T> {
+  const attempt = async () => {
+    try {
+      return await request()
+    } catch (error) {
+      const status = (error as { status?: number }).status
+      if (status && status < 500 && status !== 403 && status !== 429) {
+        throw new retry.AbortError(error as Error)
+      }
+
+      throw error
+    }
+  }
+
+  return retry(attempt, {
+    retries: 5,
+    onFailedAttempt: (error) => {
+      core.warning(
+        `Failed to ${description}: ${error.message}. There are ${error.retriesLeft} retries left`
+      )
+    },
+  })
+}
+
 type CreateRefParams = {
   client: GithubClient
   repo: Repo
@@ -198,7 +224,10 @@ export async function createSignedCommit({
   additions,
   repoRoot = '',
 }: CreateSignedCommitParams): Promise<string> {
-  await createRef({ client, repo, ref: `refs/heads/${branch}`, sha: expectedHeadOid })
+  const ref = `refs/heads/${branch}`
+  await retryRequest(`create ref ${ref}`, () =>
+    createRef({ client, repo, ref, sha: expectedHeadOid })
+  )
 
   const fileAdditions = await Promise.all(
     additions.map(async (path) => {
@@ -209,29 +238,31 @@ export async function createSignedCommit({
     })
   )
 
-  const { createCommitOnBranch } = await client.graphql<CreateCommitOnBranchResponse>(
-    /* GraphQL */ `
-      mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
-        createCommitOnBranch(input: $input) {
-          commit {
-            oid
+  const { createCommitOnBranch } = await retryRequest(`create signed commit on ${branch}`, () =>
+    client.graphql<CreateCommitOnBranchResponse>(
+      /* GraphQL */ `
+        mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
+          createCommitOnBranch(input: $input) {
+            commit {
+              oid
+            }
           }
         }
+      `,
+      {
+        input: {
+          branch: {
+            repositoryNameWithOwner: `${repo.owner}/${repo.repo}`,
+            branchName: branch,
+          },
+          message: { headline, body },
+          expectedHeadOid,
+          fileChanges: {
+            additions: fileAdditions,
+          },
+        },
       }
-    `,
-    {
-      input: {
-        branch: {
-          repositoryNameWithOwner: `${repo.owner}/${repo.repo}`,
-          branchName: branch,
-        },
-        message: { headline, body },
-        expectedHeadOid,
-        fileChanges: {
-          additions: fileAdditions,
-        },
-      },
-    }
+    )
   )
 
   return createCommitOnBranch.commit.oid
