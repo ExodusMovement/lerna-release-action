@@ -11,21 +11,32 @@ jest.mock('@actions/core', () => ({
   warning: jest.fn(),
 }))
 
+// How octokit reports undici's `SocketError: other side closed`
+const socketClosed = () => Object.assign(new Error('other side closed'), { status: 500 })
+
+// How octokit reports a 200 response carrying GraphQL `errors`
+const graphqlError = (type: string, message: string) =>
+  Object.assign(new Error(message), { name: 'GraphqlResponseError', errors: [{ type, message }] })
+
 describe('createSignedCommit', () => {
   const repo = { owner: 'WayneFoundation', repo: 'batcave' }
 
   let client: GithubClient
   let createRef: jest.Mock
+  let getRef: jest.Mock
+  let getCommit: jest.Mock
   let graphql: jest.Mock
 
   beforeEach(() => {
     createRef = jest.fn()
+    getRef = jest.fn().mockResolvedValue({ data: { object: { sha: 'base-sha' } } })
+    getCommit = jest.fn()
     graphql = jest.fn().mockResolvedValue({
       createCommitOnBranch: { commit: { oid: 'signed-oid' } },
     })
 
     client = {
-      rest: { git: { createRef } },
+      rest: { git: { createRef, getRef, getCommit } },
       graphql,
     } as unknown as GithubClient
 
@@ -105,5 +116,95 @@ describe('createSignedCommit', () => {
         ),
       },
     ])
+  })
+
+  describe('when a request fails', () => {
+    const params = {
+      repo,
+      branch: 'ci/release/123',
+      expectedHeadOid: 'base-sha',
+      headline: 'chore(release): publish',
+      additions: ['a/package.json'],
+    }
+
+    it('retries the ref and the commit after GitHub closed the idle socket', async () => {
+      createRef.mockRejectedValueOnce(socketClosed())
+      graphql.mockRejectedValueOnce(socketClosed())
+
+      await expect(createSignedCommit({ client, ...params })).resolves.toBe('signed-oid')
+
+      expect(createRef).toHaveBeenCalledTimes(2)
+      expect(getRef).toHaveBeenCalledWith({ ...repo, ref: 'heads/ci/release/123' })
+      expect(graphql).toHaveBeenCalledTimes(2)
+    })
+
+    it('returns the commit the lost response had landed instead of resending it', async () => {
+      graphql.mockRejectedValueOnce(socketClosed())
+      getRef.mockResolvedValue({ data: { object: { sha: 'landed-oid' } } })
+      getCommit.mockResolvedValue({
+        data: { message: 'chore(release): publish\n\ntag-a', parents: [{ sha: 'base-sha' }] },
+      })
+
+      await expect(createSignedCommit({ client, ...params })).resolves.toBe('landed-oid')
+
+      expect(getCommit).toHaveBeenCalledWith({ ...repo, commit_sha: 'landed-oid' })
+      expect(graphql).toHaveBeenCalledTimes(1)
+    })
+
+    it('fails when the branch moved to a commit that is not ours', async () => {
+      graphql.mockRejectedValueOnce(socketClosed())
+      getRef.mockResolvedValue({ data: { object: { sha: 'foreign-oid' } } })
+      getCommit.mockResolvedValue({
+        data: { message: 'chore(release): publish', parents: [{ sha: 'other-sha' }] },
+      })
+
+      await expect(createSignedCommit({ client, ...params })).rejects.toThrow(
+        'Branch ci/release/123 moved to foreign-oid, which is not our commit on base-sha'
+      )
+
+      expect(graphql).toHaveBeenCalledTimes(1)
+    })
+
+    it('gives up immediately on a GraphQL error response', async () => {
+      graphql.mockRejectedValue(
+        graphqlError('UNPROCESSABLE', 'Expected branch to point to "base-sha" but it did not')
+      )
+
+      await expect(createSignedCommit({ client, ...params })).rejects.toThrow(
+        'Expected branch to point to "base-sha" but it did not'
+      )
+
+      expect(graphql).toHaveBeenCalledTimes(1)
+    })
+
+    it('retries a GraphQL rate limit', async () => {
+      graphql.mockRejectedValueOnce(graphqlError('RATE_LIMITED', 'API rate limit exceeded'))
+
+      await expect(createSignedCommit({ client, ...params })).resolves.toBe('signed-oid')
+
+      expect(graphql).toHaveBeenCalledTimes(2)
+    })
+
+    it('treats a ref created by the failed attempt as success', async () => {
+      createRef
+        .mockRejectedValueOnce(socketClosed())
+        .mockRejectedValueOnce(
+          Object.assign(new Error('Reference already exists'), { status: 422 })
+        )
+
+      await expect(createSignedCommit({ client, ...params })).resolves.toBe('signed-oid')
+
+      expect(createRef).toHaveBeenCalledTimes(2)
+      expect(graphql).toHaveBeenCalledTimes(1)
+    })
+
+    it('gives up immediately on a permanent failure', async () => {
+      createRef.mockRejectedValue(Object.assign(new Error('Not Found'), { status: 404 }))
+
+      await expect(createSignedCommit({ client, ...params })).rejects.toThrow('Not Found')
+
+      expect(createRef).toHaveBeenCalledTimes(1)
+      expect(graphql).not.toHaveBeenCalled()
+    })
   })
 })

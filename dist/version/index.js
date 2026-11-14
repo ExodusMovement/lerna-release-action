@@ -85391,7 +85391,7 @@ exports.checkoutPr = checkoutPr;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createSignedCommit = exports.createPullRequest = void 0;
+exports.getReleasePr = exports.getDefaultBranch = exports.commentOnIssue = exports.closePullRequest = exports.getPullRequestsForLabels = exports.createTags = exports.createSignedCommit = exports.retryRequest = exports.createPullRequest = void 0;
 const core = __nccwpck_require__(42186);
 const p_retry_1 = __nccwpck_require__(82548);
 const promises_1 = __nccwpck_require__(93977);
@@ -85466,6 +85466,35 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
     return response.data;
 }
 exports.createPullRequest = createPullRequest;
+// Octokit reports a dead keep-alive socket as a 500, so 5xx and rate limits get
+// another attempt; a 4xx or a GraphQL `errors` response never becomes valid.
+function isPermanent(error) {
+    const { status, errors } = error;
+    if (errors?.some(({ type }) => type === 'RATE_LIMITED'))
+        return false;
+    if (errors)
+        return true;
+    return status !== undefined && status < 500 && status !== 403 && status !== 429;
+}
+async function retryRequest(description, request) {
+    const attempt = async () => {
+        try {
+            return await request();
+        }
+        catch (error) {
+            if (isPermanent(error))
+                throw new p_retry_1.default.AbortError(error);
+            throw error;
+        }
+    };
+    return (0, p_retry_1.default)(attempt, {
+        retries: 5,
+        onFailedAttempt: (error) => {
+            core.warning(`Failed to ${description}: ${error.message}. There are ${error.retriesLeft} retries left`);
+        },
+    });
+}
+exports.retryRequest = retryRequest;
 async function createRef({ client, ref, sha, repo }) {
     try {
         await client.rest.git.createRef({
@@ -85481,42 +85510,65 @@ async function createRef({ client, ref, sha, repo }) {
         throw e;
     }
 }
+// A lost response leaves the commit on the branch, where resending would fail the head check.
+async function findLandedCommit({ client, repo, branch, expectedHeadOid, headline, }) {
+    const { data: ref } = await client.rest.git.getRef({ ...repo, ref: `heads/${branch}` });
+    const sha = ref.object.sha;
+    if (sha === expectedHeadOid)
+        return undefined;
+    const { data: commit } = await client.rest.git.getCommit({ ...repo, commit_sha: sha });
+    const ours = commit.message.split('\n', 1)[0] === headline && commit.parents[0]?.sha === expectedHeadOid;
+    if (!ours) {
+        throw new p_retry_1.default.AbortError(new Error(`Branch ${branch} moved to ${sha}, which is not our commit on ${expectedHeadOid}`));
+    }
+    return sha;
+}
 // Creates the release branch and commits the changed files onto it via the
 // GraphQL `createCommitOnBranch` mutation, producing a commit signed with
 // GitHub's GPG key (shown as "Verified"). The commit author is the identity of
 // the authenticated token; the committer is GitHub itself. File contents are
 // read from the working tree, which matches the local HEAD after the amend.
 async function createSignedCommit({ client, repo, branch, expectedHeadOid, headline, body, additions, repoRoot = '', }) {
-    await createRef({ client, repo, ref: `refs/heads/${branch}`, sha: expectedHeadOid });
+    const ref = `refs/heads/${branch}`;
+    await retryRequest(`create ref ${ref}`, () => createRef({ client, repo, ref, sha: expectedHeadOid }));
     const fileAdditions = await Promise.all(additions.map(async (path) => {
         const contents = await (0, promises_1.readFile)(repoRoot ? (0, node_path_1.resolve)(repoRoot, path) : path, {
             encoding: 'base64',
         });
         return { path, contents };
     }));
-    const { createCommitOnBranch } = await client.graphql(
-    /* GraphQL */ `
-      mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
-        createCommitOnBranch(input: $input) {
-          commit {
-            oid
+    let sent = false;
+    return retryRequest(`create signed commit on ${branch}`, async () => {
+        if (sent) {
+            const landed = await findLandedCommit({ client, repo, branch, expectedHeadOid, headline });
+            if (landed)
+                return landed;
+        }
+        sent = true;
+        const { createCommitOnBranch } = await client.graphql(
+        /* GraphQL */ `
+        mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
+          createCommitOnBranch(input: $input) {
+            commit {
+              oid
+            }
           }
         }
-      }
-    `, {
-        input: {
-            branch: {
-                repositoryNameWithOwner: `${repo.owner}/${repo.repo}`,
-                branchName: branch,
+      `, {
+            input: {
+                branch: {
+                    repositoryNameWithOwner: `${repo.owner}/${repo.repo}`,
+                    branchName: branch,
+                },
+                message: { headline, body },
+                expectedHeadOid,
+                fileChanges: {
+                    additions: fileAdditions,
+                },
             },
-            message: { headline, body },
-            expectedHeadOid,
-            fileChanges: {
-                additions: fileAdditions,
-            },
-        },
+        });
+        return createCommitOnBranch.commit.oid;
     });
-    return createCommitOnBranch.commit.oid;
 }
 exports.createSignedCommit = createSignedCommit;
 async function createTags({ client, repo, sha, tags }) {
