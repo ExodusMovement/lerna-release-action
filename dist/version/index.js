@@ -85466,18 +85466,24 @@ async function createPullRequest({ client, repo, title, base, head, body, labels
     return response.data;
 }
 exports.createPullRequest = createPullRequest;
-// Octokit reports a dead keep-alive socket as a 500, so only 5xx and rate
-// limits get another attempt; a missing object or a bad token never becomes valid.
+// Octokit reports a dead keep-alive socket as a 500, so 5xx and rate limits get
+// another attempt; a 4xx or a GraphQL `errors` response never becomes valid.
+function isPermanent(error) {
+    const { status, errors } = error;
+    if (errors?.some(({ type }) => type === 'RATE_LIMITED'))
+        return false;
+    if (errors)
+        return true;
+    return status !== undefined && status < 500 && status !== 403 && status !== 429;
+}
 async function retryRequest(description, request) {
     const attempt = async () => {
         try {
             return await request();
         }
         catch (error) {
-            const status = error.status;
-            if (status && status < 500 && status !== 403 && status !== 429) {
+            if (isPermanent(error))
                 throw new p_retry_1.default.AbortError(error);
-            }
             throw error;
         }
     };
@@ -85504,6 +85510,19 @@ async function createRef({ client, ref, sha, repo }) {
         throw e;
     }
 }
+// A lost response leaves the commit on the branch, where resending would fail the head check.
+async function findLandedCommit({ client, repo, branch, expectedHeadOid, headline, }) {
+    const { data: ref } = await client.rest.git.getRef({ ...repo, ref: `heads/${branch}` });
+    const sha = ref.object.sha;
+    if (sha === expectedHeadOid)
+        return undefined;
+    const { data: commit } = await client.rest.git.getCommit({ ...repo, commit_sha: sha });
+    const ours = commit.message.split('\n', 1)[0] === headline && commit.parents[0]?.sha === expectedHeadOid;
+    if (!ours) {
+        throw new p_retry_1.default.AbortError(new Error(`Branch ${branch} moved to ${sha}, which is not our commit on ${expectedHeadOid}`));
+    }
+    return sha;
+}
 // Creates the release branch and commits the changed files onto it via the
 // GraphQL `createCommitOnBranch` mutation, producing a commit signed with
 // GitHub's GPG key (shown as "Verified"). The commit author is the identity of
@@ -85518,8 +85537,16 @@ async function createSignedCommit({ client, repo, branch, expectedHeadOid, headl
         });
         return { path, contents };
     }));
-    const { createCommitOnBranch } = await retryRequest(`create signed commit on ${branch}`, () => client.graphql(
-    /* GraphQL */ `
+    let sent = false;
+    return retryRequest(`create signed commit on ${branch}`, async () => {
+        if (sent) {
+            const landed = await findLandedCommit({ client, repo, branch, expectedHeadOid, headline });
+            if (landed)
+                return landed;
+        }
+        sent = true;
+        const { createCommitOnBranch } = await client.graphql(
+        /* GraphQL */ `
         mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
           createCommitOnBranch(input: $input) {
             commit {
@@ -85528,19 +85555,20 @@ async function createSignedCommit({ client, repo, branch, expectedHeadOid, headl
           }
         }
       `, {
-        input: {
-            branch: {
-                repositoryNameWithOwner: `${repo.owner}/${repo.repo}`,
-                branchName: branch,
+            input: {
+                branch: {
+                    repositoryNameWithOwner: `${repo.owner}/${repo.repo}`,
+                    branchName: branch,
+                },
+                message: { headline, body },
+                expectedHeadOid,
+                fileChanges: {
+                    additions: fileAdditions,
+                },
             },
-            message: { headline, body },
-            expectedHeadOid,
-            fileChanges: {
-                additions: fileAdditions,
-            },
-        },
-    }));
-    return createCommitOnBranch.commit.oid;
+        });
+        return createCommitOnBranch.commit.oid;
+    });
 }
 exports.createSignedCommit = createSignedCommit;
 async function createTags({ client, repo, sha, tags }) {

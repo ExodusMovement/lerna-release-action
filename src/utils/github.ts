@@ -137,17 +137,24 @@ export async function createPullRequest({
   return response.data
 }
 
-// Octokit reports a dead keep-alive socket as a 500, so only 5xx and rate
-// limits get another attempt; a missing object or a bad token never becomes valid.
+type RequestFailure = { status?: number; errors?: { type?: string }[] }
+
+// Octokit reports a dead keep-alive socket as a 500, so 5xx and rate limits get
+// another attempt; a 4xx or a GraphQL `errors` response never becomes valid.
+function isPermanent(error: unknown): boolean {
+  const { status, errors } = error as RequestFailure
+  if (errors?.some(({ type }) => type === 'RATE_LIMITED')) return false
+  if (errors) return true
+
+  return status !== undefined && status < 500 && status !== 403 && status !== 429
+}
+
 export async function retryRequest<T>(description: string, request: () => Promise<T>): Promise<T> {
   const attempt = async () => {
     try {
       return await request()
     } catch (error) {
-      const status = (error as { status?: number }).status
-      if (status && status < 500 && status !== 403 && status !== 429) {
-        throw new retry.AbortError(error as Error)
-      }
+      if (isPermanent(error)) throw new retry.AbortError(error as Error)
 
       throw error
     }
@@ -209,6 +216,38 @@ type CreateCommitOnBranchResponse = {
   }
 }
 
+type FindLandedCommitParams = {
+  client: GithubClient
+  repo: Repo
+  branch: string
+  expectedHeadOid: string
+  headline: string
+}
+
+// A lost response leaves the commit on the branch, where resending would fail the head check.
+async function findLandedCommit({
+  client,
+  repo,
+  branch,
+  expectedHeadOid,
+  headline,
+}: FindLandedCommitParams): Promise<string | undefined> {
+  const { data: ref } = await client.rest.git.getRef({ ...repo, ref: `heads/${branch}` })
+  const sha = ref.object.sha
+  if (sha === expectedHeadOid) return undefined
+
+  const { data: commit } = await client.rest.git.getCommit({ ...repo, commit_sha: sha })
+  const ours =
+    commit.message.split('\n', 1)[0] === headline && commit.parents[0]?.sha === expectedHeadOid
+  if (!ours) {
+    throw new retry.AbortError(
+      new Error(`Branch ${branch} moved to ${sha}, which is not our commit on ${expectedHeadOid}`)
+    )
+  }
+
+  return sha
+}
+
 // Creates the release branch and commits the changed files onto it via the
 // GraphQL `createCommitOnBranch` mutation, producing a commit signed with
 // GitHub's GPG key (shown as "Verified"). The commit author is the identity of
@@ -238,8 +277,15 @@ export async function createSignedCommit({
     })
   )
 
-  const { createCommitOnBranch } = await retryRequest(`create signed commit on ${branch}`, () =>
-    client.graphql<CreateCommitOnBranchResponse>(
+  let sent = false
+  return retryRequest(`create signed commit on ${branch}`, async () => {
+    if (sent) {
+      const landed = await findLandedCommit({ client, repo, branch, expectedHeadOid, headline })
+      if (landed) return landed
+    }
+
+    sent = true
+    const { createCommitOnBranch } = await client.graphql<CreateCommitOnBranchResponse>(
       /* GraphQL */ `
         mutation CreateCommitOnBranch($input: CreateCommitOnBranchInput!) {
           createCommitOnBranch(input: $input) {
@@ -263,9 +309,9 @@ export async function createSignedCommit({
         },
       }
     )
-  )
 
-  return createCommitOnBranch.commit.oid
+    return createCommitOnBranch.commit.oid
+  })
 }
 
 type CreateTagsParams = {
