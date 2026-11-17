@@ -38,5 +38,5 @@
     "lib",
     "README.md"
   ],
-  "packageManager": "yarn@3.2.3"
+  "packageManager": "yarn@4.13.0"
 }
