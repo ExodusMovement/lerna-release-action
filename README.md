@@ -113,7 +113,7 @@ Publishing uses the same detection and runs Lerna through `pnpm exec` in pnpm wo
 
 ### Version dispatch workflow
 
-Automatically start versioning of packages when a PR is merged. Requires using `ExodusMovement/lerna-package-name-action` to label PRs, as these package labels will be used to determine the packages to be versioned.
+Automatically start versioning of packages when a PR is merged. Packages are attributed from the files each of the PR's commits touched, so no labels are required; while the PR is open the action posts a version preview comment instead.
 
 ```yaml
 name: Version dispatch
@@ -139,7 +139,7 @@ jobs:
         with:
           version-workflow-id: version.yaml
           github-token: ${{ secrets.GH_AUTOMATION_PAT }}
-          exclude-commit-types: chore,docs,test,ci
+          exclude-labels: publish-on-merge,skip-release
 ```
 
 #### PR title gates the release
