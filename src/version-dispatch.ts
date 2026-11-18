@@ -10,6 +10,7 @@ import { Bump, BUMP_MAJOR, BUMP_NONE, bumpFromMessage, maxBump } from './version
 import { filesToPackages } from './version-dispatch/files-to-packages'
 import { clearVersionPreview, postVersionPreview } from './version-dispatch/preview'
 import { isPackageReleased } from './version-dispatch/released'
+import { getDefaultBranch } from './utils/github'
 import { applyWorkingDirectory, toWorkspaceRelativePaths } from './utils/working-directory'
 
 type Params = {
@@ -91,6 +92,10 @@ export async function versionDispatch({ filesystem = fs, isReleased }: Params = 
     pr = data as PullRequest
   } else if (payload.pull_request) {
     pr = payload.pull_request as PullRequest
+    if (isNoopEvent({ payload, excludedLabels })) {
+      core.info(`Nothing to do for a ${String(payload.action)} event that cannot change the result`)
+      return null
+    }
   } else {
     core.warning('Action triggered by non-PR event and no `pr-number` was supplied.')
     return null
@@ -122,9 +127,11 @@ export async function versionDispatch({ filesystem = fs, isReleased }: Params = 
     return null
   }
 
-  const {
-    data: { default_branch: defaultBranch },
-  } = await client.rest.repos.get(repo)
+  const payloadDefaultBranch: unknown = payload.repository?.default_branch
+  const defaultBranch =
+    typeof payloadDefaultBranch === 'string'
+      ? payloadDefaultBranch
+      : await getDefaultBranch({ client, repo })
 
   if (pr.base?.ref && pr.base.ref !== defaultBranch) {
     core.notice(`Skipped versioning for PR not targeting ${defaultBranch}`)
@@ -160,13 +167,14 @@ export async function versionDispatch({ filesystem = fs, isReleased }: Params = 
   // must be cut manually. Exclude such packages from the auto-dispatch, but
   // still surface them in the preview so reviewers know a manual release is
   // pending.
+  const bumpedNames = Object.keys(bumps)
+  const releasedFlags = await Promise.all(bumpedNames.map((name) => hasBeenReleased(name)))
   const unreleased = new Set<string>()
-  for (const name of Object.keys(bumps)) {
-    if (!(await hasBeenReleased(name))) {
-      core.info(`skip ${name}: never released — first release must be cut manually`)
-      unreleased.add(name)
-    }
-  }
+  bumpedNames.forEach((name, index) => {
+    if (releasedFlags[index]) return
+    core.info(`skip ${name}: never released — first release must be cut manually`)
+    unreleased.add(name)
+  })
 
   const releasableBumps: Record<string, Bump> = {}
   for (const [name, bump] of Object.entries(bumps)) {
@@ -225,6 +233,33 @@ export async function versionDispatch({ filesystem = fs, isReleased }: Params = 
 
   core.info(`Dispatched ${workflowId} with bumps ${JSON.stringify(releasableBumps)}`)
   return releasableBumps
+}
+
+/**
+ * Events that cannot change the outcome: a label the action does not read
+ * being added or removed, or an edit that touched neither the title nor the
+ * base branch. Checked before any API call. An excluded label still runs, so
+ * adding `skip-release` clears the preview and removing it restores one.
+ */
+function isNoopEvent({
+  payload,
+  excludedLabels,
+}: {
+  payload: typeof github.context.payload
+  excludedLabels: Set<string>
+}): boolean {
+  if (payload.action === 'labeled' || payload.action === 'unlabeled') {
+    const name: unknown = payload.label?.name
+    return typeof name === 'string' && !excludedLabels.has(name)
+  }
+
+  if (payload.action === 'edited') {
+    const changes: unknown = payload.changes
+    if (!changes || typeof changes !== 'object') return true
+    return !('title' in changes) && !('base' in changes)
+  }
+
+  return false
 }
 
 type PullRequest = {

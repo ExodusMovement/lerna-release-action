@@ -366,6 +366,28 @@ describe('versionDispatch', () => {
     })
   })
 
+  it('reads the default branch from the event payload when it is present', async () => {
+    github.context.payload = {
+      pull_request: {
+        title: 'feat: a real release',
+        number: 123,
+        merged: true,
+        labels: [],
+        user: { login: 'brucewayne' },
+        base: { ref },
+      },
+      repository: { name: repo.repo, owner: { login: repo.owner }, default_branch: ref },
+    }
+    setupPaginate([{ sha: 'aaa1111', commit: { message: 'feat(atoms): shiny' } }], {
+      aaa1111: [{ filename: 'libraries/atoms/index.ts' }],
+    })
+
+    await versionDispatch({ filesystem: fs as never, isReleased: () => true })
+
+    expect(client.rest.repos.get).not.toHaveBeenCalled()
+    expect(client.rest.actions.createWorkflowDispatch).toHaveBeenCalled()
+  })
+
   describe('abort conditions', () => {
     const defaults = {
       title: 'feat: a real release',
@@ -375,6 +397,51 @@ describe('versionDispatch', () => {
       user: { login: 'brucewayne' },
       base: { ref },
     }
+
+    it.each<[string, Record<string, unknown>]>([
+      [
+        'a label the action does not read is added',
+        { action: 'labeled', label: { name: 'skip-tack' } },
+      ],
+      [
+        'a label the action does not read is removed',
+        { action: 'unlabeled', label: { name: 'skip-tack' } },
+      ],
+      ['only the body was edited', { action: 'edited', changes: { body: { from: 'old text' } } }],
+    ])('should return before any API call when %s', async (_, event) => {
+      github.context.payload = {
+        ...event,
+        pull_request: { ...defaults, merged: false, state: 'open' },
+      }
+      setupPaginate([], {})
+
+      await versionDispatch({ filesystem: fs as never, isReleased: () => true })
+
+      expect(client.rest.repos.get).not.toHaveBeenCalled()
+      expect(client.paginate).not.toHaveBeenCalled()
+      expect(client.rest.issues.createComment).not.toHaveBeenCalled()
+    })
+
+    it.each(['labeled', 'unlabeled'])(
+      'should keep running when an excluded label is %s',
+      async (action) => {
+        github.context.payload = {
+          action,
+          label: { name: 'skip-release' },
+          pull_request: {
+            ...defaults,
+            merged: false,
+            state: 'open',
+            labels: action === 'labeled' ? [{ name: 'skip-release' }] : [],
+          },
+        }
+        setupPaginate([], {})
+
+        await versionDispatch({ filesystem: fs as never, isReleased: () => true })
+
+        expect(client.paginate).toHaveBeenCalled()
+      }
+    )
 
     it.each<[string, unknown]>([
       ['for non-PR event', { comment: { id: 1 } }],
